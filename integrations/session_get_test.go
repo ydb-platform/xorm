@@ -347,6 +347,29 @@ func TestGetSlice(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestGetMap(t *testing.T) {
+	assert.NoError(t, PrepareEngine())
+
+	type UserinfoMap struct {
+		Uid   int `xorm:"pk autoincr"`
+		IsMan bool
+	}
+
+	assertSync(t, new(UserinfoMap))
+
+	tableName := testEngine.Quote(testEngine.TableName("userinfo_map", true))
+	_, err := testEngine.Exec(fmt.Sprintf("INSERT INTO %s (is_man) VALUES (NULL)", tableName))
+	assert.NoError(t, err)
+
+	var valuesString = make(map[string]string)
+	has, err := testEngine.Table("userinfo_map").Get(&valuesString)
+	assert.NoError(t, err)
+	assert.Equal(t, true, has)
+	assert.Equal(t, 2, len(valuesString))
+	assert.Equal(t, "1", valuesString["uid"])
+	assert.Equal(t, "", valuesString["is_man"])
+}
+
 func TestGetError(t *testing.T) {
 	assert.NoError(t, PrepareEngine())
 
