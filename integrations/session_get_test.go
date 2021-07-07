@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"math/big"
 	"strconv"
 	"testing"
 	"time"
@@ -765,4 +766,54 @@ func TestGetNil(t *testing.T) {
 	has, err := testEngine.Get(gn)
 	assert.True(t, errors.Is(err, xorm.ErrObjectIsNil))
 	assert.False(t, has)
+}
+
+func TestGetBigFloat(t *testing.T) {
+	type GetBigFloat struct {
+		Id    int64
+		Money *big.Float `xorm:"numeric(22,2)"`
+	}
+
+	assert.NoError(t, PrepareEngine())
+	assertSync(t, new(GetBigFloat))
+
+	{
+		var gf = GetBigFloat{
+			Money: big.NewFloat(999999.99),
+		}
+		_, err := testEngine.Insert(&gf)
+		assert.NoError(t, err)
+
+		var m big.Float
+		has, err := testEngine.Table("get_big_float").Cols("money").Where("id=?", gf.Id).Get(&m)
+		assert.NoError(t, err)
+		assert.True(t, has)
+		assert.True(t, m.String() == gf.Money.String(), "%v != %v", m.String(), gf.Money.String())
+		//fmt.Println(m.Cmp(gf.Money))
+		//assert.True(t, m.Cmp(gf.Money) == 0, "%v != %v", m.String(), gf.Money.String())
+	}
+
+	type GetBigFloat2 struct {
+		Id    int64
+		Money *big.Float `xorm:"decimal(22,2)"`
+	}
+
+	assert.NoError(t, PrepareEngine())
+	assertSync(t, new(GetBigFloat2))
+
+	{
+		var gf2 = GetBigFloat2{
+			Money: big.NewFloat(9999999.99),
+		}
+		_, err := testEngine.Insert(&gf2)
+		assert.NoError(t, err)
+
+		var m2 big.Float
+		has, err := testEngine.Table("get_big_float2").Cols("money").Where("id=?", gf2.Id).Get(&m2)
+		assert.NoError(t, err)
+		assert.True(t, has)
+		assert.True(t, m2.String() == gf2.Money.String(), "%v != %v", m2.String(), gf2.Money.String())
+		//fmt.Println(m.Cmp(gf.Money))
+		//assert.True(t, m.Cmp(gf.Money) == 0, "%v != %v", m.String(), gf.Money.String())
+	}
 }
