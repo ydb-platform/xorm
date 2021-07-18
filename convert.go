@@ -7,6 +7,7 @@ package xorm
 import (
 	"database/sql"
 	"database/sql/driver"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -285,23 +286,94 @@ func asBigFloat(src interface{}) (*big.Float, error) {
 	return nil, fmt.Errorf("unsupported value %T as big.Float", src)
 }
 
-func asBytes(buf []byte, rv reflect.Value) (b []byte, ok bool) {
+func asBytes(src interface{}) ([]byte, bool) {
+	switch t := src.(type) {
+	case []byte:
+		return t, true
+	case *sql.NullString:
+		if !t.Valid {
+			return nil, true
+		}
+		return []byte(t.String), true
+	case *sql.RawBytes:
+		return *t, true
+	}
+
+	rv := reflect.ValueOf(src)
+
 	switch rv.Kind() {
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		return strconv.AppendInt(buf, rv.Int(), 10), true
+		return strconv.AppendInt(nil, rv.Int(), 10), true
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		return strconv.AppendUint(buf, rv.Uint(), 10), true
+		return strconv.AppendUint(nil, rv.Uint(), 10), true
 	case reflect.Float32:
-		return strconv.AppendFloat(buf, rv.Float(), 'g', -1, 32), true
+		return strconv.AppendFloat(nil, rv.Float(), 'g', -1, 32), true
 	case reflect.Float64:
-		return strconv.AppendFloat(buf, rv.Float(), 'g', -1, 64), true
+		return strconv.AppendFloat(nil, rv.Float(), 'g', -1, 64), true
 	case reflect.Bool:
-		return strconv.AppendBool(buf, rv.Bool()), true
+		return strconv.AppendBool(nil, rv.Bool()), true
 	case reflect.String:
-		s := rv.String()
-		return append(buf, s...), true
+		return []byte(rv.String()), true
 	}
-	return
+	return nil, false
+}
+
+func asTime(src interface{}, dbLoc *time.Location, uiLoc *time.Location) (*time.Time, error) {
+	switch t := src.(type) {
+	case string:
+		return convert.String2Time(t, dbLoc, uiLoc)
+	case *sql.NullString:
+		if !t.Valid {
+			return nil, nil
+		}
+		return convert.String2Time(t.String, dbLoc, uiLoc)
+	case []uint8:
+		if t == nil {
+			return nil, nil
+		}
+		return convert.String2Time(string(t), dbLoc, uiLoc)
+	case *sql.NullTime:
+		if !t.Valid {
+			return nil, nil
+		}
+		z, _ := t.Time.Zone()
+		if len(z) == 0 || t.Time.Year() == 0 || t.Time.Location().String() != dbLoc.String() {
+			tm := time.Date(t.Time.Year(), t.Time.Month(), t.Time.Day(), t.Time.Hour(),
+				t.Time.Minute(), t.Time.Second(), t.Time.Nanosecond(), dbLoc).In(uiLoc)
+			return &tm, nil
+		}
+		tm := t.Time.In(uiLoc)
+		return &tm, nil
+	case *time.Time:
+		z, _ := t.Zone()
+		if len(z) == 0 || t.Year() == 0 || t.Location().String() != dbLoc.String() {
+			tm := time.Date(t.Year(), t.Month(), t.Day(), t.Hour(),
+				t.Minute(), t.Second(), t.Nanosecond(), dbLoc).In(uiLoc)
+			return &tm, nil
+		}
+		tm := t.In(uiLoc)
+		return &tm, nil
+	case time.Time:
+		z, _ := t.Zone()
+		if len(z) == 0 || t.Year() == 0 || t.Location().String() != dbLoc.String() {
+			tm := time.Date(t.Year(), t.Month(), t.Day(), t.Hour(),
+				t.Minute(), t.Second(), t.Nanosecond(), dbLoc).In(uiLoc)
+			return &tm, nil
+		}
+		tm := t.In(uiLoc)
+		return &tm, nil
+	case int:
+		tm := time.Unix(int64(t), 0).In(uiLoc)
+		return &tm, nil
+	case int64:
+		tm := time.Unix(t, 0).In(uiLoc)
+		return &tm, nil
+	case *sql.NullInt64:
+		tm := time.Unix(t.Int64, 0).In(uiLoc)
+		return &tm, nil
+
+	}
+	return nil, fmt.Errorf("unsupported value %#v as time", src)
 }
 
 // convertAssign copies to dest the value in src, converting it if possible.
@@ -559,8 +631,7 @@ func convertAssign(dest, src interface{}, originalLocation *time.Location, conve
 			return nil
 		}
 	case *[]byte:
-		sv = reflect.ValueOf(src)
-		if b, ok := asBytes(nil, sv); ok {
+		if b, ok := asBytes(src); ok {
 			*d = b
 			return nil
 		}
@@ -575,44 +646,24 @@ func convertAssign(dest, src interface{}, originalLocation *time.Location, conve
 		return nil
 	}
 
-	return convertAssignV(reflect.ValueOf(dest), src, originalLocation, convertedLocation)
+	return convertAssignV(reflect.ValueOf(dest), src)
 }
 
-func convertAssignV(dpv reflect.Value, src interface{}, originalLocation, convertedLocation *time.Location) error {
-	if dpv.Kind() != reflect.Ptr {
-		return errors.New("destination not a pointer")
-	}
-	if dpv.IsNil() {
-		return errNilPtr
-	}
-
-	var sv = reflect.ValueOf(src)
-
-	dv := reflect.Indirect(dpv)
-	if sv.IsValid() && sv.Type().AssignableTo(dv.Type()) {
-		switch b := src.(type) {
-		case []byte:
-			dv.Set(reflect.ValueOf(cloneBytes(b)))
-		default:
-			dv.Set(sv)
-		}
+func convertAssignV(dv reflect.Value, src interface{}) error {
+	if src == nil {
 		return nil
 	}
 
-	if dv.Kind() == sv.Kind() && sv.Type().ConvertibleTo(dv.Type()) {
-		dv.Set(sv.Convert(dv.Type()))
-		return nil
+	if dv.Type().Implements(scannerType) {
+		return dv.Interface().(sql.Scanner).Scan(src)
 	}
 
 	switch dv.Kind() {
 	case reflect.Ptr:
-		if src == nil {
-			dv.Set(reflect.Zero(dv.Type()))
-			return nil
+		if dv.IsNil() {
+			dv.Set(reflect.New(dv.Type().Elem()))
 		}
-
-		dv.Set(reflect.New(dv.Type().Elem()))
-		return convertAssign(dv.Interface(), src, originalLocation, convertedLocation)
+		return convertAssignV(dv.Elem(), src)
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		i64, err := asInt64(src)
 		if err != nil {
@@ -640,9 +691,28 @@ func convertAssignV(dpv reflect.Value, src interface{}, originalLocation, conver
 	case reflect.String:
 		dv.SetString(asString(src))
 		return nil
+	case reflect.Bool:
+		b, err := asBool(src)
+		if err != nil {
+			return err
+		}
+		dv.SetBool(b)
+		return nil
+	case reflect.Slice, reflect.Map, reflect.Struct, reflect.Array:
+		data, ok := asBytes(src)
+		if !ok {
+			return fmt.Errorf("onvertAssignV: src cannot be as bytes %#v", src)
+		}
+		if data == nil {
+			return nil
+		}
+		if dv.Kind() != reflect.Ptr {
+			dv = dv.Addr()
+		}
+		return json.Unmarshal(data, dv.Interface())
+	default:
+		return fmt.Errorf("convertAssignV: unsupported Scan, storing driver.Value type %T into type %T", src, dv.Interface())
 	}
-
-	return fmt.Errorf("unsupported Scan, storing driver.Value type %T into type %T", src, dpv.Interface())
 }
 
 func asKind(vv reflect.Value, tp reflect.Type) (interface{}, error) {
@@ -682,16 +752,43 @@ func asKind(vv reflect.Value, tp reflect.Type) (interface{}, error) {
 	return nil, fmt.Errorf("unsupported primary key type: %v, %v", tp, vv)
 }
 
-func asBool(bs []byte) (bool, error) {
-	if len(bs) == 0 {
-		return false, nil
+func asBool(src interface{}) (bool, error) {
+	switch v := src.(type) {
+	case bool:
+		return v, nil
+	case *bool:
+		return *v, nil
+	case *sql.NullBool:
+		return v.Bool, nil
+	case int64:
+		return v > 0, nil
+	case int:
+		return v > 0, nil
+	case int8:
+		return v > 0, nil
+	case int16:
+		return v > 0, nil
+	case int32:
+		return v > 0, nil
+	case []byte:
+		if len(v) == 0 {
+			return false, nil
+		}
+		if v[0] == 0x00 {
+			return false, nil
+		} else if v[0] == 0x01 {
+			return true, nil
+		}
+		return strconv.ParseBool(string(v))
+	case string:
+		return strconv.ParseBool(v)
+	case *sql.NullInt64:
+		return v.Int64 > 0, nil
+	case *sql.NullInt32:
+		return v.Int32 > 0, nil
+	default:
+		return false, fmt.Errorf("unknow type %T as bool", src)
 	}
-	if bs[0] == 0x00 {
-		return false, nil
-	} else if bs[0] == 0x01 {
-		return true, nil
-	}
-	return strconv.ParseBool(string(bs))
 }
 
 // str2PK convert string value to primary key value according to tp
