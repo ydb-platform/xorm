@@ -211,12 +211,8 @@ func (engine *Engine) scan(rows *core.Rows, fields []string, types []*sql.Column
 			scanResult = &sql.RawBytes{}
 			replaced = true
 		default:
-			var useNullable = true
-			if engine.driver.Features().SupportNullable {
-				nullable, ok := types[0].Nullable()
-				useNullable = ok && nullable
-			}
-			if useNullable {
+			nullable, ok := types[0].Nullable()
+			if !ok || nullable {
 				scanResult, replaced, err = genScanResultsByBeanNullable(v)
 			} else {
 				scanResult, replaced, err = genScanResultsByBean(v)
@@ -286,14 +282,14 @@ func rows2maps(rows *core.Rows) (resultsSlice []map[string][]byte, err error) {
 		return nil, err
 	}
 	for rows.Next() {
-		if rows.Err() != nil {
-			return nil, rows.Err()
-		}
 		result, err := row2mapBytes(rows, types, fields)
 		if err != nil {
 			return nil, err
 		}
 		resultsSlice = append(resultsSlice, result)
+	}
+	if rows.Err() != nil {
+		return nil, rows.Err()
 	}
 
 	return resultsSlice, nil

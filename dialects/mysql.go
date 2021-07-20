@@ -213,7 +213,10 @@ func (db *mysql) Version(ctx context.Context, queryer core.Queryer) (*schemas.Ve
 
 	var version string
 	if !rows.Next() {
-		return nil, errors.New("Unknow version")
+		if rows.Err() != nil {
+			return nil, rows.Err()
+		}
+		return nil, errors.New("unknow version")
 	}
 
 	if err := rows.Scan(&version); err != nil {
@@ -254,9 +257,6 @@ func (db *mysql) SetParams(params map[string]string) {
 			fallthrough
 		case "COMPRESSED":
 			db.rowFormat = t
-			break
-		default:
-			break
 		}
 	}
 }
@@ -405,9 +405,6 @@ func (db *mysql) GetColumns(queryer core.Queryer, ctx context.Context, tableName
 	cols := make(map[string]*schemas.Column)
 	colSeq := make([]string, 0)
 	for rows.Next() {
-		if rows.Err() != nil {
-			return nil, nil, rows.Err()
-		}
 		col := new(schemas.Column)
 		col.Indexes = make(map[string]int)
 
@@ -506,6 +503,9 @@ func (db *mysql) GetColumns(queryer core.Queryer, ctx context.Context, tableName
 		cols[col.Name] = col
 		colSeq = append(colSeq, col.Name)
 	}
+	if rows.Err() != nil {
+		return nil, nil, rows.Err()
+	}
 	return colSeq, cols, nil
 }
 
@@ -522,9 +522,6 @@ func (db *mysql) GetTables(queryer core.Queryer, ctx context.Context) ([]*schema
 
 	tables := make([]*schemas.Table, 0)
 	for rows.Next() {
-		if rows.Err() != nil {
-			return nil, rows.Err()
-		}
 		table := schemas.NewEmptyTable()
 		var name, engine string
 		var autoIncr, comment *string
@@ -539,6 +536,9 @@ func (db *mysql) GetTables(queryer core.Queryer, ctx context.Context) ([]*schema
 		}
 		table.StoreEngine = engine
 		tables = append(tables, table)
+	}
+	if rows.Err() != nil {
+		return nil, rows.Err()
 	}
 	return tables, nil
 }
@@ -570,11 +570,8 @@ func (db *mysql) GetIndexes(queryer core.Queryer, ctx context.Context, tableName
 	}
 	defer rows.Close()
 
-	indexes := make(map[string]*schemas.Index, 0)
+	indexes := make(map[string]*schemas.Index)
 	for rows.Next() {
-		if rows.Err() != nil {
-			return nil, rows.Err()
-		}
 		var indexType int
 		var indexName, colName, nonUnique string
 		err = rows.Scan(&indexName, &nonUnique, &colName)
@@ -586,7 +583,7 @@ func (db *mysql) GetIndexes(queryer core.Queryer, ctx context.Context, tableName
 			continue
 		}
 
-		if "YES" == nonUnique || nonUnique == "1" {
+		if nonUnique == "YES" || nonUnique == "1" {
 			indexType = schemas.IndexType
 		} else {
 			indexType = schemas.UniqueType
@@ -609,6 +606,9 @@ func (db *mysql) GetIndexes(queryer core.Queryer, ctx context.Context, tableName
 			indexes[indexName] = index
 		}
 		index.AddColumn(colName)
+	}
+	if rows.Err() != nil {
+		return nil, rows.Err()
 	}
 	return indexes, nil
 }
@@ -696,14 +696,12 @@ func (p *mysqlDriver) Parse(driverName, dataSourceName string) (*URI, error) {
 				for _, kv := range kvs {
 					splits := strings.Split(kv, "=")
 					if len(splits) == 2 {
-						switch splits[0] {
-						case "charset":
+						if splits[0] == "charset" {
 							uri.Charset = splits[1]
 						}
 					}
 				}
 			}
-
 		}
 	}
 	return uri, nil
@@ -720,13 +718,13 @@ func (p *mysqlDriver) GenScanResult(colType string) (interface{}, error) {
 	case "TINYINT", "SMALLINT", "MEDIUMINT", "INT":
 		var s sql.NullInt32
 		return &s, nil
-	case "FLOAT", "REAL", "DOUBLE PRECISION":
+	case "FLOAT", "REAL", "DOUBLE PRECISION", "DOUBLE":
 		var s sql.NullFloat64
 		return &s, nil
 	case "DECIMAL", "NUMERIC":
 		var s sql.NullString
 		return &s, nil
-	case "DATETIME":
+	case "DATETIME", "TIMESTAMP":
 		var s sql.NullTime
 		return &s, nil
 	case "BIT":
