@@ -34,7 +34,7 @@ type ErrFieldIsNotExist struct {
 }
 
 func (e ErrFieldIsNotExist) Error() string {
-	return fmt.Sprintf("field %s is not valid on table %s", e.FieldName, e.TableName)
+	return fmt.Sprintf("field %s is not exist on table %s", e.FieldName, e.TableName)
 }
 
 // ErrFieldIsNotValid is not valid
@@ -677,10 +677,11 @@ func (session *Session) slice2Bean(scanResults []interface{}, fields []string, b
 
 		col, fieldValue, err := session.getField(dataStruct, table, colName, idx)
 		if err != nil {
-			if _, ok := err.(ErrFieldIsNotValid); !ok {
-				session.engine.logger.Warnf("%v", err)
+			if _, ok := err.(ErrFieldIsNotExist); ok {
+				continue
+			} else {
+				return nil, err
 			}
-			continue
 		}
 		if fieldValue == nil {
 			continue
