@@ -3,6 +3,11 @@
 This changelog goes through all the changes that have been made in each release
 without substantial changes to our git log.
 
+## [1.2.2](https://gitea.com/xorm/xorm/releases/tag/1.2.2) - 2021-08-11
+
+* MISC
+  * Move convert back to xorm.io/xorm/convert (#2030)
+
 ## [1.2.1](https://gitea.com/xorm/xorm/releases/tag/1.2.1) - 2021-08-08
 
 * FEATURES
