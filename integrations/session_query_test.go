@@ -5,7 +5,6 @@
 package integrations
 
 import (
-	"fmt"
 	"strconv"
 	"testing"
 	"time"
@@ -37,7 +36,7 @@ func TestQueryString(t *testing.T) {
 	_, err := testEngine.InsertOne(data)
 	assert.NoError(t, err)
 
-	records, err := testEngine.QueryString("select * from " + testEngine.TableName("get_var2", true))
+	records, err := testEngine.QueryString("select * from " + testEngine.Quote(testEngine.TableName("get_var2", true)))
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(records))
 	assert.Equal(t, 5, len(records[0]))
@@ -63,48 +62,12 @@ func TestQueryString2(t *testing.T) {
 	_, err := testEngine.Insert(data)
 	assert.NoError(t, err)
 
-	records, err := testEngine.QueryString("select * from " + testEngine.TableName("get_var3", true))
+	records, err := testEngine.QueryString("select * from " + testEngine.Quote(testEngine.TableName("get_var3", true)))
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(records))
 	assert.Equal(t, 2, len(records[0]))
 	assert.Equal(t, "1", records[0]["id"])
 	assert.True(t, "0" == records[0]["msg"] || "false" == records[0]["msg"])
-}
-
-func toString(i interface{}) string {
-	switch i.(type) {
-	case []byte:
-		return string(i.([]byte))
-	case string:
-		return i.(string)
-	}
-	return fmt.Sprintf("%v", i)
-}
-
-func toInt64(i interface{}) int64 {
-	switch i.(type) {
-	case []byte:
-		n, _ := strconv.ParseInt(string(i.([]byte)), 10, 64)
-		return n
-	case int:
-		return int64(i.(int))
-	case int64:
-		return i.(int64)
-	}
-	return 0
-}
-
-func toFloat64(i interface{}) float64 {
-	switch i.(type) {
-	case []byte:
-		n, _ := strconv.ParseFloat(string(i.([]byte)), 64)
-		return n
-	case float64:
-		return i.(float64)
-	case float32:
-		return float64(i.(float32))
-	}
-	return 0
 }
 
 func toBool(i interface{}) bool {
@@ -138,7 +101,7 @@ func TestQueryInterface(t *testing.T) {
 	_, err := testEngine.InsertOne(data)
 	assert.NoError(t, err)
 
-	records, err := testEngine.QueryInterface("select * from " + testEngine.TableName("get_var_interface", true))
+	records, err := testEngine.QueryInterface("select * from " + testEngine.Quote(testEngine.TableName("get_var_interface", true)))
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(records))
 	assert.Equal(t, 5, len(records[0]))
@@ -192,7 +155,7 @@ func TestQueryNoParams(t *testing.T) {
 	assert.NoError(t, err)
 	assertResult(t, results)
 
-	results, err = testEngine.SQL("select * from " + testEngine.TableName("query_no_params", true)).Query()
+	results, err = testEngine.SQL("select * from " + testEngine.Quote(testEngine.TableName("query_no_params", true))).Query()
 	assert.NoError(t, err)
 	assertResult(t, results)
 }
@@ -223,7 +186,7 @@ func TestQueryStringNoParam(t *testing.T) {
 		assert.EqualValues(t, "0", records[0]["msg"])
 	}
 
-	records, err = testEngine.Table("get_var4").Where(builder.Eq{"id": 1}).QueryString()
+	records, err = testEngine.Table("get_var4").Where(builder.Eq{"`id`": 1}).QueryString()
 	assert.NoError(t, err)
 	assert.EqualValues(t, 1, len(records))
 	assert.EqualValues(t, "1", records[0]["id"])
@@ -260,7 +223,7 @@ func TestQuerySliceStringNoParam(t *testing.T) {
 		assert.EqualValues(t, "0", records[0][1])
 	}
 
-	records, err = testEngine.Table("get_var6").Where(builder.Eq{"id": 1}).QuerySliceString()
+	records, err = testEngine.Table("get_var6").Where(builder.Eq{"`id`": 1}).QuerySliceString()
 	assert.NoError(t, err)
 	assert.EqualValues(t, 1, len(records))
 	assert.EqualValues(t, "1", records[0][0])
@@ -293,7 +256,7 @@ func TestQueryInterfaceNoParam(t *testing.T) {
 	assert.EqualValues(t, 1, records[0]["id"])
 	assert.False(t, toBool(records[0]["msg"]))
 
-	records, err = testEngine.Table("get_var5").Where(builder.Eq{"id": 1}).QueryInterface()
+	records, err = testEngine.Table("get_var5").Where(builder.Eq{"`id`": 1}).QueryInterface()
 	assert.NoError(t, err)
 	assert.EqualValues(t, 1, len(records))
 	assert.EqualValues(t, 1, records[0]["id"])
@@ -340,7 +303,7 @@ func TestQueryWithBuilder(t *testing.T) {
 		assert.EqualValues(t, 3000, money)
 	}
 
-	results, err := testEngine.Query(builder.Select("*").From(testEngine.TableName("query_with_builder", true)))
+	results, err := testEngine.Query(builder.Select("*").From(testEngine.Quote(testEngine.TableName("query_with_builder", true))))
 	assert.NoError(t, err)
 	assertResult(t, results)
 }
@@ -383,14 +346,14 @@ func TestJoinWithSubQuery(t *testing.T) {
 
 	tbName := testEngine.Quote(testEngine.TableName("join_with_sub_query_depart", true))
 	var querys []JoinWithSubQuery1
-	err = testEngine.Join("INNER", builder.Select("id").From(tbName),
-		"join_with_sub_query_depart.id = join_with_sub_query1.depart_id").Find(&querys)
+	err = testEngine.Join("INNER", builder.Select("`id`").From(tbName),
+		"`join_with_sub_query_depart`.`id` = `join_with_sub_query1`.`depart_id`").Find(&querys)
 	assert.NoError(t, err)
 	assert.EqualValues(t, 1, len(querys))
 	assert.EqualValues(t, q, querys[0])
 
 	querys = make([]JoinWithSubQuery1, 0, 1)
-	err = testEngine.Join("INNER", "(SELECT id FROM "+tbName+") join_with_sub_query_depart", "join_with_sub_query_depart.id = join_with_sub_query1.depart_id").
+	err = testEngine.Join("INNER", "(SELECT `id` FROM "+tbName+") `a`", "`a`.`id` = `join_with_sub_query1`.`depart_id`").
 		Find(&querys)
 	assert.NoError(t, err)
 	assert.EqualValues(t, 1, len(querys))

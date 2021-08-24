@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"xorm.io/xorm"
+	"xorm.io/xorm/schemas"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -191,8 +192,8 @@ func TestInsertDefault(t *testing.T) {
 	assert.NoError(t, err)
 	assert.True(t, has)
 	assert.EqualValues(t, -1, di.Status)
-	assert.EqualValues(t, di2.Updated.Unix(), di.Updated.Unix())
-	assert.EqualValues(t, di2.Created.Unix(), di.Created.Unix())
+	assert.EqualValues(t, di2.Updated.Unix(), di.Updated.Unix(), di.Updated)
+	assert.EqualValues(t, di2.Created.Unix(), di.Created.Unix(), di.Created)
 }
 
 func TestInsertDefault2(t *testing.T) {
@@ -624,6 +625,11 @@ func TestAnonymousStruct(t *testing.T) {
 }
 
 func TestInsertMap(t *testing.T) {
+	if testEngine.Dialect().URI().DBType == schemas.DAMENG {
+		t.SkipNow()
+		return
+	}
+
 	type InsertMap struct {
 		Id     int64
 		Width  uint32
@@ -727,7 +733,7 @@ func TestInsertWhere(t *testing.T) {
 	}
 
 	inserted, err := testEngine.SetExpr("`index`", "coalesce(MAX(`index`),0)+1").
-		Where("repo_id=?", 1).
+		Where("`repo_id`=?", 1).
 		Insert(&i)
 	assert.NoError(t, err)
 	assert.EqualValues(t, 1, inserted)
@@ -740,7 +746,12 @@ func TestInsertWhere(t *testing.T) {
 	i.Index = 1
 	assert.EqualValues(t, i, j)
 
-	inserted, err = testEngine.Table(new(InsertWhere)).Where("repo_id=?", 1).
+	if testEngine.Dialect().URI().DBType == schemas.DAMENG {
+		t.SkipNow()
+		return
+	}
+
+	inserted, err = testEngine.Table(new(InsertWhere)).Where("`repo_id`=?", 1).
 		SetExpr("`index`", "coalesce(MAX(`index`),0)+1").
 		Insert(map[string]interface{}{
 			"repo_id": 1,
@@ -761,7 +772,7 @@ func TestInsertWhere(t *testing.T) {
 	assert.EqualValues(t, "trest2", j2.Name)
 	assert.EqualValues(t, 2, j2.Index)
 
-	inserted, err = testEngine.Table(new(InsertWhere)).Where("repo_id=?", 1).
+	inserted, err = testEngine.Table(new(InsertWhere)).Where("`repo_id`=?", 1).
 		SetExpr("`index`", "coalesce(MAX(`index`),0)+1").
 		SetExpr("repo_id", "1").
 		Insert(map[string]string{
@@ -777,7 +788,7 @@ func TestInsertWhere(t *testing.T) {
 	assert.EqualValues(t, "trest3", j3.Name)
 	assert.EqualValues(t, 3, j3.Index)
 
-	inserted, err = testEngine.Table(new(InsertWhere)).Where("repo_id=?", 1).
+	inserted, err = testEngine.Table(new(InsertWhere)).Where("`repo_id`=?", 1).
 		SetExpr("`index`", "coalesce(MAX(`index`),0)+1").
 		Insert(map[string]interface{}{
 			"repo_id": 1,
@@ -793,7 +804,7 @@ func TestInsertWhere(t *testing.T) {
 	assert.EqualValues(t, "10';delete * from insert_where; --", j4.Name)
 	assert.EqualValues(t, 4, j4.Index)
 
-	inserted, err = testEngine.Table(new(InsertWhere)).Where("repo_id=?", 1).
+	inserted, err = testEngine.Table(new(InsertWhere)).Where("`repo_id`=?", 1).
 		SetExpr("`index`", "coalesce(MAX(`index`),0)+1").
 		Insert(map[string]interface{}{
 			"repo_id": 1,
@@ -845,6 +856,11 @@ func TestInsertExpr2(t *testing.T) {
 	assert.EqualValues(t, 0, ie2.NumCommits)
 	assert.EqualValues(t, 1, ie2.RepoId)
 	assert.EqualValues(t, true, ie2.IsTag)
+
+	if testEngine.Dialect().URI().DBType == schemas.DAMENG {
+		t.SkipNow()
+		return
+	}
 
 	inserted, err = testEngine.Table(new(InsertExprsRelease)).
 		SetExpr("is_draft", true).
@@ -1067,6 +1083,11 @@ func TestInsertDeleted(t *testing.T) {
 }
 
 func TestInsertMultipleMap(t *testing.T) {
+	if testEngine.Dialect().URI().DBType == schemas.DAMENG {
+		t.SkipNow()
+		return
+	}
+
 	type InsertMultipleMap struct {
 		Id     int64
 		Width  uint32

@@ -248,11 +248,6 @@ func (engine *Engine) SQLType(c *schemas.Column) string {
 	return engine.dialect.SQLType(c)
 }
 
-// AutoIncrStr Database's autoincrement statement
-func (engine *Engine) AutoIncrStr() string {
-	return engine.dialect.AutoIncrStr()
-}
-
 // SetConnMaxLifetime sets the maximum amount of time a connection may be reused.
 func (engine *Engine) SetConnMaxLifetime(d time.Duration) {
 	engine.DB().SetConnMaxLifetime(d)
@@ -441,7 +436,7 @@ func (engine *Engine) DumpTablesToFile(tables []*schemas.Table, fp string, tp ..
 
 // DumpTables dump specify tables to io.Writer
 func (engine *Engine) DumpTables(tables []*schemas.Table, w io.Writer, tp ...schemas.DBType) error {
-	return engine.dumpTables(tables, w, tp...)
+	return engine.dumpTables(context.Background(), tables, w, tp...)
 }
 
 func formatBool(s string, dstDialect dialects.Dialect) string {
@@ -457,7 +452,7 @@ func formatBool(s string, dstDialect dialects.Dialect) string {
 }
 
 // dumpTables dump database all table structs and data to w with specify db type
-func (engine *Engine) dumpTables(tables []*schemas.Table, w io.Writer, tp ...schemas.DBType) error {
+func (engine *Engine) dumpTables(ctx context.Context, tables []*schemas.Table, w io.Writer, tp ...schemas.DBType) error {
 	var dstDialect dialects.Dialect
 	if len(tp) == 0 {
 		dstDialect = engine.dialect
@@ -494,9 +489,12 @@ func (engine *Engine) dumpTables(tables []*schemas.Table, w io.Writer, tp ...sch
 			}
 		}
 
-		dstTableName := dstTable.Name
+		var dstTableName = dstTable.Name
+		var quoter = dstDialect.Quoter().Quote
+		var quotedDstTableName = quoter(dstTable.Name)
 		if dstDialect.URI().Schema != "" {
 			dstTableName = fmt.Sprintf("%s.%s", dstDialect.URI().Schema, dstTable.Name)
+			quotedDstTableName = fmt.Sprintf("%s.%s", quoter(dstDialect.URI().Schema), quoter(dstTable.Name))
 		}
 		originalTableName := table.Name
 		if engine.dialect.URI().Schema != "" {
@@ -509,13 +507,26 @@ func (engine *Engine) dumpTables(tables []*schemas.Table, w io.Writer, tp ...sch
 			}
 		}
 
-		sqls, _ := dstDialect.CreateTableSQL(dstTable, dstTableName)
-		for _, s := range sqls {
-			_, err = io.WriteString(w, s+";\n")
+		if dstTable.AutoIncrement != "" && dstDialect.Features().AutoincrMode == dialects.SequenceAutoincrMode {
+			sqlstr, err := dstDialect.CreateSequenceSQL(ctx, engine.db, utils.SeqName(dstTableName))
+			if err != nil {
+				return err
+			}
+			_, err = io.WriteString(w, sqlstr+";\n")
 			if err != nil {
 				return err
 			}
 		}
+
+		sqlstr, _, err := dstDialect.CreateTableSQL(ctx, engine.db, dstTable, dstTableName)
+		if err != nil {
+			return err
+		}
+		_, err = io.WriteString(w, sqlstr+";\n")
+		if err != nil {
+			return err
+		}
+
 		if len(dstTable.PKColumns()) > 0 && dstDialect.URI().DBType == schemas.MSSQL {
 			fmt.Fprintf(w, "SET IDENTITY_INSERT [%s] ON;\n", dstTable.Name)
 		}
@@ -552,7 +563,7 @@ func (engine *Engine) dumpTables(tables []*schemas.Table, w io.Writer, tp ...sch
 		sess := engine.NewSession()
 		defer sess.Close()
 		for rows.Next() {
-			_, err = io.WriteString(w, "INSERT INTO "+dstDialect.Quoter().Quote(dstTableName)+" ("+destColNames+") VALUES (")
+			_, err = io.WriteString(w, "INSERT INTO "+quotedDstTableName+" ("+destColNames+") VALUES (")
 			if err != nil {
 				return err
 			}
@@ -563,36 +574,27 @@ func (engine *Engine) dumpTables(tables []*schemas.Table, w io.Writer, tp ...sch
 			}
 			for i, scanResult := range scanResults {
 				stp := schemas.SQLType{Name: types[i].DatabaseTypeName()}
-				if stp.IsNumeric() {
-					s := scanResult.(*sql.NullString)
-					if s.Valid {
-						if _, err = io.WriteString(w, formatBool(s.String, dstDialect)); err != nil {
-							return err
-						}
-					} else {
-						if _, err = io.WriteString(w, "NULL"); err != nil {
-							return err
-						}
-					}
-				} else if stp.IsBool() {
-					s := scanResult.(*sql.NullString)
-					if s.Valid {
-						if _, err = io.WriteString(w, formatBool(s.String, dstDialect)); err != nil {
-							return err
-						}
-					} else {
-						if _, err = io.WriteString(w, "NULL"); err != nil {
-							return err
-						}
+				s := scanResult.(*sql.NullString)
+				if !s.Valid {
+					if _, err = io.WriteString(w, "NULL"); err != nil {
+						return err
 					}
 				} else {
-					s := scanResult.(*sql.NullString)
-					if s.Valid {
-						if _, err = io.WriteString(w, "'"+strings.ReplaceAll(s.String, "'", "''")+"'"); err != nil {
+					if stp.IsBool() || (dstDialect.URI().DBType == schemas.MSSQL && strings.EqualFold(stp.Name, schemas.Bit)) {
+						if _, err = io.WriteString(w, formatBool(s.String, dstDialect)); err != nil {
+							return err
+						}
+					} else if stp.IsNumeric() {
+						if _, err = io.WriteString(w, s.String); err != nil {
+							return err
+						}
+					} else if sess.engine.dialect.URI().DBType == schemas.DAMENG && stp.IsTime() && len(s.String) == 25 {
+						r := strings.Replace(s.String[:19], "T", " ", -1)
+						if _, err = io.WriteString(w, "'"+r+"'"); err != nil {
 							return err
 						}
 					} else {
-						if _, err = io.WriteString(w, "NULL"); err != nil {
+						if _, err = io.WriteString(w, "'"+strings.ReplaceAll(s.String, "'", "''")+"'"); err != nil {
 							return err
 						}
 					}

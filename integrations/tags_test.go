@@ -458,7 +458,7 @@ func TestExtends5(t *testing.T) {
 	list := make([]Book, 0)
 	err = session.
 		Select(fmt.Sprintf(
-			"%s.%s, sc.%s AS %s, sc.%s AS %s, s.%s, s.%s",
+			"%s.%s, `sc`.%s AS %s, `sc`.%s AS %s, `s`.%s, `s`.%s",
 			quote(bookTableName),
 			quote("id"),
 			quote("Width"),
@@ -472,12 +472,12 @@ func TestExtends5(t *testing.T) {
 		Join(
 			"LEFT",
 			sizeTableName+" AS `sc`",
-			bookTableName+".`SizeClosed`=sc.`id`",
+			bookTableName+".`SizeClosed`=`sc`.`id`",
 		).
 		Join(
 			"LEFT",
 			sizeTableName+" AS `s`",
-			bookTableName+".`Size`=s.`id`",
+			bookTableName+".`Size`=`s`.`id`",
 		).
 		Find(&list)
 	assert.NoError(t, err)
@@ -730,7 +730,7 @@ func TestLowerCase(t *testing.T) {
 
 	err := testEngine.Sync2(&Lowercase{})
 	assert.NoError(t, err)
-	_, err = testEngine.Where("id > 0").Delete(&Lowercase{})
+	_, err = testEngine.Where("`id` > 0").Delete(&Lowercase{})
 	assert.NoError(t, err)
 
 	_, err = testEngine.Insert(&Lowercase{ended: 1})

@@ -14,6 +14,7 @@ import (
 	"xorm.io/xorm"
 	"xorm.io/xorm/schemas"
 
+	_ "gitee.com/travelliu/dm"
 	_ "github.com/denisenkom/go-mssqldb"
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/jackc/pgx/v4/stdlib"
@@ -134,6 +135,8 @@ func TestDump(t *testing.T) {
 	}
 }
 
+var dbtypes = []schemas.DBType{schemas.SQLITE, schemas.MYSQL, schemas.POSTGRES, schemas.MSSQL}
+
 func TestDumpTables(t *testing.T) {
 	assert.NoError(t, PrepareEngine())
 
@@ -169,7 +172,7 @@ func TestDumpTables(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NoError(t, sess.Commit())
 
-	for _, tp := range []schemas.DBType{schemas.SQLITE, schemas.MYSQL, schemas.POSTGRES, schemas.MSSQL} {
+	for _, tp := range dbtypes {
 		name := fmt.Sprintf("dump_%v-table.sql", tp)
 		t.Run(name, func(t *testing.T) {
 			assert.NoError(t, testEngine.(*xorm.Engine).DumpTablesToFile([]*schemas.Table{tb}, name, tp))
