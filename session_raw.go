@@ -46,25 +46,22 @@ func (session *Session) queryRows(sqlStr string, args ...interface{}) (*core.Row
 				return nil, err
 			}
 
-			rows, err := stmt.QueryContext(session.ctx, args...)
-			if err != nil {
-				return nil, err
-			}
-			return rows, nil
+			return stmt.QueryContext(session.ctx, args...)
 		}
 
-		rows, err := db.QueryContext(session.ctx, sqlStr, args...)
+		return db.QueryContext(session.ctx, sqlStr, args...)
+	}
+
+	if session.prepareStmt {
+		stmt, err := session.doPrepareTx(sqlStr)
 		if err != nil {
 			return nil, err
 		}
-		return rows, nil
+
+		return stmt.QueryContext(session.ctx, args...)
 	}
 
-	rows, err := session.tx.QueryContext(session.ctx, sqlStr, args...)
-	if err != nil {
-		return nil, err
-	}
-	return rows, nil
+	return session.tx.QueryContext(session.ctx, sqlStr, args...)
 }
 
 func (session *Session) queryRow(sqlStr string, args ...interface{}) *core.Row {
@@ -160,6 +157,13 @@ func (session *Session) exec(sqlStr string, args ...interface{}) (sql.Result, er
 	session.lastSQLArgs = args
 
 	if !session.isAutoCommit {
+		if session.prepareStmt {
+			stmt, err := session.doPrepareTx(sqlStr)
+			if err != nil {
+				return nil, err
+			}
+			return stmt.ExecContext(session.ctx, args...)
+		}
 		return session.tx.ExecContext(session.ctx, sqlStr, args...)
 	}
 
@@ -168,12 +172,7 @@ func (session *Session) exec(sqlStr string, args ...interface{}) (sql.Result, er
 		if err != nil {
 			return nil, err
 		}
-
-		res, err := stmt.ExecContext(session.ctx, args...)
-		if err != nil {
-			return nil, err
-		}
-		return res, nil
+		return stmt.ExecContext(session.ctx, args...)
 	}
 
 	return session.DB().ExecContext(session.ctx, sqlStr, args...)

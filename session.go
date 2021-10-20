@@ -79,7 +79,8 @@ type Session struct {
 	afterClosures   []func(interface{})
 	afterProcessors []executedProcessor
 
-	stmtCache map[uint32]*core.Stmt //key: hash.Hash32 of (queryStr, len(queryStr))
+	stmtCache   map[uint32]*core.Stmt //key: hash.Hash32 of (queryStr, len(queryStr))
+	txStmtCache map[uint32]*core.Stmt // for tx statement
 
 	lastSQL     string
 	lastSQLArgs []interface{}
@@ -130,6 +131,7 @@ func newSession(engine *Engine) *Session {
 		afterClosures:    make([]func(interface{}), 0),
 		afterProcessors:  make([]executedProcessor, 0),
 		stmtCache:        make(map[uint32]*core.Stmt),
+		txStmtCache:      make(map[uint32]*core.Stmt),
 
 		lastSQL:     "",
 		lastSQLArgs: make([]interface{}, 0),
@@ -150,6 +152,12 @@ func (session *Session) Close() error {
 		}
 	}
 
+	for _, v := range session.txStmtCache {
+		if err := v.Close(); err != nil {
+			return err
+		}
+	}
+
 	if !session.isClosed {
 		// When Close be called, if session is a transaction and do not call
 		// Commit or Rollback, then call Rollback.
@@ -160,6 +168,7 @@ func (session *Session) Close() error {
 		}
 		session.tx = nil
 		session.stmtCache = nil
+		session.txStmtCache = nil
 		session.isClosed = true
 	}
 	return nil
@@ -200,6 +209,7 @@ func (session *Session) IsClosed() bool {
 func (session *Session) resetStatement() {
 	if session.autoResetStatement {
 		session.statement.Reset()
+		session.prepareStmt = false
 	}
 }
 
@@ -366,6 +376,21 @@ func (session *Session) doPrepare(db *core.DB, sqlStr string) (stmt *core.Stmt, 
 			return nil, err
 		}
 		session.stmtCache[crc] = stmt
+	}
+	return
+}
+
+func (session *Session) doPrepareTx(sqlStr string) (stmt *core.Stmt, err error) {
+	crc := crc32.ChecksumIEEE([]byte(sqlStr))
+	// TODO try hash(sqlStr+len(sqlStr))
+	var has bool
+	stmt, has = session.txStmtCache[crc]
+	if !has {
+		stmt, err = session.tx.PrepareContext(session.ctx, sqlStr)
+		if err != nil {
+			return nil, err
+		}
+		session.txStmtCache[crc] = stmt
 	}
 	return
 }
