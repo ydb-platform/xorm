@@ -247,6 +247,10 @@ func TestOrder(t *testing.T) {
 	users2 := make([]Userinfo, 0)
 	err = testEngine.Asc("id", "username").Desc("height").Find(&users2)
 	assert.NoError(t, err)
+
+	users = make([]Userinfo, 0)
+	err = testEngine.OrderBy("CASE WHEN username LIKE ? THEN 0 ELSE 1 END DESC", "a").Find(&users)
+	assert.NoError(t, err)
 }
 
 func TestGroupBy(t *testing.T) {
