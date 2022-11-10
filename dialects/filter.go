@@ -74,3 +74,10 @@ func convertQuestionMark(sql, prefix string, start int) string {
 func (s *SeqFilter) Do(sql string) string {
 	return convertQuestionMark(sql, s.Prefix, s.Start)
 }
+
+// do nothing
+type FakeFilter struct{}
+
+func (ff *FakeFilter) Do(sqlStr string) string {
+	return sqlStr
+}
