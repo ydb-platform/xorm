@@ -329,14 +329,8 @@ func toYQLDataType(t string, defaultLength, defaultLength2 int64) string {
 		res = ydb_Double
 	case schemas.Bool:
 		res = ydb_Bool
-	case schemas.Char, schemas.TinyText, schemas.Text, schemas.MediumText, schemas.LongText:
+	case schemas.Char, schemas.TinyText, schemas.MediumText, schemas.LongText, schemas.Varchar:
 		res = ydb_Utf8
-	case schemas.Varchar:
-		if defaultLength == 255 {
-			res = ydb_Utf8
-		} else {
-			res = ydb_String
-		}
 	case schemas.Date:
 		res = ydb_Date
 	case schemas.TimeStamp:

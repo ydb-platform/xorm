@@ -97,19 +97,46 @@ func (yf *SeqFilter) DoWithDeclare(sqlStr string, args ...interface{}) string {
 
 	var index = yf.Start
 
-	// log.Println(sqlStr, reflect.ValueOf(args))
+	// log.Println(sqlStr, reflect.ValueOf(args), reflect.TypeOf(args[0]))
 	for _, c := range sqlStr {
 		if !beginSingleQuote && !isLineComment && !isComment && c == '?' {
-			// t, ok := reflect.ValueOf(args[index-1]).Interface().(sql.NamedArg)
 			t, ok := args[index-1].(sql.NamedArg)
 			if !ok {
 				panic(fmt.Errorf("args should be the `sql.NamedArg` type: %+v", args[index-1]))
 			}
 
-			repl := fmt.Sprintf("%s%s", yf.Prefix, t.Name)
+			// common idea:
+			// 2 cases for now:
+			// - primitive
+			// - non-primitive
+			// if non-primitive. `tp` will be ydb_String
+			// if `tp` is ydb_String it can be map, slice, array, struct
+
 			st := schemas.Type2SQLType(reflect.TypeOf(t.Value))
 			tp := toYQLDataType(st.Name, st.DefaultLength, st.DefaultLength2)
 
+			if tp == ydb_String { // non-primitive case
+				switch k := reflect.TypeOf(t.Value).Kind(); k {
+				case reflect.Array, reflect.Slice:
+					st = schemas.Type2SQLType(reflect.TypeOf(t.Value).Elem())
+					tElem := toYQLDataType(st.Name, st.DefaultLength, st.DefaultLength2)
+					tp = fmt.Sprintf("List<%s>", tElem)
+				case reflect.Map:
+				case reflect.Struct:
+					fields := make([]string, 0)
+					to := reflect.TypeOf(t.Value)
+					for i := 0; i < to.NumField(); i++ {
+						st = schemas.Type2SQLType(to.Field(i).Type)
+						tElem := toYQLDataType(st.Name, st.DefaultLength, st.DefaultLength2)
+						fields = append(fields, fmt.Sprintf("%s:%s", to.Field(i).Name, tElem))
+					}
+					tp = fmt.Sprintf("Struct<%s>", strings.Join(fields, ","))
+				default:
+					tp = ydb_String
+				}
+			}
+
+			repl := fmt.Sprintf("%s%s", yf.Prefix, t.Name)
 			declareBuf.WriteString(fmt.Sprintf("DECLARE %s AS %s;", repl, tp))
 
 			buf.WriteString(repl)
@@ -148,6 +175,7 @@ func (yf *SeqFilter) DoWithDeclare(sqlStr string, args ...interface{}) string {
 			buf.WriteRune(c)
 		}
 	}
-	
+
+	// log.Println(declareBuf.String() + buf.String())
 	return declareBuf.String() + buf.String()
 }
