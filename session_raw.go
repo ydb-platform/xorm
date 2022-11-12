@@ -9,11 +9,16 @@ import (
 	"strings"
 
 	"xorm.io/xorm/core"
+	"xorm.io/xorm/schemas"
 )
 
 func (session *Session) queryPreprocess(sqlStr *string, paramStr ...interface{}) {
 	for _, filter := range session.engine.dialect.Filters() {
-		*sqlStr = filter.Do(*sqlStr)
+		if session.engine.driverName == string(schemas.YDB) {
+			*sqlStr = filter.DoWithDeclare(*sqlStr, paramStr...)
+		} else {
+			*sqlStr = filter.Do(*sqlStr)
+		}
 	}
 
 	session.lastSQL = *sqlStr

@@ -3,6 +3,10 @@ package dialects
 import (
 	"context"
 	"database/sql"
+	"errors"
+	"fmt"
+	"net/url"
+	"path"
 	"strings"
 
 	"xorm.io/xorm/core"
@@ -263,7 +267,6 @@ func (db *ydb) Version(ctx context.Context, queryer core.Queryer) (*schemas.Vers
 
 func (db *ydb) Features() *DialectFeatures {
 	return &DialectFeatures{
-		// AutoincrMode: SequenceAutoincrMode,
 		AutoincrMode: -1,
 	}
 }
@@ -309,9 +312,9 @@ var (
 	ydb_Interval  = "Interval"
 )
 
-func (db *ydb) SQLType(column *schemas.Column) string {
+func toYQLDataType(t string, defaultLength, defaultLength2 int64) string {
 	var res string
-	switch v := column.SQLType.Name; v {
+	switch v := t; v {
 	case schemas.Int, schemas.Integer, schemas.TinyInt, schemas.SmallInt, schemas.MediumInt:
 		res = ydb_Int32
 	case schemas.UnsignedInt:
@@ -329,7 +332,7 @@ func (db *ydb) SQLType(column *schemas.Column) string {
 	case schemas.Char, schemas.TinyText, schemas.Text, schemas.MediumText, schemas.LongText:
 		res = ydb_Utf8
 	case schemas.Varchar:
-		if column.SQLType.DefaultLength == 255 {
+		if defaultLength == 255 {
 			res = ydb_Utf8
 		} else {
 			res = ydb_String
@@ -347,6 +350,10 @@ func (db *ydb) SQLType(column *schemas.Column) string {
 	}
 
 	return res
+}
+
+func (db *ydb) SQLType(column *schemas.Column) string {
+	return toYQLDataType(column.SQLType.Name, column.SQLType.DefaultLength, column.SQLType.DefaultLength2)
 }
 
 // ydb-go-sdk does not support ColumnType.
@@ -369,18 +376,55 @@ func (db *ydb) IsTableExist(
 }
 
 func (db *ydb) AddColumnSQL(tableName string, column *schemas.Column) string {
-	// TODO
-	return ""
+	quote := db.dialect.Quoter()
+
+	pathToTable := quote.Quote(path.Join(db.URI().DBName, tableName))
+	columnName := quote.Quote(column.Name)
+	dataType := db.SQLType(column)
+
+	var buf strings.Builder
+	buf.WriteString(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s;", pathToTable, columnName, dataType))
+
+	return buf.String()
 }
 
+// Does YQL have script to do this????
+// is this nessesary??
 func (db *ydb) ModifyColumnSQL(tableName string, column *schemas.Column) string {
 	// TODO
 	return ""
 }
 
+// SYNC by default
+func (db *ydb) CreateIndexSQL(tableName string, index *schemas.Index) string {
+	quote := db.dialect.Quoter()
+
+	pathToTable := quote.Quote(path.Join(db.URI().DBName, tableName))
+	indexName := quote.Quote(index.Name)
+
+	colsIndex := index.Cols
+	for i := 0; i < len(colsIndex); i++ {
+		colsIndex[i] = quote.Quote(colsIndex[i])
+	}
+
+	indexOn := strings.Join(colsIndex, ",")
+
+	var buf strings.Builder
+	buf.WriteString(fmt.Sprintf("ALTER TABLE %s ADD INDEX %s GLOBAL ON ( %s );", pathToTable, indexName, indexOn))
+
+	return buf.String()
+}
+
 func (db *ydb) DropIndexSQL(tableName string, index *schemas.Index) string {
-	// TODO
-	return ""
+	quote := db.dialect.Quoter()
+
+	pathToTable := quote.Quote(path.Join(db.URI().DBName, tableName))
+	indexName := quote.Quote(index.Name)
+
+	var buf strings.Builder
+	buf.WriteString(fmt.Sprintf("ALTER TABLE %s DROP INDEX %s;", pathToTable, indexName))
+
+	return buf.String()
 }
 
 func (db *ydb) IsColumnExist(
@@ -401,6 +445,7 @@ func (db *ydb) GetColumns(queryer core.Queryer, ctx context.Context, tableName s
 }
 
 func (db *ydb) GetTables(queryer core.Queryer, ctx context.Context) ([]*schemas.Table, error) {
+	// TODO
 	return nil, nil
 }
 
@@ -421,9 +466,16 @@ func (db *ydb) CreateTableSQL(
 	return "", true, nil
 }
 
-// ydb already use $ for query parameters
+func (db *ydb) DropTableSQL(tableName string) (string, bool) {
+	return "", false
+}
+
+// https://github.com/ydb-platform/ydb-go-sdk/blob/master/SQL.md#specifying-query-parameters-
 func (db *ydb) Filters() []Filter {
-	return []Filter{&FakeFilter{}}
+	return []Filter{&SeqFilter{
+		Prefix: "$",
+		Start:  1,
+	}}
 }
 
 type ydbDriver struct {
@@ -436,9 +488,42 @@ func (ydbDrv *ydbDriver) Features() *DriverFeatures {
 	}
 }
 
+// DSN format: https://github.com/ydb-platform/ydb-go-sdk/blob/a804c31be0d3c44dfd7b21ed49d863619217b11d/connection.go#L339
 func (ydbDrv *ydbDriver) Parse(driverName, dataSourceName string) (*URI, error) {
-	// TODO
-	return nil, nil
+	info := &URI{DBType: schemas.YDB}
+
+	uri, err := url.Parse(dataSourceName)
+	if err != nil {
+		return nil, fmt.Errorf("failed on parse data source %v", dataSourceName)
+	}
+
+	const (
+		secure   = "grpcs"
+		insecure = "grpc"
+	)
+
+	if uri.Scheme != secure && uri.Scheme != insecure {
+		return nil, fmt.Errorf("unsupported scheme %v", uri.Scheme)
+	}
+	// info.Schema = uri.Scheme
+
+	info.Host = uri.Host
+	if spl := strings.Split(uri.Host, ":"); len(spl) > 1 {
+		info.Host = spl[0]
+		info.Port = spl[1]
+	}
+
+	info.DBName = uri.Path
+	if info.DBName == "" {
+		return nil, errors.New("database path can not be empty")
+	}
+
+	if uri.User != nil {
+		info.Passwd, _ = uri.User.Password()
+		info.User = uri.User.Username()
+	}
+
+	return info, nil
 }
 
 // ydb-go-sdk does not support ColumnType.
