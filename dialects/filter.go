@@ -176,6 +176,5 @@ func (yf *SeqFilter) DoWithDeclare(sqlStr string, args ...interface{}) string {
 		}
 	}
 
-	// log.Println(declareBuf.String() + buf.String())
 	return declareBuf.String() + buf.String()
 }
