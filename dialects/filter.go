@@ -100,9 +100,11 @@ func (yf *SeqFilter) DoWithDeclare(sqlStr string, args ...interface{}) string {
 	// log.Println(sqlStr, reflect.ValueOf(args), reflect.TypeOf(args[0]))
 	for _, c := range sqlStr {
 		if !beginSingleQuote && !isLineComment && !isComment && c == '?' {
-			t, ok := args[index-1].(sql.NamedArg)
-			if !ok {
-				panic(fmt.Errorf("args should be the `sql.NamedArg` type: %+v", args[index-1]))
+			var t sql.NamedArg
+			if _, ok := args[index-1].(sql.NamedArg); ok {
+				t, _ = args[index-1].(sql.NamedArg)
+			} else {
+				t = sql.Named(fmt.Sprintf("param_%v", index), args[index-1])
 			}
 
 			// common idea:

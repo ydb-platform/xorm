@@ -456,12 +456,75 @@ func (db *ydb) CreateTableSQL(
 	queryer core.Queryer,
 	table *schemas.Table,
 	tableName string) (string, bool, error) {
-	// TODO
-	return "", true, nil
+
+	quote := db.dialect.Quoter()
+
+	pathToTable := quote.Quote(path.Join(db.URI().DBName, tableName))
+
+	var buf strings.Builder
+	buf.WriteString(fmt.Sprintf("CREATE TABLE %s ( ", pathToTable))
+
+	// 	build primary key
+	if len(table.PrimaryKeys) == 0 {
+		return "", false, errors.New("table must have at least one primary key")
+	}
+	pk := table.PrimaryKeys
+	pkMap := make(map[string]bool)
+	for i := 0; i < len(pk); i++ {
+		pk[i] = quote.Quote(pk[i])
+		pkMap[pk[i]] = true
+	}
+	primaryKey := fmt.Sprintf("PRIMARY KEY ( %s )", strings.Join(pk, ", "))
+
+	// build column
+	columnsList := []string{}
+	for _, c := range table.Columns() {
+		columnName := quote.Quote(c.Name)
+		dataType := db.SQLType(c)
+
+		if _, isPk := pkMap[columnName]; isPk {
+			columnsList = append(columnsList, fmt.Sprintf("%s %s NOT NULL", columnName, dataType))
+		} else {
+			columnsList = append(columnsList, fmt.Sprintf("%s %s", columnName, dataType))
+		}
+	}
+	joinColumns := strings.Join(columnsList, ", ")
+
+	// build index
+	indexList := []string{}
+	for indexName, index := range table.Indexes {
+		name := quote.Quote(indexName)
+		onCols := index.Cols
+		for i := 0; i < len(onCols); i++ {
+			onCols[i] = quote.Quote(onCols[i])
+		}
+		indexList = append(indexList,
+			fmt.Sprintf(
+				"INDEX %s GLOBAL ON ( %s )",
+				name, strings.Join(onCols, ", ")))
+	}
+	joinIndexes := strings.Join(indexList, ", ")
+
+	if joinIndexes != "" {
+		buf.WriteString(strings.Join([]string{joinColumns, joinIndexes, primaryKey}, ", "))
+	} else {
+		buf.WriteString(strings.Join([]string{joinColumns, primaryKey}, ", "))
+	}
+
+	buf.WriteString(" );")
+
+	return buf.String(), true, nil
 }
 
 func (db *ydb) DropTableSQL(tableName string) (string, bool) {
-	return "", false
+	quote := db.dialect.Quoter()
+
+	pathToTable := quote.Quote(path.Join(db.URI().DBName, tableName))
+
+	var buf strings.Builder
+	buf.WriteString(fmt.Sprintf("DROP TABLE %s;", pathToTable))
+
+	return buf.String(), true
 }
 
 // https://github.com/ydb-platform/ydb-go-sdk/blob/master/SQL.md#specifying-query-parameters-
