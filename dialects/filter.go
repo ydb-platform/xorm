@@ -97,7 +97,6 @@ func (yf *SeqFilter) DoWithDeclare(sqlStr string, args ...interface{}) string {
 
 	var index = yf.Start
 
-	// log.Println(sqlStr, reflect.ValueOf(args), reflect.TypeOf(args[0]))
 	for _, c := range sqlStr {
 		if !beginSingleQuote && !isLineComment && !isComment && c == '?' {
 			var t sql.NamedArg
