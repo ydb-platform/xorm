@@ -6,6 +6,7 @@ package xorm
 
 import (
 	"database/sql"
+	"fmt"
 	"strings"
 
 	"xorm.io/xorm/core"
@@ -18,6 +19,14 @@ func (session *Session) queryPreprocess(sqlStr *string, paramStr ...interface{})
 			*sqlStr = filter.DoWithDeclare(*sqlStr, paramStr...)
 		} else {
 			*sqlStr = filter.Do(*sqlStr)
+		}
+	}
+
+	if session.engine.driverName == string(schemas.YDB) {
+		for i := 0; i < len(paramStr); i++ {
+			if _, ok := paramStr[i].(sql.NamedArg); !ok {
+				paramStr[i] = sql.Named(fmt.Sprintf("param_%v", i+1), paramStr[i])
+			}
 		}
 	}
 
