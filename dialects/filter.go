@@ -119,9 +119,13 @@ func (yf *SeqFilter) DoWithDeclare(sqlStr string, args ...interface{}) string {
 			if tp == ydb_String { // non-primitive case
 				switch k := reflect.TypeOf(t.Value).Kind(); k {
 				case reflect.Array, reflect.Slice:
-					st = schemas.Type2SQLType(reflect.TypeOf(t.Value).Elem())
-					tElem := toYQLDataType(st.Name, st.DefaultLength, st.DefaultLength2)
-					tp = fmt.Sprintf("List<%s>", tElem)
+					if reflect.TypeOf(t.Value).Elem() == schemas.ByteType {
+						tp = "String"
+					} else {
+						st = schemas.Type2SQLType(reflect.TypeOf(t.Value).Elem())
+						tElem := toYQLDataType(st.Name, st.DefaultLength, st.DefaultLength2)
+						tp = fmt.Sprintf("List<%s>", tElem)
+					}
 				case reflect.Map:
 				case reflect.Struct:
 					fields := make([]string, 0)
@@ -138,7 +142,7 @@ func (yf *SeqFilter) DoWithDeclare(sqlStr string, args ...interface{}) string {
 			}
 
 			repl := fmt.Sprintf("%s%s", yf.Prefix, t.Name)
-			declareBuf.WriteString(fmt.Sprintf("DECLARE %s AS %s;", repl, tp))
+			declareBuf.WriteString(fmt.Sprintf("DECLARE %s AS %s;\n", repl, tp))
 
 			buf.WriteString(repl)
 			index++
@@ -176,6 +180,7 @@ func (yf *SeqFilter) DoWithDeclare(sqlStr string, args ...interface{}) string {
 			buf.WriteRune(c)
 		}
 	}
+	buf.WriteString(";")
 
 	return declareBuf.String() + buf.String()
 }
