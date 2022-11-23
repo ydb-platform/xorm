@@ -81,8 +81,7 @@ func (s *SeqFilter) Do(sql string) string {
 	return convertQuestionMark(sql, s.Prefix, s.Start)
 }
 
-// NEDD TEST
-// mapping ?, ? ... -> $ydb_placeholer_1, $ydb_placeholder_2 ...
+// generate `DECLARE` section
 // https://github.com/ydb-platform/ydb-go-sdk/blob/master/SQL.md#specifying-query-parameters-
 func (yf *SeqFilter) DoWithDeclare(sqlStr string, args ...interface{}) string {
 	var buf strings.Builder
@@ -106,39 +105,25 @@ func (yf *SeqFilter) DoWithDeclare(sqlStr string, args ...interface{}) string {
 				t = sql.Named(fmt.Sprintf("param_%v", index), args[index-1])
 			}
 
-			// common idea:
-			// 2 cases for now:
-			// - primitive
-			// - non-primitive
-			// if non-primitive. `tp` will be ydb_String
-			// if `tp` is ydb_String it can be map, slice, array, struct
-
-			st := schemas.Type2SQLType(reflect.TypeOf(t.Value))
+			st := schemas.YQL_TypeToSQLType(reflect.TypeOf(t.Value))
 			tp := toYQLDataType(st.Name, st.DefaultLength, st.DefaultLength2)
 
-			if tp == ydb_String { // non-primitive case
-				switch k := reflect.TypeOf(t.Value).Kind(); k {
-				case reflect.Array, reflect.Slice:
-					if reflect.TypeOf(t.Value).Elem() == schemas.ByteType {
-						tp = "String"
-					} else {
-						st = schemas.Type2SQLType(reflect.TypeOf(t.Value).Elem())
-						tElem := toYQLDataType(st.Name, st.DefaultLength, st.DefaultLength2)
-						tp = fmt.Sprintf("List<%s>", tElem)
-					}
-				case reflect.Map:
-				case reflect.Struct:
+			switch tp {
+			case yql_String:
+				if reflect.TypeOf(t.Value).Kind() == reflect.Struct {
 					fields := make([]string, 0)
 					to := reflect.TypeOf(t.Value)
 					for i := 0; i < to.NumField(); i++ {
-						st = schemas.Type2SQLType(to.Field(i).Type)
+						st = schemas.YQL_TypeToSQLType(to.Field(i).Type)
 						tElem := toYQLDataType(st.Name, st.DefaultLength, st.DefaultLength2)
 						fields = append(fields, fmt.Sprintf("%s:%s", to.Field(i).Name, tElem))
 					}
 					tp = fmt.Sprintf("Struct<%s>", strings.Join(fields, ","))
-				default:
-					tp = ydb_String
 				}
+			case yql_List:
+				st = schemas.YQL_TypeToSQLType(reflect.TypeOf(t.Value).Elem())
+				tElem := toYQLDataType(st.Name, st.DefaultLength, st.DefaultLength2)
+				tp = fmt.Sprintf("List<%s>", tElem)
 			}
 
 			repl := fmt.Sprintf("%s%s", yf.Prefix, t.Name)

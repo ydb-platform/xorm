@@ -169,3 +169,113 @@ func (statement *Statement) Value2Interface(col *schemas.Column, fieldValue refl
 		return fieldValue.Interface(), nil
 	}
 }
+
+func (statement *Statement) YQL_ValueToInterface(col *schemas.Column, fieldValue reflect.Value) (interface{}, error) {
+	fieldType := fieldValue.Type()
+	k := fieldType.Kind()
+	if k == reflect.Ptr {
+		if fieldValue.IsNil() {
+			return nil, nil
+		} else if !fieldValue.IsValid() {
+			return nil, nil
+		} else {
+			fieldValue = fieldValue.Elem()
+			fieldType = fieldValue.Type()
+			k = fieldType.Kind()
+		}
+	}
+
+	switch k {
+	case reflect.Bool:
+		return fieldValue.Bool(), nil
+	case reflect.String:
+		return fieldValue.String(), nil
+	case reflect.Struct:
+		if fieldType.ConvertibleTo(schemas.TimeType) {
+			t := fieldValue.Convert(schemas.TimeType).Interface().(time.Time)
+			return t, nil
+		} else if fieldType.ConvertibleTo(schemas.IntervalType) {
+			t := fieldValue.Convert(schemas.IntervalType).Interface().(time.Duration)
+			return t, nil
+		} else if fieldType.ConvertibleTo(schemas.NullBoolType) {
+			t := fieldValue.Convert(schemas.NullBoolType).Interface().(sql.NullBool)
+			if !t.Valid {
+				return nil, nil
+			}
+			return t.Bool, nil
+		} else if fieldType.ConvertibleTo(schemas.NullFloat64Type) {
+			t := fieldValue.Convert(schemas.NullFloat64Type).Interface().(sql.NullFloat64)
+			if !t.Valid {
+				return nil, nil
+			}
+			return t.Float64, nil
+		} else if fieldType.ConvertibleTo(schemas.NullInt16Type) {
+			t := fieldValue.Convert(schemas.NullInt16Type).Interface().(sql.NullInt16)
+			if !t.Valid {
+				return nil, nil
+			}
+			return t.Int16, nil
+		} else if fieldType.ConvertibleTo(schemas.NullInt32Type) {
+			t := fieldValue.Convert(schemas.NullInt32Type).Interface().(sql.NullInt32)
+			if !t.Valid {
+				return nil, nil
+			}
+			return t.Int32, nil
+		} else if fieldType.ConvertibleTo(schemas.NullInt64Type) {
+			t := fieldValue.Convert(schemas.NullInt64Type).Interface().(sql.NullInt64)
+			if !t.Valid {
+				return nil, nil
+			}
+			return t.Int64, nil
+		} else if fieldType.ConvertibleTo(schemas.NullStringType) {
+			t := fieldValue.Convert(schemas.NullStringType).Interface().(sql.NullString)
+			if !t.Valid {
+				return nil, nil
+			}
+			return t.String, nil
+		} else if fieldType.ConvertibleTo(schemas.NullTimeType) {
+			t := fieldValue.Convert(schemas.NullTimeType).Interface().(sql.NullTime)
+			if !t.Valid {
+				return nil, nil
+			}
+			return t.Time, nil
+		}
+
+		if col.SQLType.IsBlob() {
+			bytes, err := json.DefaultJSONHandler.Marshal(fieldValue.Interface())
+			if err != nil {
+				return nil, err
+			}
+			return bytes, nil
+		}
+
+		return nil, ErrUnSupportedType
+	case reflect.Array, reflect.Slice:
+		if !fieldValue.IsValid() {
+			return fieldValue.Interface(), nil
+		}
+
+		if col.SQLType.IsBlob() {
+			return fieldValue.Bytes(), nil
+		} else if col.SQLType.IsArray() {
+			return fieldValue.Interface(), nil
+		}
+		return nil, ErrUnSupportedType
+	case reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uint:
+		val := fieldValue.Uint()
+		switch t := col.SQLType.Name; t {
+		case schemas.UnsignedTinyInt:
+			return uint8(val), nil
+		case schemas.UnsignedSmallInt:
+			return uint16(val), nil
+		case schemas.UnsignedMediumInt, schemas.UnsignedInt:
+			return uint32(val), nil
+		case schemas.UnsignedBigInt:
+			return uint64(val), nil
+		default:
+			return val, nil
+		}
+	default:
+		return fieldValue.Interface(), nil
+	}
+}

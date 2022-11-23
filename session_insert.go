@@ -169,7 +169,13 @@ func (session *Session) insertMultipleStruct(rowsSlicePtr interface{}) (int64, e
 					setColumnInt(bean, col, 1)
 				})
 			} else {
-				arg, err := session.statement.Value2Interface(col, fieldValue)
+				var err error
+				var arg interface{}
+				if session.engine.dialect.URI().DBType == schemas.YDB {
+					arg, err = session.statement.YQL_ValueToInterface(col, fieldValue)
+				} else {
+					arg, err = session.statement.Value2Interface(col, fieldValue)
+				}
 				if err != nil {
 					return 0, err
 				}
@@ -525,7 +531,13 @@ func (session *Session) genInsertColumns(bean interface{}) ([]string, []interfac
 		} else if col.IsVersion && session.statement.CheckVersion {
 			args = append(args, 1)
 		} else {
-			arg, err := session.statement.Value2Interface(col, fieldValue)
+			var err error
+			var arg interface{}
+			if session.engine.dialect.URI().DBType == schemas.YDB {
+				arg, err = session.statement.YQL_ValueToInterface(col, fieldValue)
+			} else {
+				arg, err = session.statement.Value2Interface(col, fieldValue)
+			}
 			if err != nil {
 				return colNames, args, err
 			}

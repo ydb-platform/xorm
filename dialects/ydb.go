@@ -285,63 +285,96 @@ func (db *ydb) SetQuotePolicy(quotePolicy QuotePolicy) {}
 
 var (
 	// numeric types
-	ydb_Bool = "Bool"
+	yql_Bool = "Bool"
 
-	ydb_Int32 = "Int32"
-	ydb_Int64 = "Int64"
+	yql_Int8  = "Int8"
+	yql_Int16 = "Int16"
+	yql_Int32 = "Int32"
+	yql_Int64 = "Int64"
 
-	ydb_Uint8  = "Uint8"
-	ydb_Uint32 = "Uint32"
-	ydb_Uint64 = "Uint64"
+	yql_Uint8  = "Uint8"
+	yql_Uint16 = "Uint16"
+	yql_Uint32 = "Uint32"
+	yql_Uint64 = "Uint64"
 
-	ydb_Float   = "Float"
-	ydb_Double  = "Double"
-	ydb_Decimal = "Decimal"
+	yql_Float   = "Float"
+	yql_Double  = "Double"
+	yql_Decimal = "Decimal"
 
 	// string types
-	ydb_String       = "String"
-	ydb_Utf8         = "Utf8"
-	ydb_Json         = "Json"
-	ydb_JsonDocument = "JsonDocument"
-	ydb_Yson         = "Yson"
+	yql_String       = "String"
+	yql_Utf8         = "Utf8"
+	yql_Json         = "Json"
+	yql_JsonDocument = "JsonDocument"
+	yql_Yson         = "Yson"
 
 	// Data and Time
-	ydb_Date      = "Date"
-	ydb_DateTime  = "DateTime"
-	ydb_Timestamp = "Timestamp"
-	ydb_Interval  = "Interval"
+	yql_Date      = "Date"
+	yql_DateTime  = "DateTime"
+	yql_Timestamp = "Timestamp"
+	yql_Interval  = "Interval"
+
+	// Containers
+	yql_List = "List"
 )
 
-func toYQLDataType(t string, defaultLength, defaultLength2 int64) string {
-	var res string
+func toYQLDataType(t string, defaultLength, defaultLength2 int64) (yqlType string) {
 	switch v := t; v {
-	case schemas.Int, schemas.Integer, schemas.TinyInt, schemas.SmallInt, schemas.MediumInt:
-		res = ydb_Int32
-	case schemas.UnsignedInt:
-		res = ydb_Uint32
-	case schemas.BigInt:
-		res = ydb_Int64
-	case schemas.UnsignedBigInt:
-		res = ydb_Uint64
-	case schemas.Float:
-		res = ydb_Float
-	case schemas.Double:
-		res = ydb_Double
 	case schemas.Bool:
-		res = ydb_Bool
-	case schemas.Char, schemas.TinyText, schemas.MediumText, schemas.LongText, schemas.Varchar:
-		res = ydb_Utf8
-	case schemas.Date, schemas.DateTime:
-		res = ydb_Timestamp
+		yqlType = yql_Bool
+		return
+	case schemas.TinyInt:
+		yqlType = yql_Int8
+		return
+	case schemas.UnsignedTinyInt:
+		yqlType = yql_Uint8
+		return
+	case schemas.SmallInt:
+		yqlType = yql_Int16
+		return
+	case schemas.UnsignedSmallInt:
+		yqlType = yql_Uint16
+		return
+	case schemas.MediumInt:
+		yqlType = yql_Int32
+		return
+	case schemas.UnsignedMediumInt:
+		yqlType = yql_Uint32
+		return
+	case schemas.BigInt:
+		yqlType = yql_Int64
+		return
+	case schemas.UnsignedBigInt:
+		yqlType = yql_Uint64
+		return
+	case schemas.Float:
+		yqlType = yql_Float
+		return
+	case schemas.Double:
+		yqlType = yql_Double
+		return
+	case schemas.Blob:
+		yqlType = yql_String
+		return
+	case schemas.Json:
+		yqlType = yql_Json
+		return
+	case schemas.Array:
+		yqlType = yql_List
+		return
+	case schemas.Varchar:
+		yqlType = yql_Utf8
+		return
 	case schemas.TimeStamp:
-		res = ydb_Timestamp
-	case schemas.Decimal:
-		res = ydb_Decimal
+		yqlType = yql_Timestamp
+		return
+	case schemas.Interval:
+		yqlType = yql_Interval
+		return
 	default:
-		res = ydb_String
+		yqlType = yql_String
 	}
-
-	return res
+	return
 }
 
 func (db *ydb) SQLType(column *schemas.Column) string {
@@ -380,8 +413,6 @@ func (db *ydb) AddColumnSQL(tableName string, column *schemas.Column) string {
 	return buf.String()
 }
 
-// Does YQL have script to do this????
-// is this nessesary??
 func (db *ydb) ModifyColumnSQL(tableName string, column *schemas.Column) string {
 	// TODO
 	return ""
