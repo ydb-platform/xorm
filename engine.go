@@ -330,7 +330,7 @@ func (engine *Engine) Ping() error {
 // SQL method let's you manually write raw SQL and operate
 // For example:
 //
-//         engine.SQL("select * from user").Find(&users)
+//	engine.SQL("select * from user").Find(&users)
 //
 // This    code will execute "select * from user" and set the records to users
 func (engine *Engine) SQL(query interface{}, args ...interface{}) *Session {
@@ -996,9 +996,8 @@ func (engine *Engine) Desc(colNames ...string) *Session {
 // Asc will generate "ORDER BY column1,column2 Asc"
 // This method can chainable use.
 //
-//        engine.Desc("name").Asc("age").Find(&users)
-//        // SELECT * FROM user ORDER BY name DESC, age ASC
-//
+//	engine.Desc("name").Asc("age").Find(&users)
+//	// SELECT * FROM user ORDER BY name DESC, age ASC
 func (engine *Engine) Asc(colNames ...string) *Session {
 	session := engine.NewSession()
 	session.isAutoClose = true
@@ -1217,12 +1216,21 @@ func (engine *Engine) InsertOne(bean interface{}) (int64, error) {
 	return session.InsertOne(bean)
 }
 
+// Replace one or more records
+// https://ydb.tech/en/docs/yql/reference/syntax/replace_into
+func (engine *Engine) Replace(beans ...interface{}) (int64, error) {
+	session := engine.NewSession()
+	defer session.Close()
+	return session.Replace(beans...)
+}
+
 // Update records, bean's non-empty fields are updated contents,
 // condiBean' non-empty filds are conditions
 // CAUTION:
-//        1.bool will defaultly be updated content nor conditions
-//         You should call UseBool if you have bool to use.
-//        2.float32 & float64 may be not inexact as conditions
+//
+//	1.bool will defaultly be updated content nor conditions
+//	 You should call UseBool if you have bool to use.
+//	2.float32 & float64 may be not inexact as conditions
 func (engine *Engine) Update(bean interface{}, condiBeans ...interface{}) (int64, error) {
 	session := engine.NewSession()
 	defer session.Close()

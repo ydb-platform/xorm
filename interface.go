@@ -72,6 +72,9 @@ type Interface interface {
 	Update(bean interface{}, condiBeans ...interface{}) (int64, error)
 	UseBool(...string) *Session
 	Where(interface{}, ...interface{}) *Session
+
+	// YDB
+	Replace(...interface{}) (int64, error)
 }
 
 // EngineInterface defines the interface which Engine, EngineGroup will implementate.
