@@ -1216,6 +1216,14 @@ func (engine *Engine) InsertOne(bean interface{}) (int64, error) {
 	return session.InsertOne(bean)
 }
 
+// Replace one or more records
+// https://ydb.tech/en/docs/yql/reference/syntax/replace_into
+func (engine *Engine) Replace(beans ...interface{}) (int64, error) {
+	session := engine.NewSession()
+	defer session.Close()
+	return session.Replace(beans...)
+}
+
 // Update records, bean's non-empty fields are updated contents,
 // condiBean' non-empty filds are conditions
 // CAUTION:

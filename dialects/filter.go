@@ -127,7 +127,7 @@ func (yf *SeqFilter) DoWithDeclare(sqlStr string, args ...interface{}) string {
 			}
 
 			repl := fmt.Sprintf("%s%s", yf.Prefix, t.Name)
-			declareBuf.WriteString(fmt.Sprintf("DECLARE %s AS %s;\n", repl, tp))
+			declareBuf.WriteString(fmt.Sprintf("DECLARE %s AS %s;", repl, tp))
 
 			buf.WriteString(repl)
 			index++
@@ -165,7 +165,6 @@ func (yf *SeqFilter) DoWithDeclare(sqlStr string, args ...interface{}) string {
 			buf.WriteRune(c)
 		}
 	}
-	buf.WriteString(";")
 
 	return declareBuf.String() + buf.String()
 }

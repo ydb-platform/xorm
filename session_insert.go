@@ -57,6 +57,11 @@ func (session *Session) Insert(beans ...interface{}) (int64, error) {
 			}
 		}
 		if err != nil {
+			if session.engine.dialect.URI().DBType == schemas.YDB &&
+				err.Error() == ErrRowAffectedUnsupported.Error() {
+				err = nil
+				continue
+			}
 			return affected, err
 		}
 		affected += cnt
