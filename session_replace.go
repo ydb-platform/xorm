@@ -35,14 +35,14 @@ func (session *Session) Replace(beans ...interface{}) (int64, error) {
 		var cnt int64
 		var err error
 		switch v := bean.(type) {
-		case *builder.Builder:
+		case *builder.Builder: // FIXME: this feature have not worked yet.
 			cnt, err = session.replaceByFetchValues(v)
 		case map[string]interface{}:
 			cnt, err = session.replaceMapInterface(v)
 		case []map[string]interface{}:
 			cnt, err = session.replaceMultipleMapInterface(v)
 		default:
-			err = fmt.Errorf("not supported type: %s", reflect.TypeOf(v).String())
+			err = fmt.Errorf("REPLACE INTO does not support type: %s", reflect.TypeOf(v).String())
 		}
 		if err != nil {
 			if session.engine.dialect.URI().DBType == schemas.YDB &&
@@ -101,6 +101,11 @@ func (session *Session) replaceByFetchValues(b *builder.Builder) (int64, error) 
 		return 0, nil
 	}
 
+	// FIXME: add this PRAGMA cause an error "COMMIT not supported inside Kikimr query"
+	if _, err = buf.WriteString("PRAGMA AutoCommit;"); err != nil {
+		return 0, err
+	}
+
 	if _, err = buf.WriteString(declareSection); err != nil {
 		return 0, err
 	}
@@ -109,7 +114,7 @@ func (session *Session) replaceByFetchValues(b *builder.Builder) (int64, error) 
 		return 0, err
 	}
 
-	if _, err = buf.WriteString(fmt.Sprintf("REPLACE INTO %s ( select * from $fetchedData );", quoter.Quote(tableName))); err != nil {
+	if _, err = buf.WriteString(fmt.Sprintf("REPLACE INTO %s ( SELECT * FROM $fetchedData );", quoter.Quote(tableName))); err != nil {
 		return 0, err
 	}
 
