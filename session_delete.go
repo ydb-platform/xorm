@@ -174,6 +174,9 @@ func (session *Session) Delete(beans ...interface{}) (int64, error) {
 			// TODO: how to handle delete limit on mssql?
 		case schemas.MSSQL:
 			return 0, ErrNotImplemented
+		case schemas.YDB:
+			// consider to add support for DELETE FROM ... ON
+			return 0, ErrNotImplemented
 		default:
 			fmt.Fprint(orderCondWriter, orderSQLWriter.String())
 			orderCondWriter.Append(orderSQLWriter.Args()...)
@@ -253,5 +256,12 @@ func (session *Session) Delete(beans ...interface{}) (int64, error) {
 	cleanupProcessorsClosures(&session.afterClosures)
 	// --
 
-	return res.RowsAffected()
+	affected, err := res.RowsAffected()
+	if err != nil {
+		if session.engine.Dialect().URI().DBType == schemas.YDB &&
+			err.Error() == ErrRowAffectedUnsupported.Error() {
+			err = nil
+		}
+	}
+	return affected, err
 }
