@@ -405,6 +405,9 @@ func (session *Session) Update(bean interface{}, condiBean ...interface{}) (int6
 			} else {
 				top = fmt.Sprintf("TOP (%d) ", limitValue)
 			}
+		case schemas.YDB:
+			// consider to add support for UPDATE ON
+			return 0, ErrNotImplemented
 		}
 	}
 
