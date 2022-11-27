@@ -102,10 +102,11 @@ func (session *Session) replaceByFetchValues(b *builder.Builder) (int64, error) 
 	}
 
 	// FIXME: add this PRAGMA cause an error "COMMIT not supported inside Kikimr query"
-	if _, err = buf.WriteString("PRAGMA AutoCommit;"); err != nil {
-		return 0, err
-	}
-
+	/*
+			if _, err = buf.WriteString("PRAGMA AutoCommit;"); err != nil {
+			return 0, err
+		}
+	*/
 	if _, err = buf.WriteString(declareSection); err != nil {
 		return 0, err
 	}
