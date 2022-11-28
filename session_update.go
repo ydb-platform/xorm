@@ -280,9 +280,9 @@ func (session *Session) Update(bean interface{}, condiBean ...interface{}) (int6
 	if !session.statement.NoAutoCondition {
 		condBeanIsStruct := false
 		if len(condiBean) > 0 {
-			// check if condiBean[0].(builder.Cond) help to expand the condition to other like Gte, Neq, ... .
-			// but it makes the part check condiBean[0].(map[string]interface{}) may become unreachable.
-			// Another problem need to be considered when implement this way is that the columns need to be quoted by xorm user theirself.
+			// !datbeohbbh! check if condiBean[0].(builder.Cond) help to expand the condition to other like Gte, Neq, ... .
+			// !datbeohbbh! but it makes the part check condiBean[0].(map[string]interface{}) may become unreachable.
+			// !datbeohbbh! Another problem need to be considered when implement this way is that the columns need to be quoted by xorm user theirself.
 			if c, ok := condiBean[0].(builder.Cond); ok {
 				autoCond = c
 			} else if c, ok := condiBean[0].(map[string]interface{}); ok {
@@ -406,7 +406,7 @@ func (session *Session) Update(bean interface{}, condiBean ...interface{}) (int6
 				top = fmt.Sprintf("TOP (%d) ", limitValue)
 			}
 		case schemas.YDB:
-			// consider to add support for UPDATE ON
+			// !datbeohbbh! consider to add support for UPDATE ON
 			return 0, ErrNotImplemented
 		}
 	}

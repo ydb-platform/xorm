@@ -73,7 +73,7 @@ type Interface interface {
 	UseBool(...string) *Session
 	Where(interface{}, ...interface{}) *Session
 
-	// YDB
+	// !datbeohbbh! YDB
 	Replace(...interface{}) (int64, error)
 }
 

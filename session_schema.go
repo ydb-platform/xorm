@@ -165,7 +165,7 @@ func (session *Session) dropTable(beanOrTableName interface{}) error {
 		return err
 	}
 
-	// above process is enough for ydb
+	// !datbeohbbh! above process is enough for ydb
 	if session.engine.dialect.URI().DBType == schemas.YDB {
 		return nil
 	}
