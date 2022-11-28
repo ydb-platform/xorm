@@ -4,6 +4,13 @@
 
 package xorm
 
+import (
+	"database/sql"
+	"fmt"
+
+	"xorm.io/xorm/schemas"
+)
+
 // Begin a transaction
 func (session *Session) Begin() error {
 	if session.isAutoCommit {
@@ -42,6 +49,86 @@ func (session *Session) Commit() error {
 		if err := session.tx.Commit(); err != nil {
 			return err
 		}
+
+		// handle processors after tx committed
+		closureCallFunc := func(closuresPtr *[]func(interface{}), bean interface{}) {
+			if closuresPtr != nil {
+				for _, closure := range *closuresPtr {
+					closure(bean)
+				}
+			}
+		}
+
+		for bean, closuresPtr := range session.afterInsertBeans {
+			closureCallFunc(closuresPtr, bean)
+
+			if processor, ok := interface{}(bean).(AfterInsertProcessor); ok {
+				processor.AfterInsert()
+			}
+		}
+		for bean, closuresPtr := range session.afterUpdateBeans {
+			closureCallFunc(closuresPtr, bean)
+
+			if processor, ok := interface{}(bean).(AfterUpdateProcessor); ok {
+				processor.AfterUpdate()
+			}
+		}
+		for bean, closuresPtr := range session.afterDeleteBeans {
+			closureCallFunc(closuresPtr, bean)
+
+			if processor, ok := interface{}(bean).(AfterDeleteProcessor); ok {
+				processor.AfterDelete()
+			}
+		}
+		cleanUpFunc := func(slices *map[interface{}]*[]func(interface{})) {
+			if len(*slices) > 0 {
+				*slices = make(map[interface{}]*[]func(interface{}))
+			}
+		}
+		cleanUpFunc(&session.afterInsertBeans)
+		cleanUpFunc(&session.afterUpdateBeans)
+		cleanUpFunc(&session.afterDeleteBeans)
+	}
+	return nil
+}
+
+// !datbeohbb! for YDB only
+func (session *Session) BeginRetryTx(customTx *sql.Tx) error {
+	if session.engine.dialect.URI().DBType != schemas.YDB {
+		return fmt.Errorf("BeginRetryTx does not support %s", session.engine.dialect.URI().DBType)
+	}
+	if session.isAutoCommit {
+		tx, err := session.DB().BeginWithTx(session.ctx, customTx)
+		if err != nil {
+			return err
+		}
+		session.isAutoCommit = false
+		session.isCommitedOrRollbacked = false
+		session.tx = tx
+	}
+	return nil
+}
+
+// !datbeohbbh! for YDB only
+func (session *Session) RollbackRetryTx() error {
+	if session.engine.dialect.URI().DBType != schemas.YDB {
+		return fmt.Errorf("RollbackRetryTx does not support %s", session.engine.dialect.URI().DBType)
+	}
+	if !session.isAutoCommit && !session.isCommitedOrRollbacked {
+		session.isCommitedOrRollbacked = true
+		session.isAutoCommit = true
+	}
+	return nil
+}
+
+// !datbeohbbh! for YDB only
+func (session *Session) CommitRetryTx() error {
+	if session.engine.dialect.URI().DBType != schemas.YDB {
+		return fmt.Errorf("CommitRetryTx does not support %s", session.engine.dialect.URI().DBType)
+	}
+	if !session.isAutoCommit && !session.isCommitedOrRollbacked {
+		session.isCommitedOrRollbacked = true
+		session.isAutoCommit = true
 
 		// handle processors after tx committed
 		closureCallFunc := func(closuresPtr *[]func(interface{}), bean interface{}) {
