@@ -38,15 +38,6 @@ func (db *DB) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) {
 }
 
 func (db *DB) BeginWithTx(ctx context.Context, tx *sql.Tx) (*Tx, error) {
-	hookCtx := contexts.NewContextHook(ctx, "BEGIN TRANSACTION", nil)
-	ctx, err := db.beforeProcess(hookCtx)
-	if err != nil {
-		return nil, err
-	}
-	hookCtx.End(ctx, nil, err)
-	if err := db.afterProcess(hookCtx); err != nil {
-		return nil, err
-	}
 	return &Tx{tx, db, ctx}, nil
 }
 
