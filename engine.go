@@ -1439,3 +1439,47 @@ func (engine *Engine) Transaction(f func(*Session) (interface{}, error)) (interf
 
 	return result, nil
 }
+
+// !datbeohbbh! Transaction Execute sql wrapped in a transaction with provided context
+func (engine *Engine) TransactionContext(ctx context.Context, f func(*Session) (interface{}, error)) (interface{}, error) {
+	session := engine.NewSession().Context(ctx)
+	defer session.Close()
+
+	if err := session.Begin(); err != nil {
+		return nil, err
+	}
+	defer session.Rollback()
+
+	result, err := f(session)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := session.Commit(); err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+// !datbeohbbh! support for Retry helpers for YDB database/sql driver (Retries over sql.Tx)
+func (engine *Engine) DoTx(ctx context.Context, tx *sql.Tx, f func(*Session) error) error {
+	session := engine.NewSession().Context(ctx)
+	defer session.Close()
+
+	if err := session.BeginRetryTx(tx); err != nil {
+		return err
+	}
+	defer session.RollbackRetryTx()
+
+	err := f(session)
+	if err != nil {
+		return err
+	}
+
+	if err := session.CommitRetryTx(); err != nil {
+		return err
+	}
+
+	return nil
+}
