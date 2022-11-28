@@ -175,7 +175,7 @@ func (session *Session) Delete(beans ...interface{}) (int64, error) {
 		case schemas.MSSQL:
 			return 0, ErrNotImplemented
 		case schemas.YDB:
-			// consider to add support for DELETE FROM ... ON
+			// !datbeohbbh! consider to add support for DELETE FROM ... ON
 			return 0, ErrNotImplemented
 		default:
 			fmt.Fprint(orderCondWriter, orderSQLWriter.String())

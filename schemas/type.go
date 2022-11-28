@@ -329,7 +329,7 @@ func Type2SQLType(t reflect.Type) (st SQLType) {
 	return
 }
 
-// YQL_TypeToSQLType return the SQLType that compatiable with YQL types
+// !datbeohbbh! YQL_TypeToSQLType return the SQLType that compatiable with YQL types
 func YQL_TypeToSQLType(t reflect.Type) (st SQLType) {
 	switch k := t.Kind(); k {
 	case reflect.Bool:

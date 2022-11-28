@@ -35,7 +35,7 @@ func (session *Session) Replace(beans ...interface{}) (int64, error) {
 		var cnt int64
 		var err error
 		switch v := bean.(type) {
-		case *builder.Builder: // FIXME: this feature have not worked yet.
+		case *builder.Builder:
 			cnt, err = session.replaceByFetchValues(v)
 		case map[string]interface{}:
 			cnt, err = session.replaceMapInterface(v)
@@ -80,7 +80,7 @@ func splitCmds(sql string) (string, string, error) {
 }
 
 func (session *Session) replaceByFetchValues(b *builder.Builder) (int64, error) {
-	// note: xorm/builder does not apply quote policy
+	// !datbeohbbh! note: xorm/builder does not apply quote policy
 	var (
 		buf       strings.Builder
 		tableName = session.statement.TableName()
@@ -101,12 +101,6 @@ func (session *Session) replaceByFetchValues(b *builder.Builder) (int64, error) 
 		return 0, nil
 	}
 
-	// FIXME: add this PRAGMA cause an error "COMMIT not supported inside Kikimr query"
-	/*
-			if _, err = buf.WriteString("PRAGMA AutoCommit;"); err != nil {
-			return 0, err
-		}
-	*/
 	if _, err = buf.WriteString(declareSection); err != nil {
 		return 0, err
 	}
