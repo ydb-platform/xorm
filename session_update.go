@@ -281,8 +281,8 @@ func (session *Session) Update(bean interface{}, condiBean ...interface{}) (int6
 		condBeanIsStruct := false
 		if len(condiBean) > 0 {
 			// !datbeohbbh! check if condiBean[0].(builder.Cond) help to expand the condition to other like Gte, Neq, ... .
-			// !datbeohbbh! but it makes the part check condiBean[0].(map[string]interface{}) may become unreachable.
-			// !datbeohbbh! Another problem need to be considered when implement this way is that the columns need to be quoted by xorm user theirself.
+			// but it makes the part check condiBean[0].(map[string]interface{}) may become unreachable.
+			// Another problem need to be considered when implement this way is that the columns need to be quoted by xorm user themselves.
 			if c, ok := condiBean[0].(builder.Cond); ok {
 				autoCond = c
 			} else if c, ok := condiBean[0].(map[string]interface{}); ok {

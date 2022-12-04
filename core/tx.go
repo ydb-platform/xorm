@@ -37,10 +37,6 @@ func (db *DB) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) {
 	return &Tx{tx, db, ctx}, nil
 }
 
-func (db *DB) BeginWithTx(ctx context.Context, tx *sql.Tx) (*Tx, error) {
-	return &Tx{tx, db, ctx}, nil
-}
-
 // Begin begins a transaction
 func (db *DB) Begin() (*Tx, error) {
 	return db.BeginTx(context.Background(), nil)

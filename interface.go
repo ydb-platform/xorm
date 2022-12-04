@@ -75,6 +75,7 @@ type Interface interface {
 
 	// !datbeohbbh! YDB
 	Replace(...interface{}) (int64, error)
+	Upsert(...interface{}) (int64, error)
 }
 
 // EngineInterface defines the interface which Engine, EngineGroup will implementate.

@@ -1217,11 +1217,19 @@ func (engine *Engine) InsertOne(bean interface{}) (int64, error) {
 }
 
 // !datbeohbbh! Replace one or more records
-// !datbeohbbh! https://ydb.tech/en/docs/yql/reference/syntax/replace_into
+// https://ydb.tech/en/docs/yql/reference/syntax/replace_into
 func (engine *Engine) Replace(beans ...interface{}) (int64, error) {
 	session := engine.NewSession()
 	defer session.Close()
 	return session.Replace(beans...)
+}
+
+// !datbeohbbh! Upsert
+// https://ydb.tech/en/docs/yql/reference/syntax/upsert_into
+func (engine *Engine) Upsert(beans ...interface{}) (int64, error) {
+	session := engine.NewSession()
+	defer session.Close()
+	return session.Upsert(beans...)
 }
 
 // Update records, bean's non-empty fields are updated contents,
@@ -1460,26 +1468,4 @@ func (engine *Engine) TransactionContext(ctx context.Context, f func(*Session) (
 	}
 
 	return result, nil
-}
-
-// !datbeohbbh! support for Retry helpers for YDB database/sql driver (Retries over sql.Tx)
-func (engine *Engine) DoTx(ctx context.Context, tx *sql.Tx, f func(*Session) error) error {
-	session := engine.NewSession().Context(ctx)
-	defer session.Close()
-
-	if err := session.BeginRetryTx(tx); err != nil {
-		return err
-	}
-	defer session.RollbackRetryTx()
-
-	err := f(session)
-	if err != nil {
-		return err
-	}
-
-	if err := session.CommitRetryTx(); err != nil {
-		return err
-	}
-
-	return nil
 }
