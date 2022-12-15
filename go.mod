@@ -13,8 +13,9 @@ require (
 	github.com/lib/pq v1.10.2
 	github.com/mattn/go-sqlite3 v1.14.9
 	github.com/shopspring/decimal v1.2.0
-	github.com/stretchr/testify v1.7.0
+	github.com/stretchr/testify v1.7.1
 	github.com/syndtr/goleveldb v1.0.0
+	github.com/ydb-platform/ydb-go-sdk/v3 v3.40.1 // indirect
 	github.com/ziutek/mymysql v1.5.4
 	modernc.org/sqlite v1.14.2
 	xorm.io/builder v0.3.11-0.20220531020008-1bd24a7dc978
