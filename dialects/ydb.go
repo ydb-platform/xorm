@@ -553,7 +553,7 @@ func (db *ydb) DropTableSQL(tableName string) (string, bool) {
 	var buf strings.Builder
 	buf.WriteString(fmt.Sprintf("DROP TABLE %s;", pathToTable))
 
-	return buf.String(), true
+	return buf.String(), false
 }
 
 // https://github.com/ydb-platform/ydb-go-sdk/blob/master/SQL.md#specifying-query-parameters-

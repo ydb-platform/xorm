@@ -10,7 +10,7 @@ GO_DIRS := caches contexts integrations core dialects internal log migrate names
 GOFILES := $(wildcard *.go)
 GOFILES += $(shell find $(GO_DIRS) -name "*.go" -type f)
 INTEGRATION_PACKAGES := xorm.io/xorm/integrations
-PACKAGES ?= $(filter-out $(INTEGRATION_PACKAGES),$(shell $(GO) list ./...))
+PACKAGES ?= $(filter-out $(INTEGRATION_PACKAGES) $(INTEGRATION_PACKAGES)/ydbtest,$(shell $(GO) list ./...))
 
 TEST_COCKROACH_HOST ?= cockroach:26257
 TEST_COCKROACH_SCHEMA ?=
@@ -46,6 +46,11 @@ TEST_TIDB_PASSWORD ?=
 TEST_DAMENG_HOST ?= dameng:5236
 TEST_DAMENG_USERNAME ?= SYSDBA
 TEST_DAMENG_PASSWORD ?= SYSDBA
+
+TEST_YDB_HOST ?= ydb:2136
+TEST_YDB_DBNAME ?= local
+TEST_YDB_USERNAME ?= 
+TEST_YDB_PASSWORD ?= 
 
 TEST_CACHE_ENABLE ?= false
 TEST_QUOTE_POLICY ?= always
@@ -275,6 +280,12 @@ test-dameng\#%: go-check
 	$(GO) test $(INTEGRATION_PACKAGES) -v -race -run $* -db=dm -cache=$(TEST_CACHE_ENABLE) -quote=$(TEST_QUOTE_POLICY) \
 	-conn_str="dm://$(TEST_DAMENG_USERNAME):$(TEST_DAMENG_PASSWORD)@$(TEST_DAMENG_HOST)" \
 	-coverprofile=dameng.$(TEST_QUOTE_POLICY).$(TEST_CACHE_ENABLE).coverage.out -covermode=atomic -timeout=20m
+
+.PHONY: test-ydb
+test-ydb: go-check
+	$(GO) test $(INTEGRATION_PACKAGES)/ydbtest -v -race -db=ydb -cache=$(TEST_CACHE_ENABLE) \
+	-conn_str="grpc://$(TEST_YDB_HOST)/$(TEST_YDB_DBNAME)" \
+	-quote=$(TEST_QUOTE_POLICY) -coverprofile=ydb.$(TEST_QUOTE_POLICY).$(TEST_CACHE_ENABLE).coverage.out -covermode=atomic -timeout=20m
 
 .PHONY: vet
 vet:
