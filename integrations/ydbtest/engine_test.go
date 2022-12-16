@@ -9,14 +9,14 @@ import (
 )
 
 func TestPing(t *testing.T) {
-	engine, err := GetDefaultEngine()
+	engine, err := enginePool.GetDefaultEngine()
 	assert.NoError(t, err)
 
 	assert.NoError(t, engine.Ping())
 }
 
 func TestPingContext(t *testing.T) {
-	engine, err := GetDefaultEngine()
+	engine, err := enginePool.GetDefaultEngine()
 	assert.NoError(t, err)
 
 	ctx, cancelFunc := context.WithTimeout(context.Background(), time.Nanosecond)
