@@ -112,6 +112,7 @@ help:
 	@echo " - test-sqlite3      run integration tests for sqlite"
 	@echo " - test-sqlite       run integration tests for pure go sqlite"
 	@echo " - test-tidb         run integration tests for tidb"
+	@echo " - test-ydb          run integration tests for ydb"
 	@echo " - vet               examines Go source code and reports suspicious constructs"
 
 .PHONY: lint
