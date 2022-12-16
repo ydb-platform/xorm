@@ -7,16 +7,20 @@ require (
 	github.com/denisenkom/go-mssqldb v0.10.0
 	github.com/go-sql-driver/mysql v1.6.0
 	github.com/goccy/go-json v0.8.1
+	github.com/golang-jwt/jwt/v4 v4.4.3 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/jackc/pgx/v4 v4.12.0
+	github.com/jonboulle/clockwork v0.3.0 // indirect
 	github.com/json-iterator/go v1.1.12
 	github.com/lib/pq v1.10.2
 	github.com/mattn/go-sqlite3 v1.14.9
 	github.com/shopspring/decimal v1.2.0
-	github.com/stretchr/testify v1.7.1
+	github.com/stretchr/testify v1.8.1
 	github.com/syndtr/goleveldb v1.0.0
-	github.com/ydb-platform/ydb-go-sdk/v3 v3.40.1 // indirect
+	github.com/ydb-platform/ydb-go-sdk/v3 v3.41.0 // indirect
 	github.com/ziutek/mymysql v1.5.4
+	golang.org/x/net v0.4.0 // indirect
+	google.golang.org/genproto v0.0.0-20221207170731-23e4bf6bdc37 // indirect
 	modernc.org/sqlite v1.14.2
 	xorm.io/builder v0.3.11-0.20220531020008-1bd24a7dc978
 )
