@@ -392,12 +392,31 @@ func (db *ydb) IndexCheckSQL(tableName, indexName string) (string, []interface{}
 	return "", nil
 }
 
+// This is just temporary implementation for testing only
 func (db *ydb) IsTableExist(
 	queryer core.Queryer,
 	ctx context.Context,
 	tableName string) (bool, error) {
-	// TODO
-	return true, nil
+
+	sys := ".sys/partition_stats"
+	pathToSysTable := path.Join(db.URI().DBName, sys)
+
+	pathToTable := path.Join(db.URI().DBName, tableName)
+
+	rows, err := queryer.
+		QueryContext(ctx,
+			fmt.Sprintf("SELECT `Path` FROM `%s` WHERE `Path` = \"%s\";", pathToSysTable, pathToTable))
+
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+
+	if rows.Next() {
+		return true, nil
+	}
+
+	return false, nil
 }
 
 func (db *ydb) AddColumnSQL(tableName string, column *schemas.Column) string {
