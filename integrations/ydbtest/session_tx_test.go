@@ -161,13 +161,20 @@ func TestEngineTx(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	has, err := engine.Transaction(func(session *xorm.Session) (interface{}, error) {
-		has, err := session.Exist(&userDataB)
+	_, err = engine.Transaction(func(session *xorm.Session) (interface{}, error) {
+		hasA, err := session.Exist(&userDataA)
+		if err != nil {
+			return nil, err
+		}
+		assert.False(t, hasA)
+
+		hasB, err := session.Exist(&userDataB)
 		if err != nil {
 			return false, err
 		}
-		return has, nil
+		assert.True(t, hasB)
+
+		return nil, nil
 	})
 	assert.NoError(t, err)
-	assert.True(t, has.(bool))
 }
