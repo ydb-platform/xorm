@@ -2,7 +2,10 @@ package ydb
 
 import (
 	"database/sql"
+	"fmt"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 type Series struct {
@@ -41,8 +44,10 @@ type Users struct {
 }
 
 type Account struct {
-	UserID sql.NullInt64 `xorm:"pk 'user_id'"`
-	Number string        `xorm:"'number'"`
+	UserID  sql.NullInt64 `xorm:"pk 'user_id'"`
+	Number  string        `xorm:"'number'"`
+	Created time.Time     `xorm:"created 'created_at'"`
+	Updated time.Time     `xorm:"updated 'updated_at'"`
 }
 
 // table name method
@@ -64,4 +69,18 @@ func (*TestEpisodes) TableName() string {
 
 func (*Users) TableName() string {
 	return "users"
+}
+
+func getUsersData() (users []*Users) {
+	for i := 0; i < 20; i++ {
+		users = append(users, &Users{
+			Name: fmt.Sprintf("Dat - %d", i),
+			Age:  uint32(22 + i),
+			Account: Account{
+				UserID: sql.NullInt64{Int64: int64(i), Valid: true},
+				Number: uuid.NewString(),
+			},
+		})
+	}
+	return
 }

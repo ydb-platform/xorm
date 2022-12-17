@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"time"
 
 	xormLog "xorm.io/xorm/log"
 
@@ -57,6 +58,7 @@ func (em *EngineWithMode) getEngine(queryMode QueryMode) (*xorm.Engine, error) {
 
 	engine.ShowSQL(*showSQL)
 	engine.SetLogLevel(xormLog.LOG_DEBUG)
+	engine.TZLocation, _ = time.LoadLocation("Europe/Moscow")
 
 	engine.SetDefaultContext(em.ctx)
 

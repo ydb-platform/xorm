@@ -1019,7 +1019,7 @@ func (engine *Engine) Prepare() *Session {
 }
 
 // Join the join_operator should be one of INNER, LEFT OUTER, CROSS etc - this will be prepended to JOIN
-func (engine *Engine) Join(joinOperator string, tablename interface{}, condition string, args ...interface{}) *Session {
+func (engine *Engine) Join(joinOperator string, tablename interface{}, condition interface{}, args ...interface{}) *Session {
 	session := engine.NewSession()
 	session.isAutoClose = true
 	return session.Join(joinOperator, tablename, condition, args...)
