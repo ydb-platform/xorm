@@ -9,6 +9,7 @@ require (
 	github.com/goccy/go-json v0.8.1
 	github.com/golang-jwt/jwt/v4 v4.4.3 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
+	github.com/google/uuid v1.3.0
 	github.com/jackc/pgx/v4 v4.12.0
 	github.com/jonboulle/clockwork v0.3.0 // indirect
 	github.com/json-iterator/go v1.1.12
@@ -17,7 +18,7 @@ require (
 	github.com/shopspring/decimal v1.2.0
 	github.com/stretchr/testify v1.8.1
 	github.com/syndtr/goleveldb v1.0.0
-	github.com/ydb-platform/ydb-go-sdk/v3 v3.41.0 // indirect
+	github.com/ydb-platform/ydb-go-sdk/v3 v3.41.0
 	github.com/ziutek/mymysql v1.5.4
 	golang.org/x/net v0.4.0 // indirect
 	google.golang.org/genproto v0.0.0-20221207170731-23e4bf6bdc37 // indirect
