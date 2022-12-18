@@ -57,7 +57,7 @@ func (em *EngineWithMode) getEngine(queryMode QueryMode) (*xorm.Engine, error) {
 	}
 
 	engine.ShowSQL(*showSQL)
-	engine.SetLogLevel(xormLog.LOG_DEBUG)
+	engine.SetLogLevel(xormLog.LOG_ERR)
 	engine.TZLocation, _ = time.LoadLocation("Europe/Moscow")
 
 	engine.SetDefaultContext(em.ctx)
@@ -72,7 +72,9 @@ func (em *EngineWithMode) Close() error {
 		log.Println("Close", mode, "engine")
 		if err := engine.Close(); err != nil {
 			retErr = err
+			break
 		}
+		delete(em.engineCached, mode)
 	}
 	return retErr
 }
