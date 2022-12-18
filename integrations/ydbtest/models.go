@@ -45,7 +45,7 @@ type Users struct {
 
 type Account struct {
 	UserID  sql.NullInt64 `xorm:"pk 'user_id'"`
-	Number  string        `xorm:"'number'"`
+	Number  string        `xorm:"pk 'number'"`
 	Created time.Time     `xorm:"created 'created_at'"`
 	Updated time.Time     `xorm:"updated 'updated_at'"`
 }
