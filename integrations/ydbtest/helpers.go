@@ -8,6 +8,8 @@ import (
 
 	xormLog "xorm.io/xorm/log"
 
+	_ "github.com/ydb-platform/ydb-go-sdk/v3"
+
 	"xorm.io/xorm"
 )
 
@@ -58,7 +60,9 @@ func (em *EngineWithMode) getEngine(queryMode QueryMode) (*xorm.Engine, error) {
 
 	engine.ShowSQL(*showSQL)
 	engine.SetLogLevel(xormLog.LOG_ERR)
-	engine.TZLocation, _ = time.LoadLocation("Europe/Moscow")
+
+	loc, _ := time.LoadLocation("Europe/Moscow")
+	engine.SetTZLocation(loc)
 
 	engine.SetDefaultContext(em.ctx)
 

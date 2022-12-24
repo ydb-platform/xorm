@@ -6,8 +6,6 @@ import (
 	"log"
 	"testing"
 
-	_ "github.com/ydb-platform/ydb-go-sdk/v3"
-
 	"xorm.io/xorm"
 	"xorm.io/xorm/schemas"
 )
