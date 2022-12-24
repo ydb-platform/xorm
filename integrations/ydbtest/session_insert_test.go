@@ -105,7 +105,7 @@ func TestInsertMapInterface(t *testing.T) {
 	assert.Equal(t, res.Number, user["number"])
 }
 
-func TestInsertMultiInterface(t *testing.T) {
+func TestInsertMultiMapInterface(t *testing.T) {
 	assert.NoError(t, PrepareScheme(&Users{}))
 	engine, err := enginePool.GetDataQueryEngine()
 	assert.NoError(t, err)
