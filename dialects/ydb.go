@@ -444,9 +444,9 @@ func (db *ydb) CreateIndexSQL(tableName string, index *schemas.Index) string {
 	pathToTable := quote.Quote(path.Join(db.URI().DBName, tableName))
 	indexName := quote.Quote(index.Name)
 
-	colsIndex := index.Cols
-	for i := 0; i < len(colsIndex); i++ {
-		colsIndex[i] = quote.Quote(colsIndex[i])
+	colsIndex := make([]string, len(index.Cols))
+	for i := 0; i < len(index.Cols); i++ {
+		colsIndex[i] = quote.Quote(index.Cols[i])
 	}
 
 	indexOn := strings.Join(colsIndex, ",")
@@ -516,10 +516,10 @@ func (db *ydb) CreateTableSQL(
 	if len(table.PrimaryKeys) == 0 {
 		return "", false, errors.New("table must have at least one primary key")
 	}
-	pk := table.PrimaryKeys
+	pk := make([]string, len(table.PrimaryKeys))
 	pkMap := make(map[string]bool)
-	for i := 0; i < len(pk); i++ {
-		pk[i] = quote.Quote(pk[i])
+	for i := 0; i < len(table.PrimaryKeys); i++ {
+		pk[i] = quote.Quote(table.PrimaryKeys[i])
 		pkMap[pk[i]] = true
 	}
 	primaryKey := fmt.Sprintf("PRIMARY KEY ( %s )", strings.Join(pk, ", "))
@@ -542,9 +542,9 @@ func (db *ydb) CreateTableSQL(
 	indexList := []string{}
 	for indexName, index := range table.Indexes {
 		name := quote.Quote(indexName)
-		onCols := index.Cols
-		for i := 0; i < len(onCols); i++ {
-			onCols[i] = quote.Quote(onCols[i])
+		onCols := make([]string, len(index.Cols))
+		for i := 0; i < len(index.Cols); i++ {
+			onCols[i] = quote.Quote(index.Cols[i])
 		}
 		indexList = append(indexList,
 			fmt.Sprintf(
