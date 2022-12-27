@@ -63,6 +63,7 @@ func (em *EngineWithMode) getEngine(queryMode QueryMode) (*xorm.Engine, error) {
 
 	loc, _ := time.LoadLocation("Europe/Moscow")
 	engine.SetTZLocation(loc)
+	engine.SetTZDatabase(loc)
 
 	engine.SetDefaultContext(em.ctx)
 
