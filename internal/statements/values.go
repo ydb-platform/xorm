@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"fmt"
+	"log"
 	"math/big"
 	"reflect"
 	"time"
@@ -266,12 +267,35 @@ func (statement *Statement) YQL_ValueToInterface(col *schemas.Column, fieldValue
 		switch t := col.SQLType.Name; t {
 		case schemas.UnsignedTinyInt:
 			return uint8(val), nil
+		case schemas.TinyInt:
+			return int8(val), nil
 		case schemas.UnsignedSmallInt:
 			return uint16(val), nil
+		case schemas.SmallInt:
+			return int16(val), nil
 		case schemas.UnsignedMediumInt, schemas.UnsignedInt:
 			return uint32(val), nil
+		case schemas.MediumInt, schemas.Int:
+			log.Println(col.SQLType.Name)
+			return int32(val), nil
 		case schemas.UnsignedBigInt:
 			return uint64(val), nil
+		case schemas.BigInt:
+			return int64(val), nil
+		default:
+			return val, nil
+		}
+	case reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Int:
+		val := fieldValue.Int()
+		switch t := col.SQLType.Name; t {
+		case schemas.TinyInt:
+			return int8(val), nil
+		case schemas.SmallInt:
+			return int16(val), nil
+		case schemas.MediumInt, schemas.Int:
+			return int32(val), nil
+		case schemas.BigInt:
+			return int64(val), nil
 		default:
 			return val, nil
 		}
