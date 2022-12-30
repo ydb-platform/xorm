@@ -256,6 +256,62 @@ type ydb struct {
 	Base
 }
 
+type XormQueryMode int
+
+const XormMetadataQuery string = "xorm-metadata-query"
+
+const (
+	UnknownMetadataQueryMode = XormQueryMode(iota)
+
+	XormVersionQueryMode
+	XormIsTableExistQueryMode
+	XormIsColumnExistQueryMode
+	XormGetColumnsQueryMode
+	XormGetTablesQueryMode
+	XormGetIndexesQueryMode
+)
+
+var (
+	modeToString = map[XormQueryMode]string{
+		XormVersionQueryMode:       "version",
+		XormIsTableExistQueryMode:  "is-table-exist",
+		XormIsColumnExistQueryMode: "is-column-exist",
+		XormGetColumnsQueryMode:    "get-columns",
+		XormGetTablesQueryMode:     "get-tables",
+		XormGetIndexesQueryMode:    "get-indexes",
+	}
+)
+
+func withCheckVersion(ctx context.Context) context.Context {
+	value := modeToString[XormVersionQueryMode]
+	return context.WithValue(ctx, XormMetadataQuery, value)
+}
+
+func withCheckIsTableExist(ctx context.Context) context.Context {
+	value := modeToString[XormIsTableExistQueryMode]
+	return context.WithValue(ctx, XormMetadataQuery, value)
+}
+
+func withCheckIsColumnExist(ctx context.Context) context.Context {
+	value := modeToString[XormIsColumnExistQueryMode]
+	return context.WithValue(ctx, XormMetadataQuery, value)
+}
+
+func withGetColumns(ctx context.Context) context.Context {
+	value := modeToString[XormGetColumnsQueryMode]
+	return context.WithValue(ctx, XormMetadataQuery, value)
+}
+
+func withGetTables(ctx context.Context) context.Context {
+	value := modeToString[XormGetTablesQueryMode]
+	return context.WithValue(ctx, XormMetadataQuery, value)
+}
+
+func withGetIndexes(ctx context.Context) context.Context {
+	value := modeToString[XormGetIndexesQueryMode]
+	return context.WithValue(ctx, XormMetadataQuery, value)
+}
+
 func (db *ydb) Init(uri *URI) error {
 	db.quoter = ydbQuoter
 	return db.Base.Init(db, uri)
@@ -392,20 +448,16 @@ func (db *ydb) IndexCheckSQL(tableName, indexName string) (string, []interface{}
 	return "", nil
 }
 
-// This is just temporary implementation for testing only
 func (db *ydb) IsTableExist(
 	queryer core.Queryer,
 	ctx context.Context,
 	tableName string) (bool, error) {
-
-	sys := ".sys/partition_stats"
-	pathToSysTable := path.Join(db.URI().DBName, sys)
-
+	sys := ".sys/ydb_info"
 	pathToTable := path.Join(db.URI().DBName, tableName)
+	query := fmt.Sprintf("SELECT TableName FROM `%s` WHERE TableName = $1", sys)
 
 	rows, err := queryer.
-		QueryContext(ctx,
-			fmt.Sprintf("SELECT `Path` FROM `%s` WHERE `Path` = \"%s\";", pathToSysTable, pathToTable))
+		QueryContext(withCheckIsTableExist(ctx), query, sql.Named("TableName", pathToTable))
 
 	if err != nil {
 		return false, err
@@ -415,7 +467,6 @@ func (db *ydb) IsTableExist(
 	if rows.Next() {
 		return true, nil
 	}
-
 	return false, nil
 }
 
@@ -474,8 +525,25 @@ func (db *ydb) IsColumnExist(
 	ctx context.Context,
 	tableName,
 	columnName string) (bool, error) {
-	// TODO
-	return true, nil
+	sys := ".sys/ydb_info"
+	pathToTable := path.Join(db.URI().DBName, tableName)
+
+	query := fmt.Sprintf("SELECT ColumnName FROM `%s` WHERE TableName = $1 AND ColumnName = $2", sys)
+
+	rows, err := queryer.
+		QueryContext(withCheckIsColumnExist(ctx), query,
+			sql.Named("TableName", pathToTable),
+			sql.Named("ColumnName", columnName))
+
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+
+	if rows.Next() {
+		return true, nil
+	}
+	return false, nil
 }
 
 func (db *ydb) GetColumns(queryer core.Queryer, ctx context.Context, tableName string) (
@@ -487,16 +555,62 @@ func (db *ydb) GetColumns(queryer core.Queryer, ctx context.Context, tableName s
 }
 
 func (db *ydb) GetTables(queryer core.Queryer, ctx context.Context) ([]*schemas.Table, error) {
-	// TODO
-	return nil, nil
+	sys := ".sys/ydb_info"
+	dbName := db.URI().DBName
+	query := fmt.Sprintf("SELECT TableName FROM `%s` WHERE DatabaseName = $1", sys)
+
+	rows, err := queryer.QueryContext(withGetTables(ctx), query, sql.Named("DatabaseName", dbName))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	tables := make([]*schemas.Table, 0)
+	for rows.Next() {
+		table := schemas.NewEmptyTable()
+		if err := rows.Scan(&table.Name); err != nil {
+			return nil, err
+		}
+		tables = append(tables, table)
+	}
+	if rows.Err() != nil {
+		return nil, rows.Err()
+	}
+	return tables, nil
 }
 
 func (db *ydb) GetIndexes(
 	queryer core.Queryer,
 	ctx context.Context,
 	tableName string) (map[string]*schemas.Index, error) {
-	// TODO
-	return nil, nil
+	sys := ".sys/ydb_info"
+	pathToTable := path.Join(db.URI().DBName, tableName)
+	query := fmt.Sprintf("SELECT IndexName, Columns FROM `%s` WHERE DatabaseName = $1", sys)
+
+	rows, err := queryer.QueryContext(withGetIndexes(ctx), query, sql.Named("TableName", pathToTable))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	indexes := make(map[string]*schemas.Index, 0)
+	for rows.Next() {
+		var indexName string
+		var columns string
+		if err := rows.Scan(&indexName, &columns); err != nil {
+			return nil, err
+		}
+		cols := strings.Split(columns, ",")
+		indexes[indexName] = &schemas.Index{
+			Name: indexName,
+			Type: schemas.IndexType,
+			Cols: cols,
+		}
+	}
+	if rows.Err() != nil {
+		return nil, rows.Err()
+	}
+	return indexes, nil
 }
 
 func (db *ydb) CreateTableSQL(
