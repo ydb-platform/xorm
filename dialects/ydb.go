@@ -312,6 +312,14 @@ func withGetIndexes(ctx context.Context) context.Context {
 	return context.WithValue(ctx, XormMetadataQuery, value)
 }
 
+func (db *ydb) autoPrefix(s string) string {
+	dbName := db.dialect.URI().DBName
+	if !strings.HasPrefix(s, dbName) {
+		return path.Join(dbName, s)
+	}
+	return s
+}
+
 func (db *ydb) Init(uri *URI) error {
 	db.quoter = ydbQuoter
 	return db.Base.Init(db, uri)
@@ -437,6 +445,65 @@ func (db *ydb) SQLType(column *schemas.Column) string {
 	return toYQLDataType(column.SQLType.Name, column.SQLType.DefaultLength, column.SQLType.DefaultLength2)
 }
 
+func yqlToSQLType(yqlType string) (sqlType schemas.SQLType) {
+	switch yqlType {
+	case yql_Bool:
+		sqlType = schemas.SQLType{schemas.Bool, 0, 0}
+		return
+	case yql_Int8:
+		sqlType = schemas.SQLType{schemas.TinyInt, 0, 0}
+		return
+	case yql_Uint8:
+		sqlType = schemas.SQLType{schemas.UnsignedTinyInt, 0, 0}
+		return
+	case yql_Int16:
+		sqlType = schemas.SQLType{schemas.SmallInt, 0, 0}
+		return
+	case yql_Uint16:
+		sqlType = schemas.SQLType{schemas.UnsignedSmallInt, 0, 0}
+		return
+	case yql_Int32:
+		sqlType = schemas.SQLType{schemas.MediumInt, 0, 0}
+		return
+	case yql_Uint32:
+		sqlType = schemas.SQLType{schemas.UnsignedMediumInt, 0, 0}
+		return
+	case yql_Int64:
+		sqlType = schemas.SQLType{schemas.BigInt, 0, 0}
+		return
+	case yql_Uint64:
+		sqlType = schemas.SQLType{schemas.UnsignedBigInt, 0, 0}
+		return
+	case yql_Float:
+		sqlType = schemas.SQLType{schemas.Float, 0, 0}
+		return
+	case yql_Double:
+		sqlType = schemas.SQLType{schemas.Double, 0, 0}
+		return
+	case yql_String:
+		sqlType = schemas.SQLType{schemas.Blob, 0, 0}
+		return
+	case yql_Json:
+		sqlType = schemas.SQLType{schemas.Json, 0, 0}
+		return
+	case yql_List:
+		sqlType = schemas.SQLType{schemas.Array, 0, 0}
+		return
+	case yql_Utf8:
+		sqlType = schemas.SQLType{schemas.Varchar, 255, 0}
+		return
+	case yql_Timestamp:
+		sqlType = schemas.SQLType{schemas.TimeStamp, 0, 0}
+		return
+	case yql_Interval:
+		sqlType = schemas.SQLType{schemas.Interval, 0, 0}
+		return
+	default:
+		sqlType = schemas.SQLType{schemas.Text, 0, 0}
+	}
+	return
+}
+
 // ydb-go-sdk does not support ColumnType.
 // https://pkg.go.dev/database/sql#ColumnType.DatabaseTypeName
 func (db *ydb) ColumnTypeKind(t string) int {
@@ -453,8 +520,8 @@ func (db *ydb) IsTableExist(
 	ctx context.Context,
 	tableName string) (bool, error) {
 	sys := ".sys/ydb_info"
-	pathToTable := path.Join(db.URI().DBName, tableName)
-	query := fmt.Sprintf("SELECT TableName FROM `%s` WHERE TableName = $1", sys)
+	pathToTable := db.autoPrefix(tableName)
+	query := fmt.Sprintf("SELECT TableName FROM `%s` WHERE TableName = $TableName", sys)
 
 	rows, err := queryer.
 		QueryContext(withCheckIsTableExist(ctx), query, sql.Named("TableName", pathToTable))
@@ -473,7 +540,7 @@ func (db *ydb) IsTableExist(
 func (db *ydb) AddColumnSQL(tableName string, column *schemas.Column) string {
 	quote := db.dialect.Quoter()
 
-	pathToTable := quote.Quote(path.Join(db.URI().DBName, tableName))
+	pathToTable := quote.Quote(db.autoPrefix(tableName))
 	columnName := quote.Quote(column.Name)
 	dataType := db.SQLType(column)
 
@@ -492,7 +559,7 @@ func (db *ydb) ModifyColumnSQL(tableName string, column *schemas.Column) string 
 func (db *ydb) CreateIndexSQL(tableName string, index *schemas.Index) string {
 	quote := db.dialect.Quoter()
 
-	pathToTable := quote.Quote(path.Join(db.URI().DBName, tableName))
+	pathToTable := quote.Quote(db.autoPrefix(tableName))
 	indexName := quote.Quote(index.Name)
 
 	colsIndex := make([]string, len(index.Cols))
@@ -511,7 +578,7 @@ func (db *ydb) CreateIndexSQL(tableName string, index *schemas.Index) string {
 func (db *ydb) DropIndexSQL(tableName string, index *schemas.Index) string {
 	quote := db.dialect.Quoter()
 
-	pathToTable := quote.Quote(path.Join(db.URI().DBName, tableName))
+	pathToTable := quote.Quote(db.autoPrefix(tableName))
 	indexName := quote.Quote(index.Name)
 
 	var buf strings.Builder
@@ -526,9 +593,9 @@ func (db *ydb) IsColumnExist(
 	tableName,
 	columnName string) (bool, error) {
 	sys := ".sys/ydb_info"
-	pathToTable := path.Join(db.URI().DBName, tableName)
+	pathToTable := db.autoPrefix(tableName)
 
-	query := fmt.Sprintf("SELECT ColumnName FROM `%s` WHERE TableName = $1 AND ColumnName = $2", sys)
+	query := fmt.Sprintf("SELECT ColumnName FROM `%s` WHERE TableName = $TableName AND ColumnName = $ColumnName", sys)
 
 	rows, err := queryer.
 		QueryContext(withCheckIsColumnExist(ctx), query,
@@ -550,16 +617,63 @@ func (db *ydb) GetColumns(queryer core.Queryer, ctx context.Context, tableName s
 	[]string,
 	map[string]*schemas.Column,
 	error) {
-	// TODO
-	return nil, nil, nil
+	sys := ".sys/ydb_info"
+	pathToTable := db.autoPrefix(tableName)
+
+	query := fmt.Sprintf("SELECT ColumnName, TableName, DataType, IsPrimaryKey FROM `%s` WHERE TableName = $TableName", sys)
+
+	rows, err := queryer.QueryContext(withGetColumns(ctx), query, sql.Named("TableName", pathToTable))
+	if err != nil {
+		return nil, nil, err
+	}
+	defer rows.Close()
+
+	colNames := make([]string, 0)
+	colMaps := make(map[string]*schemas.Column)
+	for rows.Next() {
+		var columnName, dataType string
+		var isPk bool
+		if err := rows.Scan(&columnName, &tableName, &dataType, &isPk); err != nil {
+			return nil, nil, err
+		}
+
+		if !isPk {
+			dataType = strings.TrimPrefix(dataType, "Optional<")
+			dataType = strings.TrimSuffix(dataType, ">")
+		}
+
+		col := &schemas.Column{
+			Name:         columnName,
+			TableName:    tableName,
+			SQLType:      yqlToSQLType(dataType),
+			IsPrimaryKey: isPk,
+			Nullable:     !isPk,
+			Indexes:      make(map[string]int),
+		}
+
+		colNames = append(colNames, columnName)
+		colMaps[columnName] = col
+	}
+
+	if rows.Err() != nil {
+		return nil, nil, rows.Err()
+	}
+
+	return colNames, colMaps, nil
 }
 
 func (db *ydb) GetTables(queryer core.Queryer, ctx context.Context) ([]*schemas.Table, error) {
 	sys := ".sys/ydb_info"
 	dbName := db.URI().DBName
-	query := fmt.Sprintf("SELECT TableName FROM `%s` WHERE DatabaseName = $1", sys)
+	query := fmt.Sprintf("SELECT TableName FROM `%s` WHERE DatabaseName = $DatabaseName", sys)
 
-	rows, err := queryer.QueryContext(withGetTables(ctx), query, sql.Named("DatabaseName", dbName))
+	rows, err := queryer.
+		QueryContext(
+			withGetTables(ctx),
+			query,
+			sql.Named("DatabaseName", dbName),
+			sql.Named("IgnoreDirs", []string{".sys", ".sys_health"}),
+		)
 	if err != nil {
 		return nil, err
 	}
@@ -584,8 +698,8 @@ func (db *ydb) GetIndexes(
 	ctx context.Context,
 	tableName string) (map[string]*schemas.Index, error) {
 	sys := ".sys/ydb_info"
-	pathToTable := path.Join(db.URI().DBName, tableName)
-	query := fmt.Sprintf("SELECT IndexName, Columns FROM `%s` WHERE DatabaseName = $1", sys)
+	pathToTable := db.autoPrefix(tableName)
+	query := fmt.Sprintf("SELECT IndexName, Columns FROM `%s` WHERE TableName = $TableName", sys)
 
 	rows, err := queryer.QueryContext(withGetIndexes(ctx), query, sql.Named("TableName", pathToTable))
 	if err != nil {
@@ -621,7 +735,7 @@ func (db *ydb) CreateTableSQL(
 
 	quote := db.dialect.Quoter()
 
-	pathToTable := quote.Quote(path.Join(db.URI().DBName, tableName))
+	pathToTable := quote.Quote(db.autoPrefix(tableName))
 
 	var buf strings.Builder
 	buf.WriteString(fmt.Sprintf("CREATE TABLE %s ( ", pathToTable))
@@ -681,7 +795,7 @@ func (db *ydb) CreateTableSQL(
 func (db *ydb) DropTableSQL(tableName string) (string, bool) {
 	quote := db.dialect.Quoter()
 
-	pathToTable := quote.Quote(path.Join(db.URI().DBName, tableName))
+	pathToTable := quote.Quote(db.autoPrefix(tableName))
 
 	var buf strings.Builder
 	buf.WriteString(fmt.Sprintf("DROP TABLE %s;", pathToTable))
