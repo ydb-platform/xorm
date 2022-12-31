@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"strings"
 
 	"xorm.io/xorm/dialects"
@@ -295,6 +296,13 @@ func (session *Session) Sync(beans ...interface{}) error {
 				oriTable = tb
 				break
 			}
+			if engine.dialect.URI().DBType == schemas.YDB {
+				dbName := engine.dialect.URI().DBName
+				if strings.EqualFold(engine.tbNameWithSchema(tb.Name), path.Join(dbName, engine.tbNameWithSchema(tbName))) {
+					oriTable = tb
+					break
+				}
+			}
 		}
 
 		// this is a new table
@@ -302,6 +310,10 @@ func (session *Session) Sync(beans ...interface{}) error {
 			err = session.StoreEngine(session.statement.StoreEngine).createTable(bean)
 			if err != nil {
 				return err
+			}
+
+			if engine.dialect.URI().DBType == schemas.YDB {
+				continue
 			}
 
 			err = session.createUniques(bean)
@@ -345,6 +357,9 @@ func (session *Session) Sync(beans ...interface{}) error {
 			expectedType := engine.dialect.SQLType(col)
 			curType := engine.dialect.SQLType(oriCol)
 			if expectedType != curType {
+				if engine.dialect.URI().DBType == schemas.YDB {
+					return fmt.Errorf("YDB does not supports modify column")
+				}
 				if expectedType == schemas.Text &&
 					strings.HasPrefix(curType, schemas.Varchar) {
 					// currently only support mysql & postgres
@@ -382,6 +397,9 @@ func (session *Session) Sync(beans ...interface{}) error {
 					}
 				}
 			} else if col.Comment != oriCol.Comment {
+				if engine.dialect.URI().DBType == schemas.YDB {
+					return fmt.Errorf("YDB does not supports modify column")
+				}
 				_, err = session.exec(engine.dialect.ModifyColumnSQL(tbNameWithSchema, col))
 			}
 
