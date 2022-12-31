@@ -14,13 +14,9 @@ func TestCreateTable(t *testing.T) {
 	session := engine.NewSession()
 	defer session.Close()
 
-	if err := session.DropTable(&Users{}); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := session.CreateTable(&Users{}); err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, session.DropTable(&Users{}))
+	assert.NoError(t, session.CreateTable(&Users{}))
+	assert.NoError(t, session.CreateTable(&Users{}))
 }
 
 func TestIsTableEmpty(t *testing.T) {
@@ -53,10 +49,14 @@ func TestCreateMultiTables(t *testing.T) {
 	session := engine.NewSession()
 	defer session.Close()
 
-	for i := 0; i < 10; i++ {
-		assert.NoError(t, session.DropTable("users"))
-		assert.NoError(t, session.Table("users").CreateTable(&Users{}))
+	for _, tblNames := range []string{"users", "series", "seasons", "episodes"} {
+		assert.NoError(t, session.DropTable(tblNames))
 	}
+
+	assert.NoError(t, session.CreateTable(&Users{}))
+	assert.NoError(t, session.CreateTable(&Series{}))
+	assert.NoError(t, session.CreateTable(&Seasons{}))
+	assert.NoError(t, session.CreateTable(&Episodes{}))
 }
 
 func TestIsTableExists(t *testing.T) {
@@ -83,7 +83,7 @@ func TestIsTableExists(t *testing.T) {
 func TestIsColumnExist(t *testing.T) {
 	assert.NoError(t, PrepareScheme(&Users{}))
 
-	engine, err := enginePool.GetScriptQueryEngine()
+	engine, err := enginePool.GetDataQueryEngine()
 	assert.NoError(t, err)
 	assert.NotNil(t, engine)
 
@@ -106,8 +106,13 @@ func TestIsColumnExist(t *testing.T) {
 
 func TestGetTables(t *testing.T) {
 	assert.NoError(t, PrepareScheme(&Users{}))
+	assert.NoError(t, PrepareScheme(&Account{}))
+	assert.NoError(t, PrepareScheme(&Series{}))
+	assert.NoError(t, PrepareScheme(&Seasons{}))
+	assert.NoError(t, PrepareScheme(&Episodes{}))
+	assert.NoError(t, PrepareScheme(&TestEpisodes{}))
 
-	engine, err := enginePool.GetScriptQueryEngine()
+	engine, err := enginePool.GetDataQueryEngine()
 	assert.NoError(t, err)
 	assert.NotNil(t, engine)
 
@@ -116,22 +121,20 @@ func TestGetTables(t *testing.T) {
 
 	expected := []string{
 		"/local/users",
+		"/local/account",
 		"/local/series",
-		"/local/episodes",
 		"/local/seasons",
-		"/local/userinfo",
-		"/local/check_list",
-		"/local/condition",
-		"/local/test/episodes", // REMOVE
+		"/local/episodes",
+		"/local/test_episodes",
 	}
 
-	found := make(map[string]bool)
+	tableNames := []string{}
 	for _, table := range tables {
-		found[table.Name] = true
+		tableNames = append(tableNames, table.Name)
 	}
 
 	for _, e := range expected {
-		assert.True(t, found[e])
+		assert.Contains(t, tableNames, e)
 	}
 }
 
@@ -193,4 +196,138 @@ func TestGetIndexes(t *testing.T) {
 	assert.ElementsMatch(t, []string{"index_f", "index_g", "index_h", "index_i"}, index["c"].Cols)
 }
 
-// TODO: sync test
+func TestGetColumns(t *testing.T) {
+	assert.NoError(t, PrepareScheme(&Users{}))
+
+	engine, err := enginePool.GetDataQueryEngine()
+	assert.NoError(t, err)
+	assert.NotNil(t, engine)
+
+	dialect := engine.Dialect()
+	cols, colsMap, err := dialect.GetColumns(engine.DB(), enginePool.ctx, (&Users{}).TableName())
+	assert.NoError(t, err)
+	assert.NotNil(t, cols)
+
+	expectedCols := []string{"name", "age", "user_id", "number", "created_at", "updated_at"}
+	assert.ElementsMatch(t, expectedCols, cols)
+
+	expectedType := []string{"VARCHAR", "UNSIGNED MEDIUMINT", "BIGINT", "VARCHAR", "TIMESTAMP", "TIMESTAMP"}
+	for i, col := range expectedCols {
+		assert.Equal(t, expectedType[i], colsMap[col].SQLType.Name)
+	}
+}
+
+func TestSyncNewTable(t *testing.T) {
+	engine, err := enginePool.GetScriptQueryEngine()
+	assert.NoError(t, err)
+	assert.NotNil(t, engine)
+
+	session := engine.NewSession()
+	defer session.Close()
+
+	assert.NoError(t, session.DropTable(&Users{}))
+	assert.NoError(t, session.DropTable(&Account{}))
+	assert.NoError(t, session.DropTable(&Series{}))
+	assert.NoError(t, session.DropTable(&Seasons{}))
+	assert.NoError(t, session.DropTable(&Episodes{}))
+	assert.NoError(t, session.DropTable(&TestEpisodes{}))
+
+	assert.NoError(t, session.Sync(
+		&Users{},
+		&Account{},
+		&Series{},
+		&Seasons{},
+		&Episodes{},
+		&TestEpisodes{}))
+}
+
+func TestSyncOldTable(t *testing.T) {
+	engine, err := enginePool.GetScriptQueryEngine()
+	assert.NoError(t, err)
+	assert.NotNil(t, engine)
+
+	session := engine.NewSession()
+	defer session.Close()
+
+	assert.NoError(t, PrepareScheme(&Users{}))
+	assert.NoError(t, PrepareScheme(&Account{}))
+	assert.NoError(t, PrepareScheme(&Series{}))
+	assert.NoError(t, PrepareScheme(&Seasons{}))
+	assert.NoError(t, PrepareScheme(&Episodes{}))
+	assert.NoError(t, PrepareScheme(&TestEpisodes{}))
+
+	assert.NoError(t, session.Sync(
+		&Users{},
+		&Account{},
+		&Series{},
+		&Seasons{},
+		&Episodes{},
+		&TestEpisodes{}))
+}
+
+type oriIndexSync struct {
+	Uuid int64 `xorm:"pk"`
+
+	A int64 `xorm:"index(idx_a)"`
+	B int64 `xorm:"index(idx_a)"`
+	C int64 `xorm:"index(idx_a)"`
+
+	D int64 `xorm:"index(idx_b)"`
+	E int64 `xorm:"index(idx_b)"`
+	F int64 `xorm:"index(idx_b)"`
+
+	G int64 `xorm:"index(idx_c)"`
+
+	H int64
+	I int64
+}
+
+func (*oriIndexSync) TableName() string {
+	return "test_sync_index"
+}
+
+type newIndexSync struct {
+	Uuid int64 `xorm:"pk"`
+
+	A int64
+	B int64 `xorm:"index(idx_a)"`
+	C int64 `xorm:"index(idx_a)"`
+
+	D int64 `xorm:"index(idx_b)"`
+	E int64 `xorm:"index(idx_b)"`
+	F int64 `xorm:"index(idx_b)"`
+
+	G int64
+
+	H int64 `xorm:"index(idx_c)"`
+	I int64 `xorm:"index(idx_d)"`
+}
+
+func (*newIndexSync) TableName() string {
+	return "test_sync_index"
+}
+
+func TestIndexSync(t *testing.T) {
+	engine, err := enginePool.GetScriptQueryEngine()
+	assert.NoError(t, err)
+	assert.NotNil(t, engine)
+
+	assert.NoError(t, engine.Sync(&oriIndexSync{}))
+	assert.NoError(t, engine.Sync(&newIndexSync{}))
+
+	dialect := engine.Dialect()
+	index, err := dialect.GetIndexes(engine.DB(), enginePool.ctx, "test_sync_index")
+	assert.NoError(t, err)
+
+	assert.NotNil(t, index["idx_a"])
+	assert.ElementsMatch(t, []string{"b", "c"}, index["idx_a"].Cols)
+
+	assert.NotNil(t, index["idx_b"])
+	assert.ElementsMatch(t, []string{"d", "e", "f"}, index["idx_b"].Cols)
+
+	assert.NotNil(t, index["idx_c"])
+	assert.ElementsMatch(t, []string{"h"}, index["idx_c"].Cols)
+
+	assert.NotNil(t, index["idx_d"])
+	assert.ElementsMatch(t, []string{"i"}, index["idx_d"].Cols)
+}

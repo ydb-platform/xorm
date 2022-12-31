@@ -64,7 +64,7 @@ func (*Episodes) TableName() string {
 }
 
 func (*TestEpisodes) TableName() string {
-	return "test_extends_episodes"
+	return "test_episodes"
 }
 
 func (*Users) TableName() string {

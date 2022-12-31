@@ -127,3 +127,21 @@ func PrepareScheme(bean interface{}) error {
 
 	return nil
 }
+
+func CleanUp(beans ...interface{}) error {
+	engine, err := enginePool.GetScriptQueryEngine()
+	if err != nil {
+		return err
+	}
+
+	session := engine.NewSession()
+	defer session.Close()
+
+	for _, bean := range beans {
+		if err := session.DropTable(bean); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
