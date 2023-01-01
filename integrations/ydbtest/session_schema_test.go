@@ -1,9 +1,11 @@
 package ydb
 
 import (
+	"log"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"xorm.io/xorm/schemas"
 )
 
 func TestCreateTable(t *testing.T) {
@@ -259,7 +261,9 @@ func TestSyncOldTable(t *testing.T) {
 	assert.NoError(t, session.Sync(
 		&Users{},
 		&Account{},
-		&Series{},
+		&Series{}))
+
+	assert.NoError(t, session.Sync(
 		&Seasons{},
 		&Episodes{},
 		&TestEpisodes{}))
@@ -312,8 +316,7 @@ func TestIndexSync(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, engine)
 
-	assert.NoError(t, engine.Sync(&oriIndexSync{}))
-	assert.NoError(t, engine.Sync(&newIndexSync{}))
+	assert.NoError(t, engine.Sync(&oriIndexSync{}, &newIndexSync{}))
 
 	dialect := engine.Dialect()
 	index, err := dialect.GetIndexes(engine.DB(), enginePool.ctx, "test_sync_index")
@@ -330,4 +333,131 @@ func TestIndexSync(t *testing.T) {
 
 	assert.NotNil(t, index["idx_d"])
 	assert.ElementsMatch(t, []string{"i"}, index["idx_d"].Cols)
+
+	assert.NoError(t, engine.Sync(&newIndexSync{}, &oriIndexSync{}))
+	index, err = dialect.GetIndexes(engine.DB(), enginePool.ctx, "test_sync_index")
+	assert.NoError(t, err)
+
+	assert.NotNil(t, index["idx_a"])
+	assert.ElementsMatch(t, []string{"a", "b", "c"}, index["idx_a"].Cols)
+
+	assert.NotNil(t, index["idx_b"])
+	assert.ElementsMatch(t, []string{"d", "e", "f"}, index["idx_b"].Cols)
+
+	assert.NotNil(t, index["idx_c"])
+	assert.ElementsMatch(t, []string{"g"}, index["idx_c"].Cols)
+
+	assert.Nil(t, index["idx_d"])
+}
+
+type oriCols struct {
+	Uuid    int64 `xorm:"pk"`
+	A       int64
+	B       int64
+	C       int64
+	D       int64
+	NewType int64
+}
+
+func (*oriCols) TableName() string {
+	return "test_sync_cols"
+}
+
+type newCols struct {
+	Uuid    int64 `xorm:"pk"`
+	A       int64
+	B       int64
+	C       int64
+	D       int64
+	E       int64
+	F       int64
+	G       int64
+	NewType string
+}
+
+func (*newCols) TableName() string {
+	return "test_sync_cols"
+}
+
+func TestSyncCols(t *testing.T) {
+	engine, err := enginePool.GetScriptQueryEngine()
+	assert.NoError(t, err)
+	assert.NotNil(t, engine)
+
+	assert.NoError(t, engine.Sync(&oriCols{}, &newCols{}))
+
+	dialect := engine.Dialect()
+	cols, colMaps, err := dialect.GetColumns(engine.DB(), enginePool.ctx, "test_sync_cols")
+	assert.NoError(t, err)
+	assert.NotNil(t, colMaps)
+	assert.ElementsMatch(t, []string{"uuid", "a", "b", "c", "d", "e", "f", "g", "new_type"}, cols)
+	assert.EqualValues(t, schemas.BigInt, colMaps["new_type"].SQLType.Name)
+}
+
+type syncA struct {
+	Uuid    int64 `xorm:"pk"`
+	A       int64 `xorm:"index(idx_a)"`
+	B       int64 `xorm:"index(idx_b)"`
+	C       int64 `xorm:"index(idx_c)"`
+	D       int64
+	NewType int64
+}
+
+func (*syncA) TableName() string {
+	return "test_overall_sync"
+}
+
+type syncB struct {
+	Uuid    int64 `xorm:"pk"`
+	A       int64 `xorm:"index(idx_a)"`  // common index
+	B       int64 `xorm:"index(idx_bb)"` // common index but keep old name: `idx_b``
+	C       int64
+	D       int64 `xorm:"index(idx_c)"`
+	E       int64 `xorm:"index(idx_d)"`
+	F       int64 `xorm:"index(idx_e)"`
+	G       int64
+	NewType string `xorm:"index(idx_f)"`
+}
+
+func (*syncB) TableName() string {
+	return "test_overall_sync"
+}
+
+func TestSyncOverall(t *testing.T) {
+	engine, err := enginePool.GetScriptQueryEngine()
+	assert.NoError(t, err)
+	assert.NotNil(t, engine)
+
+	log.Println("Begin")
+	assert.NoError(t, engine.Sync(&syncA{}, &syncB{}))
+
+	dialect := engine.Dialect()
+	cols, colMaps, err := dialect.GetColumns(engine.DB(), enginePool.ctx, (&syncA{}).TableName())
+	assert.NoError(t, err)
+	assert.NotNil(t, colMaps)
+	assert.ElementsMatch(t, []string{"uuid", "a", "b", "c", "d", "e", "f", "g", "new_type"}, cols)
+	assert.EqualValues(t, schemas.BigInt, colMaps["new_type"].SQLType.Name)
+
+	indexesMap, err := dialect.GetIndexes(engine.DB(), enginePool.ctx, (&syncB{}).TableName())
+	assert.NoError(t, err)
+	assert.NotNil(t, indexesMap)
+
+	assert.NotNil(t, indexesMap["idx_a"])
+	assert.ElementsMatch(t, []string{"a"}, indexesMap["idx_a"].Cols)
+
+	assert.NotNil(t, indexesMap["idx_b"])
+	assert.ElementsMatch(t, []string{"b"}, indexesMap["idx_b"].Cols)
+
+	assert.NotNil(t, indexesMap["idx_c"])
+	assert.ElementsMatch(t, []string{"d"}, indexesMap["idx_c"].Cols)
+
+	assert.NotNil(t, indexesMap["idx_d"])
+	assert.ElementsMatch(t, []string{"e"}, indexesMap["idx_d"].Cols)
+
+	assert.NotNil(t, indexesMap["idx_e"])
+	assert.ElementsMatch(t, []string{"f"}, indexesMap["idx_e"].Cols)
+
+	assert.NotNil(t, indexesMap["idx_f"])
+	assert.ElementsMatch(t, []string{"new_type"}, indexesMap["idx_f"].Cols)
+	log.Println("End")
 }

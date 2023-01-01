@@ -406,7 +406,7 @@ func TestFindAndCount(t *testing.T) {
 	assert.EqualValues(t, len(usersData), cnt)
 
 	users = []Users{}
-	cnt, err = engine.Limit(10, 0).FindAndCount(&users)
+	_, err = engine.Limit(10, 0).FindAndCount(&users)
 	assert.NoError(t, err)
 	assert.EqualValues(t, 10, len(users))
 }

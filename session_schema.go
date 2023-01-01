@@ -256,9 +256,177 @@ func (session *Session) Sync2(beans ...interface{}) error {
 	return session.Sync(beans...)
 }
 
+// !datbeohbbh! Sync synchronize structs to database tables for YDB
+//  1. Speed up look up for table name, column name, index name
+//  2. In YDB compare table name by strings.EqualFold is not true.
+//     A = "/local/my_table"
+//     B = "/local/My_table"
+//     A and B are not same table
+func (session *Session) ydbSync(beans ...interface{}) error {
+	var (
+		engine  = session.engine
+		dialect = engine.Dialect()
+	)
+
+	if session.isAutoClose {
+		session.isAutoClose = false
+		defer session.Close()
+	}
+
+	tables, err := dialect.GetTables(session.getQueryer(), session.ctx)
+	if err != nil {
+		return err
+	}
+
+	tablesMap := make(map[string]*schemas.Table)
+	for _, table := range tables {
+		tablesMap[table.Name] = table
+	}
+
+	session.autoResetStatement = false
+	defer func() {
+		session.autoResetStatement = true
+		session.resetStatement()
+	}()
+
+	ydbIsEqualIndexes := func(lhsIndex, rhsIndex *schemas.Index) bool {
+		if lhsIndex.Type != rhsIndex.Type {
+			return false
+		}
+		if len(lhsIndex.Cols) != len(rhsIndex.Cols) {
+			return false
+		}
+		lhsColsMap := make(map[string]bool)
+		for _, col := range lhsIndex.Cols {
+			lhsColsMap[col] = true
+		}
+		for _, col := range rhsIndex.Cols {
+			if _, has := lhsColsMap[col]; !has {
+				return false
+			}
+		}
+		return true
+	}
+
+	for _, bean := range beans {
+		beanVal := utils.ReflectValue(bean)
+		curTable, err := engine.tagParser.ParseWithCache(beanVal)
+		if err != nil {
+			return err
+		}
+
+		var curTableName string
+		if len(session.statement.AltTableName) > 0 {
+			curTableName = session.statement.AltTableName
+		} else {
+			curTableName = engine.TableName(bean)
+		}
+		curTableName = path.Join(dialect.URI().DBName, curTableName)
+
+		var oriTable *schemas.Table
+		if _, has := tablesMap[curTableName]; has {
+			oriTable = tablesMap[curTableName]
+		}
+
+		// current bean is new table
+		if oriTable == nil {
+			err = session.createTable(bean)
+			if err != nil {
+				return err
+			}
+			// !datbeohbbh! update `tablesMap` so that next beans can know about new table
+			tablesMap[curTableName] = curTable
+			continue
+		}
+
+		if err = engine.loadTableInfo(oriTable); err != nil {
+			return err
+		}
+
+		// set ref to currently sync table
+		session.statement.RefTable = curTable
+		session.statement.SetTableName(curTableName)
+
+		// sync columns
+		oriColumnsMap := make(map[string]*schemas.Column)
+		for _, column := range oriTable.Columns() {
+			oriColumnsMap[column.Name] = column
+		}
+
+		for _, curColumn := range curTable.Columns() {
+			var oriColumn *schemas.Column
+			if _, has := oriColumnsMap[curColumn.Name]; has {
+				oriColumn = oriColumnsMap[curColumn.Name]
+			}
+			if oriColumn == nil {
+				if err = session.addColumn(curColumn.Name); err != nil {
+					return err
+				}
+				continue
+			}
+			curColumnType := dialect.SQLType(curColumn)
+			oriColumnType := dialect.SQLType(oriColumn)
+			// !datbeohbbh! YDB does not support modify column type.
+			if curColumnType != oriColumnType {
+				engine.logger.Warnf("Table `%s` column `%s` db type is `%s`, struct type is `%s`\n",
+					curTableName, curColumn.Name, oriColumnType, curColumnType)
+			}
+		}
+
+		// !datbeohbbh! https://ydb.tech/en/docs/yql/reference/syntax/create_table#secondary_index
+		// Currently, just support type of indexes is SYNC.
+		// Reason is that I can not (or don't know) how to get infor about indexes type from sdk side.
+
+		// sync indexes
+		commonIndexes := make(map[string]bool)
+		toAddCurIndexes := make([]string, 0)
+		for curIndexName, curIndex := range curTable.Indexes {
+			hasCommon := false
+			for oriIndexName, oriIndex := range oriTable.Indexes {
+				if ydbIsEqualIndexes(oriIndex, curIndex) {
+					commonIndexes[oriIndexName] = true
+					hasCommon = true
+					break
+				}
+			}
+
+			if !hasCommon {
+				toAddCurIndexes = append(toAddCurIndexes, curIndexName)
+			}
+		}
+
+		for oriIndexName, oriIndex := range oriTable.Indexes {
+			if _, isCommon := commonIndexes[oriIndexName]; !isCommon {
+				sql := dialect.DropIndexSQL(curTableName, oriIndex)
+				if _, err = session.exec(sql); err != nil {
+					return err
+				}
+			}
+		}
+
+		for _, curIndexName := range toAddCurIndexes {
+			if err = session.addIndex(curTableName, curIndexName); err != nil {
+				return err
+			}
+		}
+
+		for _, columnName := range oriTable.ColumnsSeq() {
+			if curTable.GetColumn(columnName) == nil {
+				engine.logger.Warnf("Table %s has column %s but struct has not related field",
+					engine.TableName(oriTable.Name), columnName)
+			}
+		}
+	}
+
+	return nil
+}
+
 // Sync synchronize structs to database tables
 func (session *Session) Sync(beans ...interface{}) error {
 	engine := session.engine
+	if engine.dialect.URI().DBType == schemas.YDB {
+		return session.ydbSync(beans...)
+	}
 
 	if session.isAutoClose {
 		session.isAutoClose = false
@@ -296,13 +464,6 @@ func (session *Session) Sync(beans ...interface{}) error {
 				oriTable = tb
 				break
 			}
-			if engine.dialect.URI().DBType == schemas.YDB {
-				dbName := engine.dialect.URI().DBName
-				if strings.EqualFold(engine.tbNameWithSchema(tb.Name), path.Join(dbName, engine.tbNameWithSchema(tbName))) {
-					oriTable = tb
-					break
-				}
-			}
 		}
 
 		// this is a new table
@@ -310,10 +471,6 @@ func (session *Session) Sync(beans ...interface{}) error {
 			err = session.StoreEngine(session.statement.StoreEngine).createTable(bean)
 			if err != nil {
 				return err
-			}
-
-			if engine.dialect.URI().DBType == schemas.YDB {
-				continue
 			}
 
 			err = session.createUniques(bean)
@@ -357,9 +514,6 @@ func (session *Session) Sync(beans ...interface{}) error {
 			expectedType := engine.dialect.SQLType(col)
 			curType := engine.dialect.SQLType(oriCol)
 			if expectedType != curType {
-				if engine.dialect.URI().DBType == schemas.YDB {
-					return fmt.Errorf("YDB does not supports modify column")
-				}
 				if expectedType == schemas.Text &&
 					strings.HasPrefix(curType, schemas.Varchar) {
 					// currently only support mysql & postgres
@@ -397,9 +551,6 @@ func (session *Session) Sync(beans ...interface{}) error {
 					}
 				}
 			} else if col.Comment != oriCol.Comment {
-				if engine.dialect.URI().DBType == schemas.YDB {
-					return fmt.Errorf("YDB does not supports modify column")
-				}
 				_, err = session.exec(engine.dialect.ModifyColumnSQL(tbNameWithSchema, col))
 			}
 

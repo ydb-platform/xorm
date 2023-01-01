@@ -52,28 +52,8 @@ func MainTest(m *testing.M) int {
 
 	code := m.Run()
 	defer func(code int) {
-		if code != 0 {
-			return
-		}
 		log.Println("Finished Testing >>> Cleaning up...")
-		_ = CleanUp(
-			"account",
-			"check_list",
-			"condition",
-			"empsetting",
-			"episodes",
-			"find_bool_struct",
-			"my_table",
-			"salary",
-			"seasons",
-			"series",
-			"test_episodes",
-			"test_extends_episodes",
-			"test_index",
-			"test_sync_index",
-			"userinfo",
-			"users",
-		)
+		_ = CleanUp()
 	}(code)
 
 	return code

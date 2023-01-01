@@ -59,7 +59,7 @@ func (em *EngineWithMode) getEngine(queryMode QueryMode) (*xorm.Engine, error) {
 	}
 
 	engine.ShowSQL(*showSQL)
-	engine.SetLogLevel(xormLog.LOG_ERR)
+	engine.SetLogLevel(xormLog.LOG_WARNING)
 
 	loc, _ := time.LoadLocation("Europe/Moscow")
 	engine.SetTZLocation(loc)
@@ -128,8 +128,13 @@ func PrepareScheme(bean interface{}) error {
 	return nil
 }
 
-func CleanUp(beans ...interface{}) error {
+func CleanUp() error {
 	engine, err := enginePool.GetScriptQueryEngine()
+	if err != nil {
+		return err
+	}
+
+	tables, err := engine.Dialect().GetTables(engine.DB(), enginePool.ctx)
 	if err != nil {
 		return err
 	}
@@ -137,10 +142,12 @@ func CleanUp(beans ...interface{}) error {
 	session := engine.NewSession()
 	defer session.Close()
 
-	for _, bean := range beans {
+	for _, table := range tables {
+		bean := table.Name
 		if err := session.DropTable(bean); err != nil {
 			return err
 		}
+		log.Printf("drop table `%s`\n", table.Name)
 	}
 
 	return nil
