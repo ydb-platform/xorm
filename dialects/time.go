@@ -13,9 +13,13 @@ import (
 
 // FormatColumnTime format column time
 func FormatColumnTime(dialect Dialect, dbLocation *time.Location, col *schemas.Column, t time.Time) (interface{}, error) {
+	// !datbeohbbh! YDB: if col.SQLType.Name is schemas.TimeStamp or schemas.Interval
+	// return value should be time.Time or time.Duration not string
+	isYDB := (dialect.URI() != nil && dialect.URI().DBType == schemas.YDB)
+
 	if t.IsZero() {
 		if col.Nullable {
-			return nil, nil
+				return nil, nil
 		}
 
 		if col.SQLType.IsNumeric() {
@@ -29,9 +33,6 @@ func FormatColumnTime(dialect Dialect, dbLocation *time.Location, col *schemas.C
 	}
 
 	t = t.In(tmZone)
-	// !datbeohbbh! YDB: if col.SQLType.Name is schemas.TimeStamp or schemas.Interval
-	// return value should be time.Time or time.Duration not string
-	isYDB := (dialect.URI() != nil && dialect.URI().DBType == schemas.YDB)
 
 	switch col.SQLType.Name {
 	case schemas.Date:

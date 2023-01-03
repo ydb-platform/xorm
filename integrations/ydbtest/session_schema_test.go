@@ -1,10 +1,12 @@
 package ydb
 
 import (
-	"log"
+	"context"
+	"path"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"xorm.io/xorm"
 	"xorm.io/xorm/schemas"
 )
 
@@ -428,7 +430,6 @@ func TestSyncOverall(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, engine)
 
-	log.Println("Begin")
 	assert.NoError(t, engine.Sync(&syncA{}, &syncB{}))
 
 	dialect := engine.Dialect()
@@ -459,5 +460,36 @@ func TestSyncOverall(t *testing.T) {
 
 	assert.NotNil(t, indexesMap["idx_f"])
 	assert.ElementsMatch(t, []string{"new_type"}, indexesMap["idx_f"].Cols)
-	log.Println("End")
+}
+
+func TestDBMetas(t *testing.T) {
+	engine, err := enginePool.GetScriptQueryEngine()
+	assert.NoError(t, err)
+
+	dialect := engine.Dialect()
+
+	_, err = engine.TransactionContext(enginePool.ctx, func(ctx context.Context, session *xorm.Session) (interface{}, error) {
+		assert.NoError(t, session.Sync(&Users{}))
+
+		exist, err := dialect.IsTableExist(session.Tx(), ctx, (&Users{}).TableName())
+		assert.NoError(t, err)
+		if err != nil {
+			return nil, err
+		}
+		assert.True(t, exist)
+
+		tables, err := dialect.GetTables(session.Tx(), ctx)
+		assert.NoError(t, err)
+		assert.NotNil(t, tables)
+		ok := false
+		for _, table := range tables {
+			if path.Join(dialect.URI().DBName, (&Users{}).TableName()) == table.Name {
+				ok = true
+				break
+			}
+		}
+		assert.True(t, ok)
+		return nil, nil
+	})
+	assert.NoError(t, err)
 }
