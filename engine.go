@@ -1449,7 +1449,7 @@ func (engine *Engine) Transaction(f func(*Session) (interface{}, error)) (interf
 }
 
 // !datbeohbbh! Transaction Execute sql wrapped in a transaction with provided context
-func (engine *Engine) TransactionContext(ctx context.Context, f func(*Session) (interface{}, error)) (interface{}, error) {
+func (engine *Engine) TransactionContext(ctx context.Context, f func(context.Context,*Session) (interface{}, error)) (interface{}, error) {
 	session := engine.NewSession().Context(ctx)
 	defer session.Close()
 
@@ -1458,7 +1458,7 @@ func (engine *Engine) TransactionContext(ctx context.Context, f func(*Session) (
 	}
 	defer session.Rollback()
 
-	result, err := f(session)
+	result, err := f(ctx, session)
 	if err != nil {
 		return nil, err
 	}
