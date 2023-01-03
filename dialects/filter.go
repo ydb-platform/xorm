@@ -100,13 +100,21 @@ func (yf *SeqFilter) DoWithDeclare(sqlStr string, args ...interface{}) string {
 		if !beginSingleQuote && !isLineComment && !isComment && c == '?' {
 			var t sql.NamedArg
 			if _, ok := args[index-1].(sql.NamedArg); ok {
-				t, _ = args[index-1].(sql.NamedArg)
+				t = args[index-1].(sql.NamedArg)
 			} else {
 				t = sql.Named(fmt.Sprintf("param_%v", index), args[index-1])
 			}
 
-			st := schemas.YQL_TypeToSQLType(reflect.TypeOf(t.Value))
-			tp := toYQLDataType(st.Name, st.DefaultLength, st.DefaultLength2)
+			var (
+				st schemas.SQLType
+				tp string
+			)
+			if t.Value == nil {
+				tp = "Null"
+			} else {
+				st = schemas.YQL_TypeToSQLType(reflect.TypeOf(t.Value))
+				tp = toYQLDataType(st.Name, st.DefaultLength, st.DefaultLength2)
+			}
 
 			switch tp {
 			case yql_String:
