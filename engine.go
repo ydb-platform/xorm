@@ -787,6 +787,50 @@ func (engine *Engine) dumpTables(ctx context.Context, tables []*schemas.Table, w
 								return err
 							}
 						}
+					} else if dstDialect.URI().DBType == schemas.YDB {
+						castTmpl := "CAST(%v AS Optional<%v>)"
+						yqlType := dstDialect.SQLType(dstTable.Columns()[i])
+						if dstTable.Columns()[i].IsPrimaryKey {
+							if strings.HasPrefix(yqlType, "Uint") || strings.HasPrefix(yqlType, "Int") {
+								if _, err = io.WriteString(w, s.String); err != nil {
+									return err
+								}
+							} else if yqlType == "Timestamp" {
+								t, err := time.Parse(time.RFC3339Nano, s.String)
+								if err != nil {
+									return err
+								}
+								if _, err = io.WriteString(w, fmt.Sprintf("%v", t.UnixMicro())); err != nil {
+									return err
+								}
+							} else {
+								if _, err = io.WriteString(w, "\""+strings.ReplaceAll(s.String, "'", "''")+"\""); err != nil {
+									return err
+								}
+							}
+						} else {
+							if yqlType == "Timestamp" {
+								t, err := time.Parse(time.RFC3339Nano, s.String)
+								if err != nil {
+									return err
+								}
+								if _, err = io.WriteString(w, fmt.Sprintf(castTmpl, t.UnixMicro(), yqlType)); err != nil {
+									return err
+								}
+							} else if yqlType == "Interval" {
+								d, err := time.ParseDuration(s.String)
+								if err != nil {
+									return err
+								}
+								if _, err = io.WriteString(w, fmt.Sprintf(castTmpl, d.Microseconds(), yqlType)); err != nil {
+									return err
+								}
+							} else {
+								if _, err = io.WriteString(w, fmt.Sprintf(castTmpl, "\""+strings.ReplaceAll(s.String, "'", "''")+"\"", yqlType)); err != nil {
+									return err
+								}
+							}
+						}
 					} else {
 						if _, err = io.WriteString(w, "'"+strings.ReplaceAll(s.String, "'", "''")+"'"); err != nil {
 							return err
@@ -1449,7 +1493,7 @@ func (engine *Engine) Transaction(f func(*Session) (interface{}, error)) (interf
 }
 
 // !datbeohbbh! Transaction Execute sql wrapped in a transaction with provided context
-func (engine *Engine) TransactionContext(ctx context.Context, f func(context.Context,*Session) (interface{}, error)) (interface{}, error) {
+func (engine *Engine) TransactionContext(ctx context.Context, f func(context.Context, *Session) (interface{}, error)) (interface{}, error) {
 	session := engine.NewSession().Context(ctx)
 	defer session.Close()
 
