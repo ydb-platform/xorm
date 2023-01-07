@@ -129,7 +129,7 @@ func TestGetTables(t *testing.T) {
 		"/local/series",
 		"/local/seasons",
 		"/local/episodes",
-		"/local/test_episodes",
+		"/local/test/episodes",
 	}
 
 	tableNames := []string{}

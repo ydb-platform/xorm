@@ -53,5 +53,7 @@ func TestExecTime(t *testing.T) {
 	has, err := engine.Where("`uid`=?", int64(1)).Get(&uet)
 	assert.NoError(t, err)
 	assert.True(t, has)
-	assert.EqualValues(t, now.In(engine.GetTZLocation()).Format(time.RFC3339), uet.Created.Format(time.RFC3339))
+	assert.EqualValues(t,
+		now.In(engine.GetTZLocation()).Format(time.RFC3339),
+		uet.Created.In(engine.TZLocation).Format(time.RFC3339))
 }

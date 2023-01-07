@@ -67,9 +67,10 @@ func TestInsertCreated(t *testing.T) {
 	err = engine.Table(&Users{}).Cols("created_at").Find(&users)
 	assert.NoError(t, err)
 
+	loc := engine.GetTZLocation()
 	for _, user := range users {
 		layout := "2006-01-02 15:04:05"
-		assert.EqualValues(t, curTime.Format(layout), user.Created.Format(layout))
+		assert.EqualValues(t, curTime.In(loc).Format(layout), user.Created.In(loc).Format(layout))
 	}
 }
 

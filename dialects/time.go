@@ -19,7 +19,7 @@ func FormatColumnTime(dialect Dialect, dbLocation *time.Location, col *schemas.C
 
 	if t.IsZero() {
 		if col.Nullable {
-				return nil, nil
+			return nil, nil
 		}
 
 		if col.SQLType.IsNumeric() {
@@ -65,6 +65,9 @@ func FormatColumnTime(dialect Dialect, dbLocation *time.Location, col *schemas.C
 	case schemas.Interval:
 		return time.Since(t), nil
 	case schemas.BigInt, schemas.Int:
+		if isYDB {
+			return t.UnixMicro(), nil
+		}
 		return t.Unix(), nil
 	default:
 		return t, nil
