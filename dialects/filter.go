@@ -84,6 +84,9 @@ func (s *SeqFilter) Do(sql string) string {
 // generate `DECLARE` section
 // https://github.com/ydb-platform/ydb-go-sdk/blob/master/SQL.md#specifying-query-parameters-
 func (yf *SeqFilter) DoWithDeclare(sqlStr string, args ...interface{}) string {
+	if len(args) == 0 {
+		return sqlStr
+	}
 	var buf strings.Builder
 	var declareBuf strings.Builder
 
