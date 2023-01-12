@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io/fs"
+	"log"
 	"os"
 	"testing"
 	"time"
@@ -115,4 +116,15 @@ func TestImportDML(t *testing.T) {
 	assert.NoError(t, err)
 
 	assert.NoError(t, session.Commit())
+}
+
+func TestDBVersion(t *testing.T) {
+	engine, err := enginePool.GetDataQueryEngine()
+	assert.NoError(t, err)
+	assert.NotNil(t, engine)
+
+	version, err := engine.DBVersion()
+	assert.NoError(t, err)
+	assert.Equal(t, version.Edition, "YDB Server")
+	log.Println(version.Edition + " " + version.Number)
 }

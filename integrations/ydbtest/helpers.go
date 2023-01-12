@@ -61,11 +61,16 @@ func (em *EngineWithMode) getEngine(queryMode QueryMode) (*xorm.Engine, error) {
 	engine.ShowSQL(*showSQL)
 	engine.SetLogLevel(xormLog.LOG_WARNING)
 
-	// loc, _ := time.LoadLocation("Europe/Moscow")
-	engine.SetTZLocation(time.Local)
-	engine.SetTZDatabase(time.Local)
+	appLoc, _ := time.LoadLocation("Asia/Ho_Chi_Minh")
+	DbLoc, _ := time.LoadLocation("Europe/Moscow")
+	engine.SetTZLocation(appLoc)
+	engine.SetTZDatabase(DbLoc)
 
 	engine.SetDefaultContext(em.ctx)
+
+	engine.SetMaxOpenConns(50)
+	engine.SetMaxIdleConns(50)
+	engine.DB().SetConnMaxIdleTime(time.Second)
 
 	em.engineCached[mode] = engine
 	return em.engineCached[mode], nil

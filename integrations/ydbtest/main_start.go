@@ -28,11 +28,11 @@ func MainTest(m *testing.M) int {
 	dbType = *db
 	if dbType != string(schemas.YDB) {
 		log.Println("this tests only apply for ydb")
-		return 1
+		return -1
 	}
 	if ptrConnStr == nil {
 		log.Println("you should indicate conn string")
-		return 1
+		return -1
 	}
 	connString = *ptrConnStr
 
