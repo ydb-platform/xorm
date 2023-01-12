@@ -818,11 +818,12 @@ func (engine *Engine) dumpTables(ctx context.Context, tables []*schemas.Table, w
 									return err
 								}
 							} else if yqlType == "Interval" {
-								d, err := time.ParseDuration(s.String)
+								d, err := strconv.ParseInt(s.String, 10, 64) // received microsecond
+								var sec float64 = float64(d) / float64(time.Microsecond)
 								if err != nil {
 									return err
 								}
-								if _, err = io.WriteString(w, fmt.Sprintf(castTmpl, d.Microseconds(), yqlType)); err != nil {
+								if _, err = io.WriteString(w, fmt.Sprintf(castTmpl, sec, yqlType)); err != nil {
 									return err
 								}
 							} else {
