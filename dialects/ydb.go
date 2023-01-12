@@ -3,12 +3,17 @@ package dialects
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"errors"
 	"fmt"
+	"io"
 	"net/url"
 	"path"
+	"runtime"
 	"strings"
+	"time"
 
+	"xorm.io/xorm/convert"
 	"xorm.io/xorm/core"
 	"xorm.io/xorm/schemas"
 )
@@ -250,67 +255,28 @@ var (
 		Suffix:     '`',
 		IsReserved: schemas.AlwaysReserve,
 	}
+
+	ydbSDK = string("")
+	ydbDSN = string("")
 )
 
 type ydb struct {
 	Base
+	ydb *sql.DB
 }
 
-type XormQueryMode int
-
-const XormMetadataQuery string = "xorm-metadata-query"
+type QueryMode int
 
 const (
-	UnknownMetadataQueryMode = XormQueryMode(iota)
+	UnknownMetadataQueryMode = QueryMode(iota)
 
-	XormVersionQueryMode
-	XormIsTableExistQueryMode
-	XormIsColumnExistQueryMode
-	XormGetColumnsQueryMode
-	XormGetTablesQueryMode
-	XormGetIndexesQueryMode
+	VersionQueryMode
+	IsTableExistQueryMode
+	IsColumnExistQueryMode
+	GetColumnsQueryMode
+	GetTablesQueryMode
+	GetIndexesQueryMode
 )
-
-var (
-	modeToString = map[XormQueryMode]string{
-		XormVersionQueryMode:       "version",
-		XormIsTableExistQueryMode:  "is-table-exist",
-		XormIsColumnExistQueryMode: "is-column-exist",
-		XormGetColumnsQueryMode:    "get-columns",
-		XormGetTablesQueryMode:     "get-tables",
-		XormGetIndexesQueryMode:    "get-indexes",
-	}
-)
-
-func withCheckVersion(ctx context.Context) context.Context {
-	value := modeToString[XormVersionQueryMode]
-	return context.WithValue(ctx, XormMetadataQuery, value)
-}
-
-func withCheckIsTableExist(ctx context.Context) context.Context {
-	value := modeToString[XormIsTableExistQueryMode]
-	return context.WithValue(ctx, XormMetadataQuery, value)
-}
-
-func withCheckIsColumnExist(ctx context.Context) context.Context {
-	value := modeToString[XormIsColumnExistQueryMode]
-	return context.WithValue(ctx, XormMetadataQuery, value)
-}
-
-func withGetColumns(ctx context.Context) context.Context {
-	value := modeToString[XormGetColumnsQueryMode]
-	return context.WithValue(ctx, XormMetadataQuery, value)
-}
-
-func withGetTables(ctx context.Context) context.Context {
-	value := modeToString[XormGetTablesQueryMode]
-	return context.WithValue(ctx, XormMetadataQuery, value)
-}
-
-func withGetIndexes(ctx context.Context) context.Context {
-	value := modeToString[XormGetIndexesQueryMode]
-	return context.WithValue(ctx, XormMetadataQuery, value)
-}
 
 func (db *ydb) autoPrefix(s string) string {
 	dbName := db.dialect.URI().DBName
@@ -320,13 +286,189 @@ func (db *ydb) autoPrefix(s string) string {
 	return s
 }
 
+func removeOptional(s string) string {
+	if strings.HasPrefix(s, "Optional") {
+		s = strings.TrimPrefix(s, "Optional<")
+		s = strings.TrimSuffix(s, ">")
+	}
+	return s
+}
+
 func (db *ydb) Init(uri *URI) error {
 	db.quoter = ydbQuoter
+
+	var err error
+	db.ydb, err = sql.Open(ydbSDK, ydbDSN)
+	if err != nil {
+		return err
+	}
+	db.ydb.SetMaxOpenConns(50)
+	db.ydb.SetMaxIdleConns(50)
+	db.ydb.SetConnMaxIdleTime(time.Second)
+
+	runtime.SetFinalizer(db.ydb, func(ydb *sql.DB) {
+		_ = ydb.Close()
+	})
+
 	return db.Base.Init(db, uri)
 }
 
+type ydbRows struct {
+	rowsi    driver.Rows
+	lastCols []driver.Value
+	lastErr  error
+	closed   bool
+}
+
+func assignValue(dst, src interface{}) error {
+	switch s := src.(type) {
+	case string:
+		switch d := dst.(type) {
+		case *string:
+			if d == nil {
+				return fmt.Errorf("can not assign to nil pointer")
+			}
+			*d = s
+			return nil
+		}
+	case bool:
+		switch d := dst.(type) {
+		case *bool:
+			if d == nil {
+				return fmt.Errorf("can not assign to nil pointer")
+			}
+			*d = s
+			return nil
+		}
+	}
+	return fmt.Errorf("not support type %T", src)
+}
+
+func (rs *ydbRows) Scan(dest ...interface{}) error {
+	if len(dest) != len(rs.lastCols) {
+		return fmt.Errorf("len(dest) is not equal len(rs.lastCols)")
+	}
+	for i, dst := range dest {
+		err := assignValue(dst, rs.lastCols[i])
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (rs *ydbRows) Close() error {
+	rs.closed = true
+	return rs.rowsi.Close()
+}
+
+func (rs *ydbRows) Next() bool {
+	if rs.closed {
+		return false
+	}
+
+	if rs.lastCols == nil {
+		rs.lastCols = make([]driver.Value, len(rs.rowsi.Columns()))
+	}
+
+	rs.lastErr = rs.rowsi.Next(rs.lastCols)
+	if rs.lastErr != nil {
+		if rs.lastErr != io.EOF {
+			rs.Close()
+			return false
+		}
+		return false
+	}
+	return true
+}
+
+func (rs *ydbRows) Err() error {
+	if rs.lastErr != nil && rs.lastErr != io.EOF {
+		return rs.lastErr
+	}
+	return nil
+}
+
+func (db *ydb) Raw(ctx context.Context, query string, option QueryMode, args ...interface{}) (*ydbRows, error) {
+	conn, err := db.ydb.Conn(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+
+	dargs := make([]driver.NamedValue, len(args))
+	for i, arg := range args {
+		dargs[i].Name = arg.(sql.NamedArg).Name
+		dargs[i].Value = arg.(sql.NamedArg).Value
+		dargs[i].Ordinal = i + 1
+	}
+
+	var rowsi driver.Rows
+	err = conn.Raw(func(driverConn interface{}) (err error) {
+		c, ok := driverConn.(interface {
+			Version(context.Context) (driver.Rows, error)
+			IsTableExists(context.Context, string, []driver.NamedValue) (driver.Rows, error)
+			IsColumnExists(context.Context, string, []driver.NamedValue) (driver.Rows, error)
+			GetColumns(context.Context, string, []driver.NamedValue) (driver.Rows, error)
+			GetTables(context.Context, string, []driver.NamedValue) (driver.Rows, error)
+			GetIndexes(context.Context, string, []driver.NamedValue) (driver.Rows, error)
+		})
+		if !ok {
+			return fmt.Errorf("driver does not support query metadata")
+		}
+		switch option {
+		case VersionQueryMode:
+			rowsi, err = c.Version(ctx)
+		case IsTableExistQueryMode:
+			rowsi, err = c.IsTableExists(ctx, query, dargs)
+		case IsColumnExistQueryMode:
+			rowsi, err = c.IsColumnExists(ctx, query, dargs)
+		case GetColumnsQueryMode:
+			rowsi, err = c.GetColumns(ctx, query, dargs)
+		case GetTablesQueryMode:
+			rowsi, err = c.GetTables(ctx, query, dargs)
+		case GetIndexesQueryMode:
+			rowsi, err = c.GetIndexes(ctx, query, dargs)
+		}
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	rows := &ydbRows{
+		rowsi: rowsi,
+	}
+
+	return rows, nil
+}
+
 func (db *ydb) Version(ctx context.Context, queryer core.Queryer) (*schemas.Version, error) {
-	return nil, nil
+	rows, err := db.Raw(ctx, "SELECT $Version", VersionQueryMode)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var version string
+	if !rows.Next() {
+		return nil, errors.New("unknow version")
+	}
+
+	if err = rows.Scan(&version); err != nil {
+		return nil, err
+	}
+
+	if strings.HasPrefix(version, "YDB Server") {
+		return &schemas.Version{
+			Number:  strings.TrimPrefix(version, "YDB Server v"),
+			Edition: "YDB Server",
+		}, nil
+	}
+	return nil, errors.New("unknow version")
 }
 
 func (db *ydb) Features() *DialectFeatures {
@@ -504,14 +646,23 @@ func yqlToSQLType(yqlType string) (sqlType schemas.SQLType) {
 	return
 }
 
-// ydb-go-sdk does not support ColumnType.
 // https://pkg.go.dev/database/sql#ColumnType.DatabaseTypeName
 func (db *ydb) ColumnTypeKind(t string) int {
-	return schemas.UNKNOW_TYPE
+	switch t {
+	case "BOOL":
+		return schemas.BOOL_TYPE
+	case "INT8", "INT16", "INT32", "INT64", "UINT8", "UINT16", "UINT32", "UINT64":
+		return schemas.NUMERIC_TYPE
+	case "UTF8":
+		return schemas.TEXT_TYPE
+	case "TIMESTAMP":
+		return schemas.TIME_TYPE
+	default:
+		return schemas.UNKNOW_TYPE
+	}
 }
 
 func (db *ydb) IndexCheckSQL(tableName, indexName string) (string, []interface{}) {
-	// TODO
 	return "", nil
 }
 
@@ -523,8 +674,7 @@ func (db *ydb) IsTableExist(
 	pathToTable := db.autoPrefix(tableName)
 	query := fmt.Sprintf("SELECT TableName FROM `%s` WHERE TableName = $TableName", sys)
 
-	rows, err := queryer.
-		QueryContext(withCheckIsTableExist(ctx), query, sql.Named("TableName", pathToTable))
+	rows, err := db.Raw(ctx, query, IsTableExistQueryMode, sql.Named("TableName", pathToTable))
 
 	if err != nil {
 		return false, err
@@ -550,8 +700,8 @@ func (db *ydb) AddColumnSQL(tableName string, column *schemas.Column) string {
 	return buf.String()
 }
 
+// YDB does not support this operation
 func (db *ydb) ModifyColumnSQL(tableName string, column *schemas.Column) string {
-	// TODO
 	return ""
 }
 
@@ -597,10 +747,9 @@ func (db *ydb) IsColumnExist(
 
 	query := fmt.Sprintf("SELECT ColumnName FROM `%s` WHERE TableName = $TableName AND ColumnName = $ColumnName", sys)
 
-	rows, err := queryer.
-		QueryContext(withCheckIsColumnExist(ctx), query,
-			sql.Named("TableName", pathToTable),
-			sql.Named("ColumnName", columnName))
+	rows, err := db.Raw(ctx, query, IsColumnExistQueryMode,
+		sql.Named("TableName", pathToTable),
+		sql.Named("ColumnName", columnName))
 
 	if err != nil {
 		return false, err
@@ -622,7 +771,7 @@ func (db *ydb) GetColumns(queryer core.Queryer, ctx context.Context, tableName s
 
 	query := fmt.Sprintf("SELECT ColumnName, TableName, DataType, IsPrimaryKey FROM `%s` WHERE TableName = $TableName", sys)
 
-	rows, err := queryer.QueryContext(withGetColumns(ctx), query, sql.Named("TableName", pathToTable))
+	rows, err := db.Raw(ctx, query, GetColumnsQueryMode, sql.Named("TableName", pathToTable))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -637,11 +786,7 @@ func (db *ydb) GetColumns(queryer core.Queryer, ctx context.Context, tableName s
 			return nil, nil, err
 		}
 
-		if !isPk {
-			dataType = strings.TrimPrefix(dataType, "Optional<")
-			dataType = strings.TrimSuffix(dataType, ">")
-		}
-
+		dataType = removeOptional(dataType)
 		col := &schemas.Column{
 			Name:         columnName,
 			TableName:    tableName,
@@ -667,10 +812,11 @@ func (db *ydb) GetTables(queryer core.Queryer, ctx context.Context) ([]*schemas.
 	dbName := db.URI().DBName
 	query := fmt.Sprintf("SELECT TableName FROM `%s` WHERE DatabaseName = $DatabaseName", sys)
 
-	rows, err := queryer.
-		QueryContext(
-			withGetTables(ctx),
+	rows, err := db.
+		Raw(
+			ctx,
 			query,
+			GetTablesQueryMode,
 			sql.Named("DatabaseName", dbName),
 			sql.Named("IgnoreDirs", []string{".sys", ".sys_health"}),
 		)
@@ -701,7 +847,7 @@ func (db *ydb) GetIndexes(
 	pathToTable := db.autoPrefix(tableName)
 	query := fmt.Sprintf("SELECT IndexName, Columns FROM `%s` WHERE TableName = $TableName", sys)
 
-	rows, err := queryer.QueryContext(withGetIndexes(ctx), query, sql.Named("TableName", pathToTable))
+	rows, err := db.Raw(ctx, query, GetIndexesQueryMode, sql.Named("TableName", pathToTable))
 	if err != nil {
 		return nil, err
 	}
@@ -824,6 +970,8 @@ func (ydbDrv *ydbDriver) Features() *DriverFeatures {
 // DSN format: https://github.com/ydb-platform/ydb-go-sdk/blob/a804c31be0d3c44dfd7b21ed49d863619217b11d/connection.go#L339
 func (ydbDrv *ydbDriver) Parse(driverName, dataSourceName string) (*URI, error) {
 	info := &URI{DBType: schemas.YDB}
+	ydbDSN = dataSourceName
+	ydbSDK = driverName
 
 	uri, err := url.Parse(dataSourceName)
 	if err != nil {
@@ -862,6 +1010,52 @@ func (ydbDrv *ydbDriver) Parse(driverName, dataSourceName string) (*URI, error) 
 // ydb-go-sdk does not support ColumnType.
 // https://pkg.go.dev/database/sql#ColumnType.DatabaseTypeName
 func (ydbDrv *ydbDriver) GenScanResult(columnType string) (interface{}, error) {
-	var ret sql.RawBytes
-	return &ret, nil
+	columnType = strings.ToUpper(removeOptional(columnType))
+	switch columnType {
+	case "BOOL":
+		var ret sql.NullBool
+		return &ret, nil
+	case "INT8":
+		var ret convert.NullInt8
+		return &ret, nil
+	case "INT16":
+		var ret sql.NullInt16
+		return &ret, nil
+	case "INT32":
+		var ret sql.NullInt32
+		return &ret, nil
+	case "INT64":
+		var ret sql.NullInt64
+		return &ret, nil
+	case "UINT8":
+		var ret sql.NullByte
+		return &ret, nil
+	case "UINT16":
+		var ret convert.NullUint16
+		return &ret, nil
+	case "UINT32":
+		var ret convert.NullUint32
+		return &ret, nil
+	case "UINT64":
+		var ret convert.NullUint64
+		return &ret, nil
+	case "FLOAT":
+		var ret convert.NullFloat32
+		return &ret, nil
+	case "DOUBLE":
+		var ret sql.NullFloat64
+		return &ret, nil
+	case "UTF8":
+		var ret sql.NullString
+		return &ret, nil
+	case "TIMESTAMP":
+		var ret sql.NullTime
+		return &ret, nil
+	case "INTERVAL":
+		var ret convert.NullDuration
+		return &ret, nil
+	default:
+		var ret sql.RawBytes
+		return &ret, nil
+	}
 }
