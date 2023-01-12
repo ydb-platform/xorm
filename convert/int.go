@@ -143,7 +143,10 @@ func (n NullUint64) Value() (driver.Value, error) {
 }
 
 var (
+	_ sql.Scanner = &NullUint64{}
 	_ sql.Scanner = &NullUint32{}
+	_ sql.Scanner = &NullUint16{}
+	_ sql.Scanner = &NullInt8{}
 )
 
 // NullUint32 represents an uint32 that may be null.
@@ -161,11 +164,11 @@ func (n *NullUint32) Scan(value interface{}) error {
 		return nil
 	}
 	n.Valid = true
-	i64, err := AsUint64(value)
+	i32, err := AsUint64(value)
 	if err != nil {
 		return err
 	}
-	n.Uint32 = uint32(i64)
+	n.Uint32 = uint32(i32)
 	return nil
 }
 
@@ -174,5 +177,61 @@ func (n NullUint32) Value() (driver.Value, error) {
 	if !n.Valid {
 		return nil, nil
 	}
-	return int64(n.Uint32), nil
+	return int32(n.Uint32), nil
+}
+
+type NullUint16 struct {
+	Uint16 uint16
+	Valid  bool // Valid is true if Uint16 is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (n *NullUint16) Scan(value interface{}) error {
+	if value == nil {
+		n.Uint16, n.Valid = 0, false
+		return nil
+	}
+	n.Valid = true
+	i16, err := AsUint64(value)
+	if err != nil {
+		return err
+	}
+	n.Uint16 = uint16(i16)
+	return nil
+}
+
+// Value implements the driver Valuer interface.
+func (n NullUint16) Value() (driver.Value, error) {
+	if !n.Valid {
+		return nil, nil
+	}
+	return int16(n.Uint16), nil
+}
+
+type NullInt8 struct {
+	Int8  int8
+	Valid bool // Valid is true if Int8 is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (n *NullInt8) Scan(value interface{}) error {
+	if value == nil {
+		n.Int8, n.Valid = 0, false
+		return nil
+	}
+	n.Valid = true
+	i8, err := AsInt64(value)
+	if err != nil {
+		return err
+	}
+	n.Int8 = int8(i8)
+	return nil
+}
+
+// Value implements the driver Valuer interface.
+func (n NullInt8) Value() (driver.Value, error) {
+	if !n.Valid {
+		return nil, nil
+	}
+	return int8(n.Int8), nil
 }

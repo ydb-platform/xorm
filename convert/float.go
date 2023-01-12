@@ -6,6 +6,7 @@ package convert
 
 import (
 	"database/sql"
+	"database/sql/driver"
 	"fmt"
 	"math/big"
 	"reflect"
@@ -139,4 +140,34 @@ func AsBigFloat(src interface{}) (*big.Float, error) {
 		return res, nil
 	}
 	return nil, fmt.Errorf("unsupported value %T as big.Float", src)
+}
+
+var _ sql.Scanner = &NullFloat32{}
+
+type NullFloat32 struct {
+	Float32 float32
+	Valid   bool // Valid is true if Float32 is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (n *NullFloat32) Scan(value interface{}) error {
+	if value == nil {
+		n.Float32, n.Valid = 0, false
+		return nil
+	}
+	n.Valid = true
+	f32, err := AsFloat64(value)
+	if err != nil {
+		return err
+	}
+	n.Float32 = float32(f32)
+	return nil
+}
+
+// Value implements the driver Valuer interface.
+func (n NullFloat32) Value() (driver.Value, error) {
+	if !n.Valid {
+		return nil, nil
+	}
+	return float32(n.Float32), nil
 }
