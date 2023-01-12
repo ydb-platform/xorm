@@ -8,7 +8,6 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"fmt"
-	"log"
 	"math/big"
 	"reflect"
 	"time"
@@ -172,6 +171,7 @@ func (statement *Statement) Value2Interface(col *schemas.Column, fieldValue refl
 }
 
 func (statement *Statement) YQL_ValueToInterface(col *schemas.Column, fieldValue reflect.Value) (interface{}, error) {
+	// @TODO: handle Conversion type
 	fieldType := fieldValue.Type()
 	k := fieldType.Kind()
 	if k == reflect.Ptr {
@@ -194,7 +194,8 @@ func (statement *Statement) YQL_ValueToInterface(col *schemas.Column, fieldValue
 	case reflect.Struct:
 		if fieldType.ConvertibleTo(schemas.TimeType) {
 			t := fieldValue.Convert(schemas.TimeType).Interface().(time.Time)
-			return t, nil
+			tf, err := dialects.FormatColumnTime(statement.dialect, statement.defaultTimeZone, col, t)
+			return tf, err
 		} else if fieldType.ConvertibleTo(schemas.IntervalType) {
 			t := fieldValue.Convert(schemas.IntervalType).Interface().(time.Duration)
 			return t, nil
@@ -276,7 +277,6 @@ func (statement *Statement) YQL_ValueToInterface(col *schemas.Column, fieldValue
 		case schemas.UnsignedMediumInt, schemas.UnsignedInt:
 			return uint32(val), nil
 		case schemas.MediumInt, schemas.Int:
-			log.Println(col.SQLType.Name)
 			return int32(val), nil
 		case schemas.UnsignedBigInt:
 			return uint64(val), nil
