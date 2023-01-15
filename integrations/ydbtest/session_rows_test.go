@@ -2,6 +2,8 @@ package ydb
 
 import (
 	"database/sql"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -121,5 +123,78 @@ func TestRowsRawYQL(t *testing.T) {
 	for rows.Next() {
 		var user Users
 		assert.NoError(t, rows.Scan(&user))
+	}
+}
+
+func TestRowsOverManyResultSet(t *testing.T) {
+	assert.NoError(t, PrepareScheme(&Series{}))
+	assert.NoError(t, PrepareScheme(&Seasons{}))
+	assert.NoError(t, PrepareScheme(&Episodes{}))
+
+	engine, err := enginePool.GetDataQueryEngine()
+	assert.NoError(t, err)
+	assert.NotNil(t, engine)
+
+	session := engine.NewSession()
+	defer session.Close()
+
+	series, seasons, episodes := getData()
+
+	_, err = engine.TransactionContext(enginePool.ctx, func(ctx context.Context, session *xorm.Session) (interface{}, error) {
+		_, err := session.Insert(&series)
+		if err != nil {
+			return nil, err
+		}
+		_, err = session.Insert(&seasons)
+		if err != nil {
+			return nil, err
+		}
+		_, err = session.Insert(&episodes)
+		if err != nil {
+			return nil, err
+		}
+		return nil, nil
+	})
+	assert.NoError(t, err)
+
+	query := fmt.Sprintf("SELECT * FROM `%s`; SELECT * FROM `%s`; SELECT * FROM `%s`;",
+		(&Series{}).TableName(),
+		(&Seasons{}).TableName(),
+		(&Episodes{}).TableName())
+
+	rows, err := session.DB().QueryContext(enginePool.ctx, query)
+	assert.NoError(t, err)
+
+	expectedColumns := [][]string{
+		[]string{"series_id", "title", "series_info", "release_date", "comment"},
+		[]string{"series_id", "season_id", "title", "first_aired", "last_aired"},
+		[]string{"series_id", "season_id", "episode_id", "title", "air_date", "views"},
+	}
+
+	expectedTypes := [][]string{
+		[]string{"String", "Utf8", "Utf8", "Timestamp", "Utf8"},
+		[]string{"String", "String", "Utf8", "Timestamp", "Timestamp"},
+		[]string{"String", "String", "String", "Utf8", "Timestamp", "Uint64"},
+	}
+
+	for i := 0; rows.NextResultSet(); i++ {
+		for rows.Next() {
+			columns, err := rows.Columns()
+			assert.NoError(t, err)
+			assert.ElementsMatch(t, expectedColumns[i], columns)
+
+			var types []string
+			li, err := rows.ColumnTypes()
+			assert.NoError(t, err)
+			for _, val := range li {
+				tp := val.DatabaseTypeName()
+				if strings.HasPrefix(tp, "Optional") {
+					tp = strings.TrimPrefix(tp, "Optional<")
+					tp = strings.TrimSuffix(tp, ">")
+				}
+				types = append(types, tp)
+			}
+			assert.ElementsMatch(t, expectedTypes[i], types)
+		}
 	}
 }

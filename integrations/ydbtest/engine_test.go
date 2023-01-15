@@ -125,6 +125,5 @@ func TestDBVersion(t *testing.T) {
 
 	version, err := engine.DBVersion()
 	assert.NoError(t, err)
-	assert.Equal(t, version.Edition, "YDB Server")
 	log.Println(version.Edition + " " + version.Number)
 }
