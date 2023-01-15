@@ -3,10 +3,8 @@ package dialects
 import (
 	"context"
 	"database/sql"
-	"database/sql/driver"
 	"errors"
 	"fmt"
-	"io"
 	"net/url"
 	"path"
 	"runtime"
@@ -265,19 +263,6 @@ type ydb struct {
 	ydb *sql.DB
 }
 
-type QueryMode int
-
-const (
-	UnknownMetadataQueryMode = QueryMode(iota)
-
-	VersionQueryMode
-	IsTableExistQueryMode
-	IsColumnExistQueryMode
-	GetColumnsQueryMode
-	GetTablesQueryMode
-	GetIndexesQueryMode
-)
-
 func (db *ydb) autoPrefix(s string) string {
 	dbName := db.dialect.URI().DBName
 	if !strings.HasPrefix(s, dbName) {
@@ -313,123 +298,22 @@ func (db *ydb) Init(uri *URI) error {
 	return db.Base.Init(db, uri)
 }
 
-type ydbRows struct {
-	rowsi    driver.Rows
-	lastCols []driver.Value
-	lastErr  error
-	closed   bool
-}
-
-func assignValue(dst, src interface{}) error {
-	switch s := src.(type) {
-	case string:
-		switch d := dst.(type) {
-		case *string:
-			if d == nil {
-				return fmt.Errorf("can not assign to nil pointer")
-			}
-			*d = s
-			return nil
-		}
-	case bool:
-		switch d := dst.(type) {
-		case *bool:
-			if d == nil {
-				return fmt.Errorf("can not assign to nil pointer")
-			}
-			*d = s
-			return nil
-		}
-	}
-	return fmt.Errorf("not support type %T", src)
-}
-
-func (rs *ydbRows) Scan(dest ...interface{}) error {
-	if len(dest) != len(rs.lastCols) {
-		return fmt.Errorf("len(dest) is not equal len(rs.lastCols)")
-	}
-	for i, dst := range dest {
-		err := assignValue(dst, rs.lastCols[i])
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (rs *ydbRows) Close() error {
-	rs.closed = true
-	return rs.rowsi.Close()
-}
-
-func (rs *ydbRows) Next() bool {
-	if rs.closed {
-		return false
-	}
-
-	if rs.lastCols == nil {
-		rs.lastCols = make([]driver.Value, len(rs.rowsi.Columns()))
-	}
-
-	rs.lastErr = rs.rowsi.Next(rs.lastCols)
-	if rs.lastErr != nil {
-		if rs.lastErr != io.EOF {
-			rs.Close()
-			return false
-		}
-		return false
-	}
-	return true
-}
-
-func (rs *ydbRows) Err() error {
-	if rs.lastErr != nil && rs.lastErr != io.EOF {
-		return rs.lastErr
-	}
-	return nil
-}
-
-func (db *ydb) Raw(ctx context.Context, query string, option QueryMode, args ...interface{}) (*ydbRows, error) {
+func (db *ydb) Version(ctx context.Context, queryer core.Queryer) (*schemas.Version, error) {
 	conn, err := db.ydb.Conn(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer conn.Close()
 
-	dargs := make([]driver.NamedValue, len(args))
-	for i, arg := range args {
-		dargs[i].Name = arg.(sql.NamedArg).Name
-		dargs[i].Value = arg.(sql.NamedArg).Value
-		dargs[i].Ordinal = i + 1
-	}
-
-	var rowsi driver.Rows
-	err = conn.Raw(func(driverConn interface{}) (err error) {
-		c, ok := driverConn.(interface {
-			Version(context.Context) (driver.Rows, error)
-			IsTableExists(context.Context, string, []driver.NamedValue) (driver.Rows, error)
-			IsColumnExists(context.Context, string, []driver.NamedValue) (driver.Rows, error)
-			GetColumns(context.Context, string, []driver.NamedValue) (driver.Rows, error)
-			GetTables(context.Context, string, []driver.NamedValue) (driver.Rows, error)
-			GetIndexes(context.Context, string, []driver.NamedValue) (driver.Rows, error)
+	var version string
+	err = conn.Raw(func(dc interface{}) error {
+		q, ok := dc.(interface {
+			Version(ctx context.Context) (string, error)
 		})
 		if !ok {
 			return fmt.Errorf("driver does not support query metadata")
 		}
-		switch option {
-		case VersionQueryMode:
-			rowsi, err = c.Version(ctx)
-		case IsTableExistQueryMode:
-			rowsi, err = c.IsTableExists(ctx, query, dargs)
-		case IsColumnExistQueryMode:
-			rowsi, err = c.IsColumnExists(ctx, query, dargs)
-		case GetColumnsQueryMode:
-			rowsi, err = c.GetColumns(ctx, query, dargs)
-		case GetTablesQueryMode:
-			rowsi, err = c.GetTables(ctx, query, dargs)
-		case GetIndexesQueryMode:
-			rowsi, err = c.GetIndexes(ctx, query, dargs)
-		}
+		version, err = q.Version(ctx)
 		if err != nil {
 			return err
 		}
@@ -439,36 +323,9 @@ func (db *ydb) Raw(ctx context.Context, query string, option QueryMode, args ...
 		return nil, err
 	}
 
-	rows := &ydbRows{
-		rowsi: rowsi,
-	}
-
-	return rows, nil
-}
-
-func (db *ydb) Version(ctx context.Context, queryer core.Queryer) (*schemas.Version, error) {
-	rows, err := db.Raw(ctx, "SELECT $Version", VersionQueryMode)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var version string
-	if !rows.Next() {
-		return nil, errors.New("unknow version")
-	}
-
-	if err = rows.Scan(&version); err != nil {
-		return nil, err
-	}
-
-	if strings.HasPrefix(version, "YDB Server") {
-		return &schemas.Version{
-			Number:  strings.TrimPrefix(version, "YDB Server v"),
-			Edition: "YDB Server",
-		}, nil
-	}
-	return nil, errors.New("unknow version")
+	return &schemas.Version{
+		Edition: version,
+	}, nil
 }
 
 func (db *ydb) Features() *DialectFeatures {
@@ -670,21 +527,32 @@ func (db *ydb) IsTableExist(
 	queryer core.Queryer,
 	ctx context.Context,
 	tableName string) (bool, error) {
-	sys := ".sys/ydb_info"
 	pathToTable := db.autoPrefix(tableName)
-	query := fmt.Sprintf("SELECT TableName FROM `%s` WHERE TableName = $TableName", sys)
+	conn, err := db.ydb.Conn(ctx)
+	if err != nil {
+		return false, err
+	}
+	defer conn.Close()
 
-	rows, err := db.Raw(ctx, query, IsTableExistQueryMode, sql.Named("TableName", pathToTable))
+	var exists bool
+	err = conn.Raw(func(dc interface{}) error {
+		q, ok := dc.(interface {
+			IsTableExists(context.Context, string) (bool, error)
+		})
+		if !ok {
+			return fmt.Errorf("driver does not support query metadata")
+		}
+		exists, err = q.IsTableExists(ctx, pathToTable)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
 
 	if err != nil {
 		return false, err
 	}
-	defer rows.Close()
-
-	if rows.Next() {
-		return true, nil
-	}
-	return false, nil
+	return exists, nil
 }
 
 func (db *ydb) AddColumnSQL(tableName string, column *schemas.Column) string {
@@ -742,99 +610,120 @@ func (db *ydb) IsColumnExist(
 	ctx context.Context,
 	tableName,
 	columnName string) (bool, error) {
-	sys := ".sys/ydb_info"
 	pathToTable := db.autoPrefix(tableName)
+	conn, err := db.ydb.Conn(ctx)
+	if err != nil {
+		return false, err
+	}
+	defer conn.Close()
 
-	query := fmt.Sprintf("SELECT ColumnName FROM `%s` WHERE TableName = $TableName AND ColumnName = $ColumnName", sys)
-
-	rows, err := db.Raw(ctx, query, IsColumnExistQueryMode,
-		sql.Named("TableName", pathToTable),
-		sql.Named("ColumnName", columnName))
+	var exists bool
+	err = conn.Raw(func(dc interface{}) error {
+		q, ok := dc.(interface {
+			IsColumnExists(context.Context, string, string) (bool, error)
+		})
+		if !ok {
+			return fmt.Errorf("driver does not support query metadata")
+		}
+		exists, err = q.IsColumnExists(ctx, pathToTable, columnName)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
 
 	if err != nil {
 		return false, err
 	}
-	defer rows.Close()
-
-	if rows.Next() {
-		return true, nil
-	}
-	return false, nil
+	return exists, nil
 }
 
 func (db *ydb) GetColumns(queryer core.Queryer, ctx context.Context, tableName string) (
 	[]string,
 	map[string]*schemas.Column,
 	error) {
-	sys := ".sys/ydb_info"
 	pathToTable := db.autoPrefix(tableName)
-
-	query := fmt.Sprintf("SELECT ColumnName, TableName, DataType, IsPrimaryKey FROM `%s` WHERE TableName = $TableName", sys)
-
-	rows, err := db.Raw(ctx, query, GetColumnsQueryMode, sql.Named("TableName", pathToTable))
+	conn, err := db.ydb.Conn(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
-	defer rows.Close()
+	defer conn.Close()
 
 	colNames := make([]string, 0)
 	colMaps := make(map[string]*schemas.Column)
-	for rows.Next() {
-		var columnName, dataType string
-		var isPk bool
-		if err := rows.Scan(&columnName, &tableName, &dataType, &isPk); err != nil {
-			return nil, nil, err
+
+	err = conn.Raw(func(dc interface{}) error {
+		q, ok := dc.(interface {
+			GetColumns(context.Context, string) ([]string, error)
+			GetColumnType(context.Context, string, string) (string, error)
+			IsPrimaryKey(context.Context, string, string) (bool, error)
+		})
+		if !ok {
+			return fmt.Errorf("driver does not support query metadata")
 		}
 
-		dataType = removeOptional(dataType)
-		col := &schemas.Column{
-			Name:         columnName,
-			TableName:    tableName,
-			SQLType:      yqlToSQLType(dataType),
-			IsPrimaryKey: isPk,
-			Nullable:     !isPk,
-			Indexes:      make(map[string]int),
+		colNames, err = q.GetColumns(ctx, pathToTable)
+		if err != nil {
+			return err
 		}
 
-		colNames = append(colNames, columnName)
-		colMaps[columnName] = col
+		for _, colName := range colNames {
+			dataType, err := q.GetColumnType(ctx, pathToTable, colName)
+			if err != nil {
+				return err
+			}
+			dataType = removeOptional(dataType)
+			isPK, err := q.IsPrimaryKey(ctx, pathToTable, colName)
+			if err != nil {
+				return err
+			}
+			col := &schemas.Column{
+				Name:         colName,
+				TableName:    pathToTable,
+				SQLType:      yqlToSQLType(dataType),
+				IsPrimaryKey: isPK,
+				Nullable:     !isPK,
+				Indexes:      make(map[string]int),
+			}
+			colMaps[colName] = col
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, nil, err
 	}
-
-	if rows.Err() != nil {
-		return nil, nil, rows.Err()
-	}
-
 	return colNames, colMaps, nil
 }
 
 func (db *ydb) GetTables(queryer core.Queryer, ctx context.Context) ([]*schemas.Table, error) {
-	sys := ".sys/ydb_info"
 	dbName := db.URI().DBName
-	query := fmt.Sprintf("SELECT TableName FROM `%s` WHERE DatabaseName = $DatabaseName", sys)
-
-	rows, err := db.
-		Raw(
-			ctx,
-			query,
-			GetTablesQueryMode,
-			sql.Named("DatabaseName", dbName),
-			sql.Named("IgnoreDirs", []string{".sys", ".sys_health"}),
-		)
+	conn, err := db.ydb.Conn(ctx)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer conn.Close()
 
 	tables := make([]*schemas.Table, 0)
-	for rows.Next() {
-		table := schemas.NewEmptyTable()
-		if err := rows.Scan(&table.Name); err != nil {
-			return nil, err
+	err = conn.Raw(func(dc interface{}) error {
+		q, ok := dc.(interface {
+			GetTables(context.Context, string) ([]string, error)
+		})
+		if !ok {
+			return fmt.Errorf("driver does not support query metadata")
 		}
-		tables = append(tables, table)
-	}
-	if rows.Err() != nil {
-		return nil, rows.Err()
+		tableNames, err := q.GetTables(ctx, dbName)
+		if err != nil {
+			return err
+		}
+		for _, tableName := range tableNames {
+			table := schemas.NewEmptyTable()
+			table.Name = tableName
+			tables = append(tables, table)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 	return tables, nil
 }
@@ -843,32 +732,41 @@ func (db *ydb) GetIndexes(
 	queryer core.Queryer,
 	ctx context.Context,
 	tableName string) (map[string]*schemas.Index, error) {
-	sys := ".sys/ydb_info"
 	pathToTable := db.autoPrefix(tableName)
-	query := fmt.Sprintf("SELECT IndexName, Columns FROM `%s` WHERE TableName = $TableName", sys)
-
-	rows, err := db.Raw(ctx, query, GetIndexesQueryMode, sql.Named("TableName", pathToTable))
+	conn, err := db.ydb.Conn(ctx)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer conn.Close()
 
 	indexes := make(map[string]*schemas.Index, 0)
-	for rows.Next() {
-		var indexName string
-		var columns string
-		if err := rows.Scan(&indexName, &columns); err != nil {
-			return nil, err
+	err = conn.Raw(func(dc interface{}) error {
+		q, ok := dc.(interface {
+			GetIndexes(context.Context, string) ([]string, error)
+			GetIndexColumns(context.Context, string, string) ([]string, error)
+		})
+		if !ok {
+			return fmt.Errorf("driver does not support query metadata")
 		}
-		cols := strings.Split(columns, ",")
-		indexes[indexName] = &schemas.Index{
-			Name: indexName,
-			Type: schemas.IndexType,
-			Cols: cols,
+		indexNames, err := q.GetIndexes(ctx, pathToTable)
+		if err != nil {
+			return err
 		}
-	}
-	if rows.Err() != nil {
-		return nil, rows.Err()
+		for _, indexName := range indexNames {
+			cols, err := q.GetIndexColumns(ctx, pathToTable, indexName)
+			if err != nil {
+				return err
+			}
+			indexes[indexName] = &schemas.Index{
+				Name: indexName,
+				Type: schemas.IndexType,
+				Cols: cols,
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 	return indexes, nil
 }
@@ -1007,7 +905,6 @@ func (ydbDrv *ydbDriver) Parse(driverName, dataSourceName string) (*URI, error) 
 	return info, nil
 }
 
-// ydb-go-sdk does not support ColumnType.
 // https://pkg.go.dev/database/sql#ColumnType.DatabaseTypeName
 func (ydbDrv *ydbDriver) GenScanResult(columnType string) (interface{}, error) {
 	columnType = strings.ToUpper(removeOptional(columnType))
