@@ -713,12 +713,12 @@ func (db *ydb) GetTables(queryer core.Queryer, ctx context.Context) ([]*schemas.
 	tables := make([]*schemas.Table, 0)
 	err = conn.Raw(func(dc interface{}) error {
 		q, ok := dc.(interface {
-			GetTables(context.Context, string) ([]string, error)
+			GetAllTables(context.Context, string) ([]string, error)
 		})
 		if !ok {
 			return fmt.Errorf("driver does not support query metadata")
 		}
-		tableNames, err := q.GetTables(ctx, dbName)
+		tableNames, err := q.GetAllTables(ctx, dbName)
 		if err != nil {
 			return err
 		}
