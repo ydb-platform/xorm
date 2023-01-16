@@ -5,6 +5,7 @@
 package xorm
 
 import (
+	"database/sql/driver"
 	"errors"
 	"fmt"
 	"reflect"
@@ -57,12 +58,17 @@ func (session *Session) Insert(beans ...interface{}) (int64, error) {
 			}
 		}
 		if err != nil {
-			if session.engine.dialect.URI().DBType == schemas.YDB &&
-				err.Error() == ErrRowAffectedUnsupported.Error() {
-				err = nil
-				continue
+			switch session.engine.Dialect().URI().DBType {
+			case schemas.YDB:
+				_, rowsAffectedErr := driver.ResultNoRows.RowsAffected()
+				if err.Error() == rowsAffectedErr.Error() {
+					err = nil
+				} else {
+					return affected, err
+				}
+			default:
+				return affected, err
 			}
-			return affected, err
 		}
 		affected += cnt
 	}
@@ -176,9 +182,10 @@ func (session *Session) insertMultipleStruct(rowsSlicePtr interface{}) (int64, e
 			} else {
 				var err error
 				var arg interface{}
-				if session.engine.dialect.URI().DBType == schemas.YDB {
+				switch session.engine.dialect.URI().DBType {
+				case schemas.YDB:
 					arg, err = session.statement.YQL_ValueToInterface(col, fieldValue)
-				} else {
+				default:
 					arg, err = session.statement.Value2Interface(col, fieldValue)
 				}
 				if err != nil {
@@ -453,9 +460,17 @@ func (session *Session) InsertOne(bean interface{}) (int64, error) {
 	}
 
 	affected, err := session.insertStruct(bean)
-	if session.engine.dialect.URI().DBType == schemas.YDB {
-		if err.Error() == ErrRowAffectedUnsupported.Error() {
-			err = nil
+	if err != nil {
+		switch session.engine.Dialect().URI().DBType {
+		case schemas.YDB:
+			_, rowsAffectedErr := driver.ResultNoRows.RowsAffected()
+			if err.Error() == rowsAffectedErr.Error() {
+				err = nil
+			} else {
+				return affected, err
+			}
+		default:
+			return affected, err
 		}
 	}
 	return affected, err
@@ -544,9 +559,10 @@ func (session *Session) genInsertColumns(bean interface{}) ([]string, []interfac
 		} else {
 			var err error
 			var arg interface{}
-			if session.engine.dialect.URI().DBType == schemas.YDB {
+			switch session.engine.dialect.URI().DBType {
+			case schemas.YDB:
 				arg, err = session.statement.YQL_ValueToInterface(col, fieldValue)
-			} else {
+			default:
 				arg, err = session.statement.Value2Interface(col, fieldValue)
 			}
 			if err != nil {

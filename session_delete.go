@@ -5,6 +5,7 @@
 package xorm
 
 import (
+	"database/sql/driver"
 	"errors"
 	"fmt"
 	"strconv"
@@ -258,9 +259,16 @@ func (session *Session) Delete(beans ...interface{}) (int64, error) {
 
 	affected, err := res.RowsAffected()
 	if err != nil {
-		if session.engine.Dialect().URI().DBType == schemas.YDB &&
-			err.Error() == ErrRowAffectedUnsupported.Error() {
-			err = nil
+		switch session.engine.Dialect().URI().DBType {
+		case schemas.YDB:
+			_, rowsAffectedErr := driver.ResultNoRows.RowsAffected()
+			if err.Error() == rowsAffectedErr.Error() {
+				err = nil
+			} else {
+				return affected, err
+			}
+		default:
+			return affected, err
 		}
 	}
 	return affected, err

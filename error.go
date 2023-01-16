@@ -23,6 +23,6 @@ var (
 	ErrCacheFailed = errors.New("Cache failed")
 	// ErrConditionType condition type unsupported
 	ErrConditionType = errors.New("Unsupported condition type")
-	// ErrRowAffectedUnsupported driver does not support this
+	// ErrRowAffectedUnsupported RowsAffected unsupported
 	ErrRowAffectedUnsupported = errors.New("no RowsAffected available after DDL statement")
 )

@@ -15,14 +15,16 @@ import (
 
 func (session *Session) queryPreprocess(sqlStr *string, paramStr ...interface{}) {
 	for _, filter := range session.engine.dialect.Filters() {
-		if session.engine.dialect.URI().DBType == schemas.YDB {
+		switch session.engine.dialect.URI().DBType {
+		case schemas.YDB:
 			*sqlStr = filter.DoWithDeclare(*sqlStr, paramStr...)
-		} else {
+		default:
 			*sqlStr = filter.Do(*sqlStr)
 		}
 	}
 
-	if session.engine.dialect.URI().DBType == schemas.YDB {
+	switch session.engine.dialect.URI().DBType {
+	case schemas.YDB:
 		for i := 0; i < len(paramStr); i++ {
 			if _, ok := paramStr[i].(sql.NamedArg); !ok {
 				paramStr[i] = sql.Named(fmt.Sprintf("param_%v", i+1), paramStr[i])

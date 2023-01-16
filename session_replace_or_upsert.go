@@ -1,6 +1,7 @@
 package xorm
 
 import (
+	"database/sql/driver"
 	"fmt"
 	"reflect"
 	"sort"
@@ -43,13 +44,19 @@ func (session *Session) replaceOrUpsert(modificationOp string, beans ...interfac
 		default:
 			err = fmt.Errorf("%s INTO does not support type: %s", modificationOp, reflect.TypeOf(v).String())
 		}
+
 		if err != nil {
-			if session.engine.dialect.URI().DBType == schemas.YDB &&
-				err.Error() == ErrRowAffectedUnsupported.Error() {
-				err = nil
-				continue
+			switch session.engine.Dialect().URI().DBType {
+			case schemas.YDB:
+				_, rowsAffectedErr := driver.ResultNoRows.RowsAffected()
+				if err.Error() == rowsAffectedErr.Error() {
+					err = nil
+				} else {
+					return affected, err
+				}
+			default:
+				return affected, err
 			}
-			return affected, err
 		}
 		affected += cnt
 	}

@@ -258,94 +258,6 @@ var (
 	ydbDSN = string("")
 )
 
-type ydb struct {
-	Base
-	ydb *sql.DB
-}
-
-func (db *ydb) autoPrefix(s string) string {
-	dbName := db.dialect.URI().DBName
-	if !strings.HasPrefix(s, dbName) {
-		return path.Join(dbName, s)
-	}
-	return s
-}
-
-func removeOptional(s string) string {
-	if strings.HasPrefix(s, "Optional") {
-		s = strings.TrimPrefix(s, "Optional<")
-		s = strings.TrimSuffix(s, ">")
-	}
-	return s
-}
-
-func (db *ydb) Init(uri *URI) error {
-	db.quoter = ydbQuoter
-
-	var err error
-	db.ydb, err = sql.Open(ydbSDK, ydbDSN)
-	if err != nil {
-		return err
-	}
-	db.ydb.SetMaxOpenConns(50)
-	db.ydb.SetMaxIdleConns(50)
-	db.ydb.SetConnMaxIdleTime(time.Second)
-
-	runtime.SetFinalizer(db.ydb, func(ydb *sql.DB) {
-		_ = ydb.Close()
-	})
-
-	return db.Base.Init(db, uri)
-}
-
-func (db *ydb) Version(ctx context.Context, queryer core.Queryer) (*schemas.Version, error) {
-	conn, err := db.ydb.Conn(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer conn.Close()
-
-	var version string
-	err = conn.Raw(func(dc interface{}) error {
-		q, ok := dc.(interface {
-			Version(ctx context.Context) (string, error)
-		})
-		if !ok {
-			return fmt.Errorf("driver does not support query metadata")
-		}
-		version, err = q.Version(ctx)
-		if err != nil {
-			return err
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	return &schemas.Version{
-		Edition: version,
-	}, nil
-}
-
-func (db *ydb) Features() *DialectFeatures {
-	return &DialectFeatures{
-		AutoincrMode: -1,
-	}
-}
-
-func (db *ydb) AutoIncrStr() string {
-	return ""
-}
-
-func (db *ydb) IsReserved(name string) bool {
-	_, ok := ydbReservedWords[strings.ToUpper(name)]
-	return ok
-}
-
-// always quote
-func (db *ydb) SetQuotePolicy(quotePolicy QuotePolicy) {}
-
 var (
 	// numeric types
 	yql_Bool = "Bool"
@@ -440,10 +352,6 @@ func toYQLDataType(t string, defaultLength, defaultLength2 int64) (yqlType strin
 	return
 }
 
-func (db *ydb) SQLType(column *schemas.Column) string {
-	return toYQLDataType(column.SQLType.Name, column.SQLType.DefaultLength, column.SQLType.DefaultLength2)
-}
-
 func yqlToSQLType(yqlType string) (sqlType schemas.SQLType) {
 	switch yqlType {
 	case yql_Bool:
@@ -503,6 +411,75 @@ func yqlToSQLType(yqlType string) (sqlType schemas.SQLType) {
 	return
 }
 
+func removeOptional(s string) string {
+	if strings.HasPrefix(s, "Optional") {
+		s = strings.TrimPrefix(s, "Optional<")
+		s = strings.TrimSuffix(s, ">")
+	}
+	return s
+}
+
+type ydb struct {
+	Base
+	ydb *sql.DB
+}
+
+func (db *ydb) autoPrefix(s string) string {
+	dbName := db.dialect.URI().DBName
+	if !strings.HasPrefix(s, dbName) {
+		return path.Join(dbName, s)
+	}
+	return s
+}
+
+func (db *ydb) SetDB(drvName, dsn string, maxConns, maxIdleConns int, maxIdleTime time.Duration) error {
+	var err error
+	db.ydb, err = sql.Open(drvName, dsn)
+	if err != nil {
+		return err
+	}
+	db.ydb.SetMaxOpenConns(maxConns)
+	db.ydb.SetMaxIdleConns(maxIdleConns)
+	db.ydb.SetConnMaxIdleTime(maxIdleTime)
+
+	runtime.SetFinalizer(db.ydb, func(ydb *sql.DB) {
+		_ = ydb.Close()
+	})
+
+	return nil
+}
+
+func (db *ydb) Init(uri *URI) error {
+	db.quoter = ydbQuoter
+	err := db.SetDB(ydbSDK, ydbDSN, 50, 50, time.Second)
+	if err != nil {
+		return err
+	}
+	return db.Base.Init(db, uri)
+}
+
+func (db *ydb) Features() *DialectFeatures {
+	return &DialectFeatures{
+		AutoincrMode: -1,
+	}
+}
+
+func (db *ydb) AutoIncrStr() string {
+	return ""
+}
+
+func (db *ydb) IsReserved(name string) bool {
+	_, ok := ydbReservedWords[strings.ToUpper(name)]
+	return ok
+}
+
+// always quote
+func (db *ydb) SetQuotePolicy(quotePolicy QuotePolicy) {}
+
+func (db *ydb) SQLType(column *schemas.Column) string {
+	return toYQLDataType(column.SQLType.Name, column.SQLType.DefaultLength, column.SQLType.DefaultLength2)
+}
+
 // https://pkg.go.dev/database/sql#ColumnType.DatabaseTypeName
 func (db *ydb) ColumnTypeKind(t string) int {
 	switch t {
@@ -517,6 +494,36 @@ func (db *ydb) ColumnTypeKind(t string) int {
 	default:
 		return schemas.UNKNOW_TYPE
 	}
+}
+
+func (db *ydb) Version(ctx context.Context, queryer core.Queryer) (*schemas.Version, error) {
+	conn, err := db.ydb.Conn(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+
+	var version string
+	err = conn.Raw(func(dc interface{}) error {
+		q, ok := dc.(interface {
+			Version(ctx context.Context) (string, error)
+		})
+		if !ok {
+			return fmt.Errorf("driver does not support query metadata")
+		}
+		version, err = q.Version(ctx)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &schemas.Version{
+		Edition: version,
+	}, nil
 }
 
 func (db *ydb) IndexCheckSQL(tableName, indexName string) (string, []interface{}) {
