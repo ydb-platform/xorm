@@ -24,6 +24,7 @@ import (
 	"xorm.io/xorm/internal/utils"
 	"xorm.io/xorm/log"
 	"xorm.io/xorm/names"
+	"xorm.io/xorm/retry"
 	"xorm.io/xorm/schemas"
 	"xorm.io/xorm/tags"
 )
@@ -252,6 +253,11 @@ func (engine *Engine) SQLType(c *schemas.Column) string {
 // SetConnMaxLifetime sets the maximum amount of time a connection may be reused.
 func (engine *Engine) SetConnMaxLifetime(d time.Duration) {
 	engine.DB().SetConnMaxLifetime(d)
+}
+
+// SetConnMaxIdleTime sets the maximum amount of time a connection may be idle.
+func (engine *Engine) SetConnMaxIdleTime(d time.Duration) {
+	engine.DB().SetConnMaxIdleTime(d)
 }
 
 // SetMaxOpenConns is only available for go 1.2+
@@ -1513,4 +1519,59 @@ func (engine *Engine) TransactionContext(ctx context.Context, f func(context.Con
 	}
 
 	return result, nil
+}
+
+// Do is a retryer of session
+func (engine *Engine) Do(ctx context.Context, f func(context.Context, *Session) error, opts ...retry.RetryOption) error {
+	var (
+		dialect  = engine.Dialect()
+		attempts = 0
+	)
+	err := retry.Retry(ctx, dialect.IsRetryable, func(ctx context.Context) (err error) {
+		attempts++
+		session := engine.NewSession().Context(ctx)
+		defer func() {
+			_ = session.Close()
+		}()
+		if err = f(ctx, session); err != nil {
+			return err
+		}
+		return nil
+	}, opts...)
+	if err != nil {
+		return fmt.Errorf("operation failed after %d attempts: %v", attempts, err)
+	}
+	return nil
+}
+
+// DoTx is a retryer of session transactions
+func (engine *Engine) DoTx(ctx context.Context, f func(context.Context, *Session) error, opts ...retry.RetryOption) error {
+	var (
+		dialect  = engine.Dialect()
+		attempts = 0
+	)
+	err := retry.Retry(ctx, dialect.IsRetryable, func(ctx context.Context) (err error) {
+		attempts++
+		session := engine.NewSession().Context(ctx)
+		defer func() {
+			_ = session.Close()
+		}()
+		if err = session.Begin(); err != nil {
+			return err
+		}
+		defer func() {
+			_ = session.Rollback()
+		}()
+		if err = f(ctx, session); err != nil {
+			return err
+		}
+		if err = session.Commit(); err != nil {
+			return err
+		}
+		return nil
+	}, opts...)
+	if err != nil {
+		return fmt.Errorf("tx failed after %d attempts: %v", attempts, err)
+	}
+	return nil
 }
