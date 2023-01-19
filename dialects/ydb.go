@@ -862,6 +862,113 @@ func (db *ydb) Filters() []Filter {
 	}}
 }
 
+const (
+	grpc_Canceled           uint32 = 1
+	grpc_Unknown            uint32 = 2
+	grpc_InvalidArgument    uint32 = 3
+	grpc_DeadlineExceeded   uint32 = 4
+	grpc_NotFound           uint32 = 5
+	grpc_AlreadyExists      uint32 = 6
+	grpc_PermissionDenied   uint32 = 7
+	grpc_ResourceExhausted  uint32 = 8
+	grpc_FailedPrecondition uint32 = 9
+	grpc_Aborted            uint32 = 10
+	grpc_OutOfRange         uint32 = 11
+	grpc_Unimplemented      uint32 = 12
+	grpc_Internal           uint32 = 13
+	grpc_Unavailable        uint32 = 14
+	grpc_DataLoss           uint32 = 15
+	grpc_Unauthenticated    uint32 = 16
+)
+
+const (
+	ydb_STATUS_CODE_UNSPECIFIED int32 = 0
+	ydb_SUCCESS                 int32 = 400000
+	ydb_BAD_REQUEST             int32 = 400010
+	ydb_UNAUTHORIZED            int32 = 400020
+	ydb_INTERNAL_ERROR          int32 = 400030
+	ydb_ABORTED                 int32 = 400040
+	ydb_UNAVAILABLE             int32 = 400050
+	ydb_OVERLOADED              int32 = 400060
+	ydb_SCHEME_ERROR            int32 = 400070
+	ydb_GENERIC_ERROR           int32 = 400080
+	ydb_TIMEOUT                 int32 = 400090
+	ydb_BAD_SESSION             int32 = 400100
+	ydb_PRECONDITION_FAILED     int32 = 400120
+	ydb_ALREADY_EXISTS          int32 = 400130
+	ydb_NOT_FOUND               int32 = 400140
+	ydb_SESSION_EXPIRED         int32 = 400150
+	ydb_CANCELLED               int32 = 400160
+	ydb_UNDETERMINED            int32 = 400170
+	ydb_UNSUPPORTED             int32 = 400180
+	ydb_SESSION_BUSY            int32 = 400190
+)
+
+// https://github.com/ydb-platform/ydb-go-sdk/blob/ca13feb3ca560ac7385e79d4365ffe0cd8c23e21/errors.go#L27
+func (db *ydb) IsRetryable(err error) bool {
+	var target interface {
+		error
+		Code() int32
+		Name() string
+	}
+	if errors.Is(err, fmt.Errorf("unknown error")) ||
+		errors.Is(err, context.DeadlineExceeded) ||
+		errors.Is(err, context.Canceled) {
+		return false
+	}
+	if !errors.As(err, &target) {
+		return false
+	}
+
+	switch target.Code() {
+	case
+		int32(grpc_Unknown),
+		int32(grpc_InvalidArgument),
+		int32(grpc_DeadlineExceeded),
+		int32(grpc_NotFound),
+		int32(grpc_AlreadyExists),
+		int32(grpc_PermissionDenied),
+		int32(grpc_FailedPrecondition),
+		int32(grpc_OutOfRange),
+		int32(grpc_Unimplemented),
+		int32(grpc_DataLoss),
+		int32(grpc_Unauthenticated):
+		return false
+	case
+		int32(grpc_Canceled),
+		int32(grpc_ResourceExhausted),
+		int32(grpc_Aborted),
+		int32(grpc_Internal),
+		int32(grpc_Unavailable):
+		return true
+	case
+		ydb_STATUS_CODE_UNSPECIFIED,
+		ydb_BAD_REQUEST,
+		ydb_UNAUTHORIZED,
+		ydb_INTERNAL_ERROR,
+		ydb_SCHEME_ERROR,
+		ydb_GENERIC_ERROR,
+		ydb_TIMEOUT,
+		ydb_PRECONDITION_FAILED,
+		ydb_ALREADY_EXISTS,
+		ydb_NOT_FOUND,
+		ydb_SESSION_EXPIRED,
+		ydb_CANCELLED,
+		ydb_UNSUPPORTED:
+		return false
+	case
+		ydb_ABORTED,
+		ydb_UNAVAILABLE,
+		ydb_OVERLOADED,
+		ydb_BAD_SESSION,
+		ydb_UNDETERMINED,
+		ydb_SESSION_BUSY:
+		return true
+	default:
+		return false
+	}
+}
+
 type ydbDriver struct {
 	baseDriver
 }

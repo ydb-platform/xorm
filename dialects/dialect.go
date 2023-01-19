@@ -89,6 +89,8 @@ type Dialect interface {
 
 	Filters() []Filter
 	SetParams(params map[string]string)
+
+	IsRetryable(err error) (canRetry bool)
 }
 
 // Base represents a basic dialect and all real dialects could embed this struct
@@ -252,6 +254,11 @@ func (db *Base) ForUpdateSQL(query string) string {
 
 // SetParams set params
 func (db *Base) SetParams(params map[string]string) {
+}
+
+// check if an error is retryable
+func (db *Base) IsRetryable(err error) (bool) {
+	return false
 }
 
 var (
