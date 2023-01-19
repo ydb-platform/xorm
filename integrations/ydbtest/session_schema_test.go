@@ -493,3 +493,30 @@ func TestDBMetas(t *testing.T) {
 	})
 	assert.NoError(t, err)
 }
+
+/* func TestErr(t *testing.T) {
+	assert.NoError(t, PrepareScheme(&Users{}))
+	engine, err := enginePool.GetDataQueryEngine()
+	assert.NoError(t, err)
+
+	conn, err := engine.DB().Conn(enginePool.ctx)
+	assert.NoError(t, err)
+
+	table := path.Join(engine.Dialect().URI().DBName, (&Users{}).TableName())
+	err = conn.Raw(func(dc interface{}) error {
+		q, ok := dc.(interface {
+			GetTables(context.Context, string) ([]string, error)
+		})
+		if !ok {
+			return fmt.Errorf("driver does not supported query for metadata")
+		}
+		tbl, err := q.GetTables(enginePool.ctx, table)
+		if err != nil {
+			return err
+		}
+		log.Println("got:", tbl)
+		return nil
+	})
+	assert.NoError(t, err)
+}
+*/

@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"xorm.io/xorm"
+	"xorm.io/xorm/retry"
 	"xorm.io/xorm/schemas"
 )
 
@@ -126,4 +128,174 @@ func TestDBVersion(t *testing.T) {
 	version, err := engine.DBVersion()
 	assert.NoError(t, err)
 	log.Println(version.Edition + " " + version.Number)
+}
+
+func TestRetry(t *testing.T) {
+	engine, err := enginePool.GetScriptQueryEngine()
+	assert.NoError(t, err)
+	err = engine.Do(enginePool.ctx, func(ctx context.Context, session *xorm.Session) (err error) {
+		return session.DropTable(&Users{})
+	}, retry.WithID("retry-test-drop-table"),
+		retry.WithIdempotent(true))
+	assert.NoError(t, err)
+
+	err = engine.Do(enginePool.ctx, func(ctx context.Context, session *xorm.Session) (err error) {
+		return session.CreateTable(&Users{})
+	}, retry.WithID("retry-test-create-table"),
+		retry.WithIdempotent(true))
+	assert.NoError(t, err)
+
+	users := getUsersData()
+	err = engine.Do(enginePool.ctx, func(ctx context.Context, session *xorm.Session) (err error) {
+		_, err = session.Insert(users)
+		return err
+	}, retry.WithID("retry-test-insert"),
+		retry.WithIdempotent(true))
+	assert.NoError(t, err)
+}
+
+func TestRetryTx(t *testing.T) {
+	assert.NoError(t, PrepareScheme(&Seasons{}))
+	assert.NoError(t, PrepareScheme(&Series{}))
+	assert.NoError(t, PrepareScheme(&Episodes{}))
+	engine, err := enginePool.GetDataQueryEngine()
+	assert.NoError(t, err)
+
+	series, seasons, episodes := getData()
+	err = engine.DoTx(enginePool.ctx, func(ctx context.Context, session *xorm.Session) (err error) {
+		_, err = session.Insert(&series)
+		if err != nil {
+			return err
+		}
+		_, err = session.Insert(&seasons)
+		if err != nil {
+			return err
+		}
+
+		_, err = session.Insert(&episodes)
+		if err != nil {
+			return err
+		}
+		return nil
+	}, retry.WithID("retry-test-insert-tx"))
+	assert.NoError(t, err)
+
+	var seriesCnt, seasonsCnt, episodesCnt int64 = 0, 0, 0
+	err = engine.DoTx(enginePool.ctx, func(ctx context.Context, session *xorm.Session) (err error) {
+		seriesCnt, err = engine.Table(&Series{}).Count()
+		if err != nil {
+			return err
+		}
+
+		seasonsCnt, err = engine.Table(&Seasons{}).Count()
+		if err != nil {
+			return err
+		}
+
+		episodesCnt, err = engine.Table(&Episodes{}).Count()
+		if err != nil {
+			return err
+		}
+		return nil
+	}, retry.WithIdempotent(true))
+
+	assert.NoError(t, err)
+	assert.EqualValues(t, seasonsCnt, len(seasons))
+	assert.EqualValues(t, seriesCnt, len(series))
+	assert.EqualValues(t, episodesCnt, len(episodes))
+}
+
+func _TestSimulationRetry(t *testing.T) {
+	engine, err := enginePool.GetSchemeQueryEngine()
+	assert.NoError(t, err)
+
+	assert.NoError(t, engine.NewSession().DropTable(&Users{}))
+	assert.NoError(t, engine.NewSession().DropTable(&Series{}))
+
+	test := true
+	err = engine.Do(enginePool.ctx, func(ctx context.Context, session *xorm.Session) (err error) {
+		err = session.CreateTable(&Users{})
+		if err != nil {
+			return err
+		}
+
+		if test {
+			log.Println("shut down ydb")
+			time.Sleep(3 * time.Second)
+
+			log.Println("turn on ydb")
+			time.Sleep(3 * time.Second)
+
+			log.Println("wait ydb")
+			time.Sleep(2 * time.Second)
+
+			test = false
+		}
+
+		err = session.CreateTable(&Series{})
+		if err != nil {
+			return err
+		}
+		return nil
+	}, retry.WithID("retry-test-create-table"),
+		retry.WithIdempotent(true),
+		retry.WithBackoff(&retry.Backoff{
+			Min:    100 * time.Millisecond,
+			Max:    1 * time.Second,
+			Jitter: true,
+		}))
+	assert.NoError(t, err)
+
+	log.Println("no err:", err == nil)
+	time.Sleep(10 * time.Second)
+}
+
+func _TestSimulationRetryTx(t *testing.T) {
+	assert.NoError(t, PrepareScheme(&Users{}))
+	assert.NoError(t, PrepareScheme(&Seasons{}))
+	assert.NoError(t, PrepareScheme(&Series{}))
+	assert.NoError(t, PrepareScheme(&Episodes{}))
+	engine, err := enginePool.GetDataQueryEngine()
+	assert.NoError(t, err)
+
+	series, seasons, _ := getData()
+	pctx, cancel := context.WithTimeout(enginePool.ctx, time.Minute)
+	defer cancel()
+	test := true
+	err = engine.DoTx(pctx, func(ctx context.Context, session *xorm.Session) (err error) {
+		log.Println(engine.DB().Stats())
+		_, err = session.Insert(&series)
+		if err != nil {
+			return err
+		}
+
+		if test {
+			log.Println("shut down ydb")
+			time.Sleep(3 * time.Second)
+
+			log.Println("turn on ydb")
+			time.Sleep(3 * time.Second)
+
+			log.Println("wait ydb")
+			time.Sleep(2 * time.Second)
+
+			test = false
+		}
+
+		_, err = session.Insert(&seasons)
+		if err != nil {
+			return err
+		}
+		return nil
+	}, retry.WithID("retry-test-insert-tx"),
+		retry.WithIdempotent(true),
+		retry.WithBackoff(&retry.Backoff{
+			Min:    100 * time.Millisecond,
+			Max:    1 * time.Second,
+			Jitter: true,
+		}))
+	assert.NoError(t, err)
+
+	log.Println("no err:", err == nil)
+	time.Sleep(10 * time.Second)
 }

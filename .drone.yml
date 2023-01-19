@@ -410,7 +410,7 @@ trigger:
 steps:
 - name: test-ydb
   pull: never
-  image: golang:1.15
+  image: golang:1.16
   volumes:
   - name: cache
     path: /go/pkg/mod
@@ -418,7 +418,7 @@ steps:
     TEST_YDB_HOST: "ydb:2136"
     TEST_YDB_DBNAME: "local"
   commands:
-  - sleep 10
+  - sleep 15
   - make test-ydb
 
 volumes:
