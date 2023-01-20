@@ -15,7 +15,7 @@ type BackoffInterface interface {
 
 type Backoff struct {
 	Min    time.Duration // default 5ms
-	Max    time.Duration // default 15s
+	Max    time.Duration // default 5s
 	Jitter bool          // default true
 }
 
