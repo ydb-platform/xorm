@@ -171,7 +171,39 @@ func (statement *Statement) Value2Interface(col *schemas.Column, fieldValue refl
 }
 
 func (statement *Statement) YQL_ValueToInterface(col *schemas.Column, fieldValue reflect.Value) (interface{}, error) {
-	// @TODO: handle Conversion type
+	if fieldValue.CanAddr() {
+		if fieldConvert, ok := fieldValue.Addr().Interface().(convert.Conversion); ok {
+			data, err := fieldConvert.ToDB()
+			if err != nil {
+				return nil, err
+			}
+			if data == nil {
+				data = []byte{}
+			}
+			if col.SQLType.IsBlob() {
+				return data, nil
+			}
+			return string(data), nil
+		}
+	}
+
+	isNil := fieldValue.Kind() == reflect.Ptr && fieldValue.IsNil()
+	if !isNil {
+		if fieldConvert, ok := fieldValue.Interface().(convert.Conversion); ok {
+			data, err := fieldConvert.ToDB()
+			if err != nil {
+				return nil, err
+			}
+			if data == nil {
+				data = []byte{}
+			}
+			if col.SQLType.IsBlob() {
+				return data, nil
+			}
+			return string(data), nil
+		}
+	}
+
 	fieldType := fieldValue.Type()
 	k := fieldType.Kind()
 	if k == reflect.Ptr {
@@ -202,43 +234,50 @@ func (statement *Statement) YQL_ValueToInterface(col *schemas.Column, fieldValue
 		} else if fieldType.ConvertibleTo(schemas.NullBoolType) {
 			t := fieldValue.Convert(schemas.NullBoolType).Interface().(sql.NullBool)
 			if !t.Valid {
-				return nil, nil
+				var ret *bool
+				return ret, nil
 			}
 			return t.Bool, nil
 		} else if fieldType.ConvertibleTo(schemas.NullFloat64Type) {
 			t := fieldValue.Convert(schemas.NullFloat64Type).Interface().(sql.NullFloat64)
 			if !t.Valid {
-				return nil, nil
+				var ret *float64
+				return ret, nil
 			}
 			return t.Float64, nil
 		} else if fieldType.ConvertibleTo(schemas.NullInt16Type) {
 			t := fieldValue.Convert(schemas.NullInt16Type).Interface().(sql.NullInt16)
 			if !t.Valid {
-				return nil, nil
+				var ret *int64
+				return ret, nil
 			}
 			return t.Int16, nil
 		} else if fieldType.ConvertibleTo(schemas.NullInt32Type) {
 			t := fieldValue.Convert(schemas.NullInt32Type).Interface().(sql.NullInt32)
 			if !t.Valid {
-				return nil, nil
+				var ret *int32
+				return ret, nil
 			}
 			return t.Int32, nil
 		} else if fieldType.ConvertibleTo(schemas.NullInt64Type) {
 			t := fieldValue.Convert(schemas.NullInt64Type).Interface().(sql.NullInt64)
 			if !t.Valid {
-				return nil, nil
+				var ret *int64
+				return ret, nil
 			}
 			return t.Int64, nil
 		} else if fieldType.ConvertibleTo(schemas.NullStringType) {
 			t := fieldValue.Convert(schemas.NullStringType).Interface().(sql.NullString)
 			if !t.Valid {
-				return nil, nil
+				var ret *string
+				return ret, nil
 			}
 			return t.String, nil
 		} else if fieldType.ConvertibleTo(schemas.NullTimeType) {
 			t := fieldValue.Convert(schemas.NullTimeType).Interface().(sql.NullTime)
 			if !t.Valid {
-				return nil, nil
+				var ret *time.Time
+				return ret, nil
 			}
 			return t.Time, nil
 		}
@@ -249,6 +288,20 @@ func (statement *Statement) YQL_ValueToInterface(col *schemas.Column, fieldValue
 				return nil, err
 			}
 			return bytes, nil
+		}
+
+		if !col.IsJSON {
+			if v, ok := fieldValue.Interface().(driver.Valuer); ok {
+				vv, err := v.Value()
+				if err != nil {
+					return nil, err
+				}
+				if vv == nil {
+					var ret *[]byte
+					return ret, nil
+				}
+				return vv, nil
+			}
 		}
 
 		return nil, ErrUnSupportedType
@@ -300,6 +353,10 @@ func (statement *Statement) YQL_ValueToInterface(col *schemas.Column, fieldValue
 			return val, nil
 		}
 	default:
+		if fieldValue.Interface() == nil {
+			var ret *[]byte
+			return ret, nil
+		}
 		return fieldValue.Interface(), nil
 	}
 }
