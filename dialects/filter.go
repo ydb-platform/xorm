@@ -98,6 +98,8 @@ func (yf *SeqFilter) DoWithDeclare(sqlStr string, args ...interface{}) string {
 	var isMaybeCommentEnd bool
 
 	var index = yf.Start
+	var declareOptional string = "DECLARE %s AS OPTIONAL<%s>;"
+	var declareNonOptional string = "DECLARE %s AS %s;"
 
 	for _, c := range sqlStr {
 		if !beginSingleQuote && !isLineComment && !isComment && c == '?' {
@@ -109,36 +111,45 @@ func (yf *SeqFilter) DoWithDeclare(sqlStr string, args ...interface{}) string {
 			}
 
 			var (
-				st schemas.SQLType
-				tp string
+				st          schemas.SQLType
+				tp          string
+				declareType string
 			)
-			if t.Value == nil {
-				tp = "Null"
+
+			// !datbeohbbh! if can not infer the type. tp = "Optional<String>"
+			if reflect.ValueOf(t.Value).Kind() == reflect.Invalid {
+				declareType = declareOptional
+				tp = yql_String
 			} else {
+				if reflect.ValueOf(t.Value).Kind() == reflect.Pointer && reflect.ValueOf(t.Value).IsNil() {
+					declareType = declareOptional
+				} else {
+					declareType = declareNonOptional
+				}
 				st = schemas.YQL_TypeToSQLType(reflect.TypeOf(t.Value))
 				tp = toYQLDataType(st.Name, st.DefaultLength, st.DefaultLength2)
-			}
 
-			switch tp {
-			case yql_String:
-				if reflect.TypeOf(t.Value).Kind() == reflect.Struct {
-					fields := make([]string, 0)
-					to := reflect.TypeOf(t.Value)
-					for i := 0; i < to.NumField(); i++ {
-						st = schemas.YQL_TypeToSQLType(to.Field(i).Type)
-						tElem := toYQLDataType(st.Name, st.DefaultLength, st.DefaultLength2)
-						fields = append(fields, fmt.Sprintf("%s:%s", to.Field(i).Name, tElem))
+				switch tp {
+				case yql_String:
+					if reflect.TypeOf(t.Value).Kind() == reflect.Struct {
+						fields := make([]string, 0)
+						to := reflect.TypeOf(t.Value)
+						for i := 0; i < to.NumField(); i++ {
+							st = schemas.YQL_TypeToSQLType(to.Field(i).Type)
+							tElem := toYQLDataType(st.Name, st.DefaultLength, st.DefaultLength2)
+							fields = append(fields, fmt.Sprintf("%s:%s", to.Field(i).Name, tElem))
+						}
+						tp = fmt.Sprintf("Struct<%s>", strings.Join(fields, ","))
 					}
-					tp = fmt.Sprintf("Struct<%s>", strings.Join(fields, ","))
+				case yql_List:
+					st = schemas.YQL_TypeToSQLType(reflect.TypeOf(t.Value).Elem())
+					tElem := toYQLDataType(st.Name, st.DefaultLength, st.DefaultLength2)
+					tp = fmt.Sprintf("List<%s>", tElem)
 				}
-			case yql_List:
-				st = schemas.YQL_TypeToSQLType(reflect.TypeOf(t.Value).Elem())
-				tElem := toYQLDataType(st.Name, st.DefaultLength, st.DefaultLength2)
-				tp = fmt.Sprintf("List<%s>", tElem)
 			}
 
 			repl := fmt.Sprintf("%s%s", yf.Prefix, t.Name)
-			declareBuf.WriteString(fmt.Sprintf("DECLARE %s AS %s;", repl, tp))
+			declareBuf.WriteString(fmt.Sprintf(declareType, repl, tp))
 
 			buf.WriteString(repl)
 			index++
