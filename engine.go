@@ -567,7 +567,9 @@ func (engine *Engine) dumpTables(ctx context.Context, tables []*schemas.Table, w
 		if err != nil {
 			return err
 		}
-		defer rows.Close()
+		// !datbeohbbh! BUGFIX: move `rows.Close()` and `sess.Close()` to the end of loop, `defer` does not work until func return.
+		// `rows.Close()` must be called after used so that the connection can be freed and return to the pool.
+		// defer rows.Close()
 
 		types, err := rows.ColumnTypes()
 		if err != nil {
@@ -580,7 +582,7 @@ func (engine *Engine) dumpTables(ctx context.Context, tables []*schemas.Table, w
 		}
 
 		sess := engine.NewSession()
-		defer sess.Close()
+		// defer sess.Close()
 		for rows.Next() {
 			_, err = io.WriteString(w, "INSERT INTO "+quotedDstTableName+" ("+destColNames+") VALUES (")
 			if err != nil {
@@ -810,7 +812,7 @@ func (engine *Engine) dumpTables(ctx context.Context, tables []*schemas.Table, w
 									return err
 								}
 							} else {
-								if _, err = io.WriteString(w, "\""+strings.ReplaceAll(s.String, "'", "''")+"\""); err != nil {
+								if _, err = io.WriteString(w, "'"+strings.ReplaceAll(s.String, "'", "''")+"'"); err != nil {
 									return err
 								}
 							}
@@ -833,7 +835,7 @@ func (engine *Engine) dumpTables(ctx context.Context, tables []*schemas.Table, w
 									return err
 								}
 							} else {
-								if _, err = io.WriteString(w, fmt.Sprintf(castTmpl, "\""+strings.ReplaceAll(s.String, "'", "''")+"\"", yqlType)); err != nil {
+								if _, err = io.WriteString(w, fmt.Sprintf(castTmpl, "'"+strings.ReplaceAll(s.String, "'", "''")+"'", yqlType)); err != nil {
 									return err
 								}
 							}
@@ -866,6 +868,8 @@ func (engine *Engine) dumpTables(ctx context.Context, tables []*schemas.Table, w
 				return err
 			}
 		}
+		rows.Close()
+		sess.Close()
 	}
 	return nil
 }
