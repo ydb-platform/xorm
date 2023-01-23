@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"sync"
 	"time"
 
 	xormLog "xorm.io/xorm/log"
@@ -19,6 +20,7 @@ type EngineWithMode struct {
 	engineCached map[string]*xorm.Engine
 	dsn          string
 	ctx          context.Context
+	mu           sync.Mutex
 }
 
 const (
@@ -47,6 +49,8 @@ func CreateEngine(dsn string) (*xorm.Engine, error) {
 }
 
 func (em *EngineWithMode) getEngine(queryMode QueryMode) (*xorm.Engine, error) {
+	em.mu.Lock()
+	defer em.mu.Unlock()
 	mode := typeToString[queryMode]
 
 	if _, has := em.engineCached[mode]; has {
@@ -77,6 +81,8 @@ func (em *EngineWithMode) getEngine(queryMode QueryMode) (*xorm.Engine, error) {
 }
 
 func (em *EngineWithMode) Close() error {
+	em.mu.Lock()
+	defer em.mu.Unlock()
 	var retErr error = nil
 	for mode, engine := range em.engineCached {
 		log.Println("Close", mode, "engine")
