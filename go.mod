@@ -18,10 +18,11 @@ require (
 	github.com/shopspring/decimal v1.2.0
 	github.com/stretchr/testify v1.8.1
 	github.com/syndtr/goleveldb v1.0.0
-	github.com/ydb-platform/ydb-go-sdk/v3 v3.41.0
+	github.com/ydb-platform/ydb-go-sdk/v3 v3.42.8
 	github.com/ziutek/mymysql v1.5.4
-	golang.org/x/net v0.4.0 // indirect
-	google.golang.org/genproto v0.0.0-20221207170731-23e4bf6bdc37 // indirect
+	golang.org/x/net v0.5.0
+	google.golang.org/genproto v0.0.0-20230131230820-1c016267d619 // indirect
+	google.golang.org/grpc v1.52.3 // indirect
 	modernc.org/sqlite v1.14.2
 	xorm.io/builder v0.3.11-0.20220531020008-1bd24a7dc978
 )
