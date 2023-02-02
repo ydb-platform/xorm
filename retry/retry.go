@@ -10,6 +10,7 @@ type retryOptions struct {
 	id         string
 	idempotent bool
 	backoff    BackoffInterface // default implement 'Decorrelated Jitter' algorithm
+	ctx        context.Context
 }
 
 // !datbeohbbh! This function can be dialect.IsRetryable(err)
@@ -19,6 +20,14 @@ type checkRetryable func(error) bool
 type retryOperation func(context.Context) error
 
 type RetryOption func(*retryOptions)
+
+type maxRetriesKey struct{}
+
+func WithMaxRetries(maxRetriesValue int) RetryOption {
+	return func(o *retryOptions) {
+		o.ctx = context.WithValue(o.ctx, maxRetriesKey{}, maxRetriesValue)
+	}
+}
 
 func WithID(id string) RetryOption {
 	return func(o *retryOptions) {
@@ -38,6 +47,14 @@ func WithBackoff(backoff BackoffInterface) RetryOption {
 	}
 }
 
+func (opts *retryOptions) reachMaxRetries(attempts int) bool {
+	if mx, has := opts.ctx.Value(maxRetriesKey{}).(int); !has {
+		return false
+	} else {
+		return attempts > mx
+	}
+}
+
 // !datbeohbbh! Retry provide the best effort fo retrying operation
 //
 // Retry implements internal busy loop until one of the following conditions is met:
@@ -47,6 +64,7 @@ func WithBackoff(backoff BackoffInterface) RetryOption {
 // Warning: if deadline without deadline or cancellation func Retry will be worked infinite
 func Retry(ctx context.Context, check checkRetryable, f retryOperation, opts ...RetryOption) error {
 	options := &retryOptions{
+		ctx:     ctx,
 		backoff: DefaultBackoff(),
 	}
 	for _, o := range opts {
@@ -55,9 +73,9 @@ func Retry(ctx context.Context, check checkRetryable, f retryOperation, opts ...
 		}
 	}
 
-	attemps := 0
-	for {
-		attemps++
+	attempts := 0
+	for !options.reachMaxRetries(attempts) {
+		attempts++
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -75,18 +93,19 @@ func Retry(ctx context.Context, check checkRetryable, f retryOperation, opts ...
 				return fmt.Errorf("operation is not idempotent. Retry process with id '%s': %v",
 					options.id, err)
 			}
-			if err = wait(ctx, options.backoff, attemps); err != nil {
+			if err = wait(ctx, options.backoff, attempts); err != nil {
 				return fmt.Errorf("error in retry process with id '%s': %v", options.id, err)
 			}
 		}
 	}
+	return fmt.Errorf("max retries limit: %d exceeded", options.ctx.Value(maxRetriesKey{}))
 }
 
-func wait(ctx context.Context, backoff BackoffInterface, attemps int) error {
+func wait(ctx context.Context, backoff BackoffInterface, attempts int) error {
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
-	case <-backoff.Wait(attemps):
+	case <-backoff.Wait(attempts):
 		return nil
 	}
 }
