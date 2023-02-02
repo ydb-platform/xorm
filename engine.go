@@ -815,6 +815,9 @@ func (engine *Engine) dumpTables(ctx context.Context, tables []*schemas.Table, w
 				return err
 			}
 		}
+		// !datbeohbbh! if no error, manually close
+		rows.Close()
+		sess.Close()
 	}
 	return nil
 }
