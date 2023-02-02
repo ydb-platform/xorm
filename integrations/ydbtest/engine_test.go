@@ -293,7 +293,8 @@ func _TestSimulationRetryTx(t *testing.T) {
 			Min:    100 * time.Millisecond,
 			Max:    1 * time.Second,
 			Jitter: true,
-		}))
+		}),
+		retry.WithMaxRetries(3))
 	assert.NoError(t, err)
 
 	log.Println("no err:", err == nil)

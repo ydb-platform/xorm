@@ -569,7 +569,8 @@ func (engine *Engine) dumpTables(ctx context.Context, tables []*schemas.Table, w
 		}
 		// !datbeohbbh! BUGFIX: move `rows.Close()` and `sess.Close()` to the end of loop, `defer` does not work until func return.
 		// `rows.Close()` must be called after used so that the connection can be freed and return to the pool.
-		// defer rows.Close()
+		// use defer in case of `err`
+		defer rows.Close()
 
 		types, err := rows.ColumnTypes()
 		if err != nil {
@@ -582,7 +583,7 @@ func (engine *Engine) dumpTables(ctx context.Context, tables []*schemas.Table, w
 		}
 
 		sess := engine.NewSession()
-		// defer sess.Close()
+		defer sess.Close()
 		for rows.Next() {
 			_, err = io.WriteString(w, "INSERT INTO "+quotedDstTableName+" ("+destColNames+") VALUES (")
 			if err != nil {
@@ -868,6 +869,7 @@ func (engine *Engine) dumpTables(ctx context.Context, tables []*schemas.Table, w
 				return err
 			}
 		}
+		// !datbeohbbh! if no error, manually close
 		rows.Close()
 		sess.Close()
 	}
