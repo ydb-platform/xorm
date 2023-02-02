@@ -121,7 +121,7 @@ func (yf *SeqFilter) DoWithDeclare(sqlStr string, args ...interface{}) string {
 				declareType = declareOptional
 				tp = yql_String
 			} else {
-				if reflect.ValueOf(t.Value).Kind() == reflect.Pointer && reflect.ValueOf(t.Value).IsNil() {
+				if reflect.ValueOf(t.Value).Kind() == reflect.Ptr && reflect.ValueOf(t.Value).IsNil() {
 					declareType = declareOptional
 				} else {
 					declareType = declareNonOptional

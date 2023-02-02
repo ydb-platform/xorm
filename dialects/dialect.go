@@ -257,8 +257,8 @@ func (db *Base) SetParams(params map[string]string) {
 }
 
 // check if an error is retryable
-func (db *Base) IsRetryable(err error) (bool) {
-	return false
+func (db *Base) IsRetryable(err error) bool {
+	return true
 }
 
 var (
