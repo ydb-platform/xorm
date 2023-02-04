@@ -38,8 +38,8 @@ type TestEpisodes struct {
 }
 
 type Users struct {
-	Name    string `xorm:"'name'"`
-	Age     uint32 `xorm:"'age'"`
+	Name    string `xorm:"'name' INDEX"`
+	Age     uint32 `xorm:"'age' INDEX"`
 	Account `xorm:"extends"`
 }
 

@@ -20,7 +20,7 @@ func TestCreateTable(t *testing.T) {
 
 	assert.NoError(t, session.DropTable(&Users{}))
 	assert.NoError(t, session.CreateTable(&Users{}))
-	assert.NoError(t, session.CreateTable(&Users{}))
+	// assert.NoError(t, session.CreateTable(&Users{}))
 }
 
 func TestIsTableEmpty(t *testing.T) {

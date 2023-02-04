@@ -228,3 +228,37 @@ func TestIn2(t *testing.T) {
 		assert.Equal(t, sql.NullInt64{Int64: int64(i + 10), Valid: true}, user.UserID)
 	}
 }
+
+func TestView(t *testing.T) {
+	assert.NoError(t, PrepareScheme(&Users{}))
+
+	engine, err := enginePool.GetDataQueryEngine()
+	assert.NoError(t, err)
+	assert.NotNil(t, engine)
+
+	usersData := getUsersData()
+
+	_, err = engine.Insert(&usersData)
+	assert.NoError(t, err)
+
+	conds := builder.
+		Select("*").
+		From((&Users{}).TableName() + " VIEW age").
+		Where(builder.Gt{"age": uint32(21)}).
+		Where(builder.Lt{"user_id": sql.NullInt64{Int64: 5, Valid: true}}).
+		OrderBy("user_id ASC")
+
+	users := []Users{}
+	err = engine.
+		SQL(conds).
+		Find(&users)
+	assert.NoError(t, err)
+	assert.EqualValues(t, 5, len(users))
+
+	for i := 0; i < 5; i++ {
+		assert.EqualValues(t, usersData[i].UserID, users[i].UserID)
+		assert.EqualValues(t, usersData[i].Age, users[i].Age)
+		assert.EqualValues(t, usersData[i].Number, users[i].Number)
+		assert.EqualValues(t, usersData[i].Name, users[i].Name)
+	}
+}
