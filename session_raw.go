@@ -28,7 +28,10 @@ func (session *Session) queryPreprocess(sqlStr *string, paramStr ...interface{})
 	case schemas.YDB:
 		for i := 0; i < len(paramStr); i++ {
 			if reflect.TypeOf(paramStr[i]).Kind() == reflect.Int {
-				paramStr[i] = int32(paramStr[i].(int))
+				paramStr[i] = int32(reflect.ValueOf(paramStr[i]).Int())
+			}
+			if reflect.TypeOf(paramStr[i]).Kind() == reflect.Uint {
+				paramStr[i] = int32(reflect.ValueOf(paramStr[i]).Uint())
 			}
 			if _, ok := paramStr[i].(sql.NamedArg); !ok {
 				paramStr[i] = sql.Named(fmt.Sprintf("param_%v", i+1), paramStr[i])
