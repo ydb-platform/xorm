@@ -474,7 +474,10 @@ func (session *Session) InsertOne(bean interface{}) (int64, error) {
 		switch session.engine.Dialect().URI().DBType {
 		case schemas.YDB:
 			_, rowsAffectedErr := driver.ResultNoRows.RowsAffected()
-			if err.Error() == rowsAffectedErr.Error() {
+			_, rowsLastInsertedId := driver.ResultNoRows.LastInsertId()
+			if err.Error() == rowsAffectedErr.Error() ||
+				err.Error() == rowsLastInsertedId.Error() ||
+				err.Error() == sql.ErrNoRows.Error() {
 				err = nil
 			} else {
 				return affected, err
