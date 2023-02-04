@@ -305,16 +305,32 @@ func (statement *Statement) YQL_ValueToInterface(col *schemas.Column, fieldValue
 		}
 
 		return nil, ErrUnSupportedType
-	case reflect.Array, reflect.Slice:
+	case reflect.Array, reflect.Slice, reflect.Map:
 		if !fieldValue.IsValid() {
 			return fieldValue.Interface(), nil
 		}
 
-		if col.SQLType.IsBlob() {
-			return fieldValue.Bytes(), nil
-		} else if col.SQLType.IsArray() {
-			return fieldValue.Interface(), nil
+		if col.SQLType.IsText() {
+			bytes, err := json.DefaultJSONHandler.Marshal(fieldValue.Interface())
+			if err != nil {
+				return nil, err
+			}
+			return string(bytes), nil
+		} else if col.SQLType.IsBlob() {
+			var bytes []byte
+			var err error
+			if (k == reflect.Slice) &&
+				(fieldValue.Type().Elem().Kind() == reflect.Uint8) {
+				bytes = fieldValue.Bytes()
+			} else {
+				bytes, err = json.DefaultJSONHandler.Marshal(fieldValue.Interface())
+				if err != nil {
+					return nil, err
+				}
+			}
+			return bytes, nil
 		}
+
 		return nil, ErrUnSupportedType
 	case reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uint:
 		val := fieldValue.Uint()
