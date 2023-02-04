@@ -55,16 +55,16 @@ func MainTest(m *testing.M) int {
 		log.Println("Finished Testing >>> Cleaning up...")
 		_ = CleanUp()
 	}(code)
-
-	defer func() {
-		for benchmarkName, benchmarkF := range map[string]func(b *testing.B){
-			"BenchmarkSync": BenchmarkSync,
-		} {
-			log.Println(benchmarkName)
-			res := testing.Benchmark(benchmarkF)
-			log.Printf("%+v\n", res)
-		}
-	}()
-
+	/*
+		defer func() {
+			for benchmarkName, benchmarkF := range map[string]func(b *testing.B){
+				"BenchmarkSync": BenchmarkSync,
+			} {
+				log.Println(benchmarkName)
+				res := testing.Benchmark(benchmarkF)
+				log.Printf("%+v\n", res)
+			}
+		}()
+	*/
 	return code
 }

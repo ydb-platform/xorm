@@ -5,6 +5,7 @@
 package xorm
 
 import (
+	"database/sql"
 	"database/sql/driver"
 	"errors"
 	"fmt"
@@ -15,6 +16,7 @@ import (
 
 	"xorm.io/xorm/convert"
 	"xorm.io/xorm/dialects"
+	"xorm.io/xorm/internal/rand"
 	"xorm.io/xorm/internal/utils"
 	"xorm.io/xorm/schemas"
 )
@@ -61,7 +63,10 @@ func (session *Session) Insert(beans ...interface{}) (int64, error) {
 			switch session.engine.Dialect().URI().DBType {
 			case schemas.YDB:
 				_, rowsAffectedErr := driver.ResultNoRows.RowsAffected()
-				if err.Error() == rowsAffectedErr.Error() {
+				_, rowsLastInsertedId := driver.ResultNoRows.LastInsertId()
+				if err.Error() == rowsAffectedErr.Error() ||
+					err.Error() == rowsLastInsertedId.Error() ||
+					err.Error() == sql.ErrNoRows.Error() {
 					err = nil
 				} else {
 					return affected, err
@@ -138,6 +143,11 @@ func (session *Session) insertMultipleStruct(rowsSlicePtr interface{}) (int64, e
 						colNames = append(colNames, col.Name)
 					}
 					colPlaces = append(colPlaces, utils.SeqName(tableName)+".nextval")
+				}
+				switch session.engine.dialect.URI().DBType {
+				case schemas.YDB:
+					args = append(args, rand.RandValue(fieldValue))
+					colNames = append(colNames, col.Name)
 				}
 				continue
 			}
@@ -530,6 +540,11 @@ func (session *Session) genInsertColumns(bean interface{}) ([]string, []interfac
 		fieldValue := *fieldValuePtr
 
 		if col.IsAutoIncrement && utils.IsValueZero(fieldValue) {
+			switch session.engine.dialect.URI().DBType {
+			case schemas.YDB:
+				args = append(args, rand.RandValue(fieldValue))
+				colNames = append(colNames, col.Name)
+			}
 			continue
 		}
 
