@@ -56,7 +56,7 @@ func MainTest(m *testing.M) int {
 		_ = CleanUp()
 	}(code)
 
-	defer func() {
+	/* 	defer func() {
 		for benchmarkName, benchmarkF := range map[string]func(b *testing.B){
 			"BenchmarkSync": BenchmarkSync,
 		} {
@@ -64,7 +64,7 @@ func MainTest(m *testing.M) int {
 			res := testing.Benchmark(benchmarkF)
 			log.Printf("%+v\n", res)
 		}
-	}()
+	}() */
 
 	return code
 }

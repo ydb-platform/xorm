@@ -337,7 +337,7 @@ func toYQLDataType(t string, defaultLength, defaultLength2 int64) (yqlType strin
 	case schemas.Array:
 		yqlType = yql_List
 		return
-	case schemas.Varchar:
+	case schemas.Varchar, schemas.Text:
 		yqlType = yql_Utf8
 		return
 	case schemas.TimeStamp:
@@ -406,7 +406,7 @@ func yqlToSQLType(yqlType string) (sqlType schemas.SQLType) {
 		sqlType = schemas.SQLType{schemas.Interval, 0, 0}
 		return
 	default:
-		sqlType = schemas.SQLType{schemas.Text, 0, 0}
+		sqlType = schemas.SQLType{schemas.Blob, 0, 0}
 	}
 	return
 }

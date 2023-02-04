@@ -358,7 +358,7 @@ func YQL_TypeToSQLType(t reflect.Type) (st SQLType) {
 		if t.Elem() == ByteType {
 			st = SQLType{Blob, 0, 0}
 		} else {
-			st = SQLType{Array, 0, 0}
+			st = SQLType{Text, 0, 0}
 		}
 	case reflect.Map:
 		st = SQLType{Blob, 0, 0}
@@ -385,12 +385,12 @@ func YQL_TypeToSQLType(t reflect.Type) (st SQLType) {
 		} else if t.ConvertibleTo(NullTimeType) {
 			st = SQLType{TimeStamp, 0, 0}
 		} else {
-			st = SQLType{Text, 0, 0}
+			st = SQLType{Blob, 0, 0}
 		}
 	case reflect.Ptr:
 		st = YQL_TypeToSQLType(t.Elem())
 	default:
-		st = SQLType{Text, 0, 0}
+		st = SQLType{Blob, 0, 0}
 	}
 	return
 }
