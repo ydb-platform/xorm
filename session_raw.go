@@ -11,31 +11,32 @@ import (
 	"strings"
 
 	"xorm.io/xorm/core"
+	"xorm.io/xorm/internal/statements"
 	"xorm.io/xorm/schemas"
 )
 
 func (session *Session) queryPreprocess(sqlStr *string, paramStr ...interface{}) {
+	switch session.engine.dialect.URI().DBType {
+	case schemas.YDB:
+		for i := 0; i < len(paramStr); i++ {
+			if v, ok := paramStr[i].(sql.NamedArg); !ok {
+				paramStr[i] = sql.Named(
+					fmt.Sprintf("param_%v", i+1),
+					statements.GetActualValue(reflect.ValueOf(paramStr[i])),
+				)
+			} else {
+				v.Value = statements.GetActualValue(reflect.ValueOf(v.Value))
+				paramStr[i] = v
+			}
+		}
+	}
+
 	for _, filter := range session.engine.dialect.Filters() {
 		switch session.engine.dialect.URI().DBType {
 		case schemas.YDB:
 			*sqlStr = filter.DoWithDeclare(*sqlStr, paramStr...)
 		default:
 			*sqlStr = filter.Do(*sqlStr)
-		}
-	}
-
-	switch session.engine.dialect.URI().DBType {
-	case schemas.YDB:
-		for i := 0; i < len(paramStr); i++ {
-			if reflect.TypeOf(paramStr[i]).Kind() == reflect.Int {
-				paramStr[i] = int32(reflect.ValueOf(paramStr[i]).Int())
-			}
-			if reflect.TypeOf(paramStr[i]).Kind() == reflect.Uint {
-				paramStr[i] = int32(reflect.ValueOf(paramStr[i]).Uint())
-			}
-			if _, ok := paramStr[i].(sql.NamedArg); !ok {
-				paramStr[i] = sql.Named(fmt.Sprintf("param_%v", i+1), paramStr[i])
-			}
 		}
 	}
 
