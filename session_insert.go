@@ -147,7 +147,10 @@ func (session *Session) insertMultipleStruct(rowsSlicePtr interface{}) (int64, e
 				switch session.engine.dialect.URI().DBType {
 				case schemas.YDB:
 					args = append(args, rand.RandValue(fieldValue))
-					colNames = append(colNames, col.Name)
+					colPlaces = append(colPlaces, "?")
+					if i == 0 {
+						colNames = append(colNames, col.Name)
+					}
 				}
 				continue
 			}
