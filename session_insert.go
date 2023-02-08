@@ -144,12 +144,28 @@ func (session *Session) insertMultipleStruct(rowsSlicePtr interface{}) (int64, e
 					}
 					colPlaces = append(colPlaces, utils.SeqName(tableName)+".nextval")
 				}
+
 				switch session.engine.dialect.URI().DBType {
 				case schemas.YDB:
-					args = append(args, rand.RandValue(fieldValue))
+					randValue := rand.RandValue(fieldValue)
+					args = append(args, randValue)
 					colPlaces = append(colPlaces, "?")
 					if i == 0 {
 						colNames = append(colNames, col.Name)
+					}
+
+					if reflect.ValueOf(randValue).CanInt() {
+						rr := reflect.ValueOf(randValue).Int()
+						var colName = col.Name
+						col := table.GetColumn(colName)
+						setColumnInt(reflect.Indirect(sliceValue.Index(i)).Addr().Interface(), col, rr)
+					}
+
+					if reflect.ValueOf(randValue).CanUint() {
+						rr := reflect.ValueOf(randValue).Uint()
+						var colName = col.Name
+						col := table.GetColumn(colName)
+						setColumnInt(reflect.Indirect(sliceValue.Index(i)).Addr().Interface(), col, int64(rr))
 					}
 				}
 				continue
@@ -349,7 +365,9 @@ func (session *Session) insertStruct(bean interface{}) (int64, error) {
 	}
 
 	// if there is auto increment column and driver don't support return it
-	if len(table.AutoIncrement) > 0 && !session.engine.driver.Features().SupportReturnInsertedID {
+	if len(table.AutoIncrement) > 0 &&
+		!session.engine.driver.Features().SupportReturnInsertedID &&
+		session.engine.dialect.URI().DBType != schemas.YDB {
 		var sql string
 		var newArgs []interface{}
 		var needCommit bool
@@ -548,8 +566,23 @@ func (session *Session) genInsertColumns(bean interface{}) ([]string, []interfac
 		if col.IsAutoIncrement && utils.IsValueZero(fieldValue) {
 			switch session.engine.dialect.URI().DBType {
 			case schemas.YDB:
-				args = append(args, rand.RandValue(fieldValue))
+				randValue := rand.RandValue(fieldValue)
+				args = append(args, randValue)
 				colNames = append(colNames, col.Name)
+
+				if reflect.ValueOf(randValue).CanInt() {
+					rr := reflect.ValueOf(randValue).Int()
+					var colName = col.Name
+					col := table.GetColumn(colName)
+					setColumnInt(bean, col, rr)
+				}
+
+				if reflect.ValueOf(randValue).CanUint() {
+					rr := reflect.ValueOf(randValue).Uint()
+					var colName = col.Name
+					col := table.GetColumn(colName)
+					setColumnInt(bean, col, int64(rr))
+				}
 			}
 			continue
 		}

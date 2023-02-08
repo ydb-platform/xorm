@@ -39,3 +39,5 @@ integrations/*.sql
 integrations/ydbtest/.dump/
 integrations/test_sqlite*
 cover.out
+
+draft_test.go

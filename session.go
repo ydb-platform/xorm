@@ -740,7 +740,13 @@ func (session *Session) slice2Bean(scanResults []interface{}, fields []string, b
 
 		col, fieldValue, err := getField(dataStruct, table, colName, idx)
 		if _, ok := err.(ErrFieldIsNotExist); ok {
-			continue
+			splitDots := strings.Split(colName, ".")
+			if len(splitDots) > 1 {
+				col, fieldValue, err = getField(dataStruct, table, splitDots[1], idx)
+			}
+			if _, ok := err.(ErrFieldIsNotExist); ok {
+				continue
+			}
 		} else if err != nil {
 			return nil, err
 		}
