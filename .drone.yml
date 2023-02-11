@@ -410,7 +410,6 @@ depends_on:
   - test-tidb
   - test-cockroach
   #- test-dameng
-  - test-ydb
 trigger:
   ref:
   - refs/heads/master
