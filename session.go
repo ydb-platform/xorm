@@ -22,6 +22,7 @@ import (
 	"xorm.io/xorm/contexts"
 	"xorm.io/xorm/convert"
 	"xorm.io/xorm/core"
+	"xorm.io/xorm/dialects"
 	"xorm.io/xorm/internal/json"
 	"xorm.io/xorm/internal/statements"
 	"xorm.io/xorm/log"
@@ -817,4 +818,8 @@ func (session *Session) PingContext(ctx context.Context) error {
 func (session *Session) NoVersionCheck() *Session {
 	session.statement.CheckVersion = false
 	return session
+}
+
+func (session *Session) Dialect() dialects.Dialect {
+	return session.Engine().dialect
 }
