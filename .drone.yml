@@ -418,7 +418,7 @@ steps:
     TEST_YDB_HOST: "ydb:2136"
     TEST_YDB_DBNAME: "local"
   commands:
-  - sleep 15
+  - sleep 20
   - make test-ydb
 
 volumes:
@@ -449,7 +449,7 @@ trigger:
   - refs/pull/*/head
 steps:
 - name: merge_coverage
-  image: golang:1.15
+  image: golang:1.17
   commands:
   - make coverage
 

@@ -53,7 +53,7 @@ func MainTest(m *testing.M) int {
 	code := m.Run()
 	defer func(code int) {
 		log.Println("Finished Testing >>> Cleaning up...")
-		_ = CleanUp()
+		// _ = CleanUp()
 	}(code)
 
 	/* 	defer func() {
