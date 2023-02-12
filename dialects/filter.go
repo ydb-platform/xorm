@@ -17,7 +17,6 @@ import (
 // Filter is an interface to filter SQL
 type Filter interface {
 	Do(sql string) string
-	DoWithDeclare(sqlStr string, args ...interface{}) string
 }
 
 // SeqFilter filter SQL replace ?, ? ... to $1, $2 ...
@@ -83,110 +82,72 @@ func (s *SeqFilter) Do(sql string) string {
 
 // generate `DECLARE` section
 // https://github.com/ydb-platform/ydb-go-sdk/blob/master/SQL.md#specifying-query-parameters-
-func (yf *SeqFilter) DoWithDeclare(sqlStr string, args ...interface{}) string {
+func (yf *SeqFilter) GenerateDeclareSection(args ...interface{}) string {
 	if len(args) == 0 {
-		return sqlStr
+		return ""
 	}
-	var buf strings.Builder
-	var declareBuf strings.Builder
-
-	var beginSingleQuote bool
-	var isLineComment bool
-	var isComment bool
-	var isMaybeLineComment bool
-	var isMaybeComment bool
-	var isMaybeCommentEnd bool
 
 	var index = yf.Start
+	var declareBuf strings.Builder
 	var declareOptional string = "DECLARE %s AS OPTIONAL<%s>;"
 	var declareNonOptional string = "DECLARE %s AS %s;"
 
-	for _, c := range sqlStr {
-		if !beginSingleQuote && !isLineComment && !isComment && c == '?' {
-			var t sql.NamedArg
-			if _, ok := args[index-1].(sql.NamedArg); ok {
-				t = args[index-1].(sql.NamedArg)
-			} else {
-				t = sql.Named(fmt.Sprintf("param_%v", index), args[index-1])
-			}
+	for _, arg := range args {
+		var t sql.NamedArg
 
-			var (
-				st          schemas.SQLType
-				tp          string
-				declareType string
-			)
-
-			// !datbeohbbh! if can not infer the type. tp = "Optional<String>"
-			if reflect.ValueOf(t.Value).Kind() == reflect.Invalid {
-				declareType = declareOptional
-				tp = yql_String
-			} else {
-				if reflect.ValueOf(t.Value).Kind() == reflect.Ptr && reflect.ValueOf(t.Value).IsNil() {
-					declareType = declareOptional
-				} else {
-					declareType = declareNonOptional
-				}
-				st = schemas.YQL_TypeToSQLType(reflect.TypeOf(t.Value))
-				tp = toYQLDataType(st.Name, st.DefaultLength, st.DefaultLength2)
-
-				switch tp {
-				case yql_String:
-					if reflect.TypeOf(t.Value).Kind() == reflect.Struct {
-						fields := make([]string, 0)
-						to := reflect.TypeOf(t.Value)
-						for i := 0; i < to.NumField(); i++ {
-							st = schemas.YQL_TypeToSQLType(to.Field(i).Type)
-							tElem := toYQLDataType(st.Name, st.DefaultLength, st.DefaultLength2)
-							fields = append(fields, fmt.Sprintf("%s:%s", to.Field(i).Name, tElem))
-						}
-						tp = fmt.Sprintf("Struct<%s>", strings.Join(fields, ","))
-					}
-				case yql_List:
-					st = schemas.YQL_TypeToSQLType(reflect.TypeOf(t.Value).Elem())
-					tElem := toYQLDataType(st.Name, st.DefaultLength, st.DefaultLength2)
-					tp = fmt.Sprintf("List<%s>", tElem)
-				}
-			}
-
-			repl := fmt.Sprintf("%s%s", yf.Prefix, t.Name)
-			declareBuf.WriteString(fmt.Sprintf(declareType, repl, tp))
-
-			buf.WriteString(repl)
-			index++
+		if c, ok := arg.(sql.NamedArg); ok {
+			t.Name = fmt.Sprintf("%s%v", strings.TrimPrefix(yf.Prefix, "$"), index)
+			t.Value = getActualValue(reflect.ValueOf(c.Value))
 		} else {
-			if isMaybeLineComment {
-				if c == '-' {
-					isLineComment = true
-				}
-				isMaybeLineComment = false
-			} else if isMaybeComment {
-				if c == '*' {
-					isComment = true
-				}
-				isMaybeComment = false
-			} else if isMaybeCommentEnd {
-				if c == '/' {
-					isComment = false
-				}
-				isMaybeCommentEnd = false
-			} else if isLineComment {
-				if c == '\n' {
-					isLineComment = false
-				}
-			} else if isComment {
-				if c == '*' {
-					isMaybeCommentEnd = true
-				}
-			} else if !beginSingleQuote && c == '-' {
-				isMaybeLineComment = true
-			} else if !beginSingleQuote && c == '/' {
-				isMaybeComment = true
-			} else if c == '\'' {
-				beginSingleQuote = !beginSingleQuote
-			}
-			buf.WriteRune(c)
+			t = sql.Named(
+				fmt.Sprintf("%s%v", strings.TrimPrefix(yf.Prefix, "$"), index),
+				getActualValue(reflect.ValueOf(arg)),
+			)
 		}
+		args[index-1] = t
+
+		var (
+			st          schemas.SQLType
+			tp          string
+			declareType string
+		)
+
+		// !datbeohbbh! if can not infer the type. tp = "Optional<String>"
+		if reflect.ValueOf(t.Value).Kind() == reflect.Invalid {
+			declareType = declareOptional
+			tp = yql_String
+		} else {
+			if reflect.ValueOf(t.Value).Kind() == reflect.Ptr && reflect.ValueOf(t.Value).IsNil() {
+				declareType = declareOptional
+			} else {
+				declareType = declareNonOptional
+			}
+			st = schemas.YQL_TypeToSQLType(reflect.TypeOf(t.Value))
+			tp = toYQLDataType(st.Name, st.DefaultLength, st.DefaultLength2)
+
+			switch tp {
+			case yql_String:
+				if reflect.TypeOf(t.Value).Kind() == reflect.Struct {
+					fields := make([]string, 0)
+					to := reflect.TypeOf(t.Value)
+					for i := 0; i < to.NumField(); i++ {
+						st = schemas.YQL_TypeToSQLType(to.Field(i).Type)
+						tElem := toYQLDataType(st.Name, st.DefaultLength, st.DefaultLength2)
+						fields = append(fields, fmt.Sprintf("%s:%s", to.Field(i).Name, tElem))
+					}
+					tp = fmt.Sprintf("Struct<%s>", strings.Join(fields, ","))
+				}
+			case yql_List:
+				st = schemas.YQL_TypeToSQLType(reflect.TypeOf(t.Value).Elem())
+				tElem := toYQLDataType(st.Name, st.DefaultLength, st.DefaultLength2)
+				tp = fmt.Sprintf("List<%s>", tElem)
+			}
+		}
+
+		declareBuf.WriteString(fmt.Sprintf(declareType, fmt.Sprintf("%s%v", yf.Prefix, index), tp))
+
+		index++
 	}
 
-	return declareBuf.String() + buf.String()
+	return declareBuf.String()
 }
