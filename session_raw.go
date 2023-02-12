@@ -19,28 +19,22 @@ import (
 )
 
 func (session *Session) queryPreprocess(sqlStr *string, paramStr ...interface{}) {
-	switch session.engine.dialect.URI().DBType {
-	case schemas.YDB:
-		for i := 0; i < len(paramStr); i++ {
-			if v, ok := paramStr[i].(sql.NamedArg); !ok {
-				paramStr[i] = sql.Named(
-					fmt.Sprintf("param_%v", i+1),
-					statements.GetActualValue(reflect.ValueOf(paramStr[i])),
-				)
-			} else {
-				v.Value = statements.GetActualValue(reflect.ValueOf(v.Value))
-				paramStr[i] = v
-			}
-		}
+	for _, filter := range session.engine.dialect.Filters() {
+		*sqlStr = filter.Do(*sqlStr)
 	}
 
-	for _, filter := range session.engine.dialect.Filters() {
-		switch session.engine.dialect.URI().DBType {
-		case schemas.YDB:
-			*sqlStr = filter.DoWithDeclare(*sqlStr, paramStr...)
-		default:
-			*sqlStr = filter.Do(*sqlStr)
+	switch session.engine.dialect.URI().DBType {
+	case schemas.YDB:
+		declareSection := ""
+		for _, filter := range session.engine.dialect.Filters() {
+			if f, ok := filter.(interface {
+				GenerateDeclareSection(...interface{}) string
+			}); ok {
+				declareSection += f.GenerateDeclareSection(paramStr...)
+			}
 		}
+		*sqlStr = declareSection + *sqlStr
+	default:
 	}
 
 	session.lastSQL = *sqlStr

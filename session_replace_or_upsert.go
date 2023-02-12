@@ -99,8 +99,19 @@ func (session *Session) replaceOrUpsertByFetchValues(op string, b *builder.Build
 	}
 
 	for _, filter := range session.engine.dialect.Filters() {
-		fetchSQL = filter.DoWithDeclare(fetchSQL, args...)
+		fetchSQL = filter.Do(fetchSQL)
 	}
+
+	declare := ""
+	for _, filter := range session.engine.dialect.Filters() {
+		if f, ok := filter.(interface {
+			GenerateDeclareSection(...interface{}) string
+		}); ok {
+			declare += f.GenerateDeclareSection(args...)
+		}
+	}
+
+	fetchSQL = declare + fetchSQL
 
 	declareSection, execCmd, err := splitCmds(fetchSQL)
 	if err != nil {

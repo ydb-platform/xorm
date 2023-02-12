@@ -432,7 +432,9 @@ func (db *ydb) Init(uri *URI) error {
 	return db.Base.Init(db, uri)
 }
 
-func (db *ydb) setDB(initDB *core.DB) {
+// !datbeohbbh! set the internal *core.DB, this function is necessary for YDB
+// because to query the metadata in YDB, need to provide *sql.Conn
+func (db *ydb) SetInternalDB(initDB *core.DB) {
 	db.ydb = initDB
 }
 
@@ -843,7 +845,7 @@ func (db *ydb) DropTableSQL(tableName string) (string, bool) {
 // https://github.com/ydb-platform/ydb-go-sdk/blob/master/SQL.md#specifying-query-parameters-
 func (db *ydb) Filters() []Filter {
 	return []Filter{&SeqFilter{
-		Prefix: "$",
+		Prefix: "$param_",
 		Start:  1,
 	}}
 }

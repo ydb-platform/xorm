@@ -80,12 +80,12 @@ func TestSeqFilterComment(t *testing.T) {
 
 func TestSeqFilterForYdb(t *testing.T) {
 	var cases = map[string]string{
-		`SELECT season_id FROM seasons WHERE title LIKE ? AND views > ?`:             `DECLARE $seasonTitle AS Utf8;DECLARE $views AS Uint64;SELECT season_id FROM seasons WHERE title LIKE $seasonTitle AND views > $views`,
-		`SELECT season_id FROM seasons WHERE title LIKE ? AND views > ? /* ????? */`: `DECLARE $seasonTitle AS Utf8;DECLARE $views AS Uint64;SELECT season_id FROM seasons WHERE title LIKE $seasonTitle AND views > $views /* ????? */`,
+		`SELECT season_id FROM seasons WHERE title LIKE ? AND views > ?`:             `DECLARE $param_1 AS Utf8;DECLARE $param_2 AS Uint64;SELECT season_id FROM seasons WHERE title LIKE $param_1 AND views > $param_2`,
+		`SELECT season_id FROM seasons WHERE title LIKE ? AND views > ? /* ????? */`: `DECLARE $param_1 AS Utf8;DECLARE $param_2 AS Uint64;SELECT season_id FROM seasons WHERE title LIKE $param_1 AND views > $param_2 /* ????? */`,
 	}
 
 	yf := &SeqFilter{
-		Prefix: "$",
+		Prefix: "$param_",
 		Start:  1,
 	}
 
@@ -94,7 +94,8 @@ func TestSeqFilterForYdb(t *testing.T) {
 		sql.Named("views", uint64(1000)),
 	}
 	for sqlStr, result := range cases {
-		actual := yf.DoWithDeclare(sqlStr, namedValue...)
+		declareSection := yf.GenerateDeclareSection(namedValue...)
+		actual := declareSection + yf.Do(sqlStr)
 		assert.EqualValues(t, result, actual)
 	}
 }
