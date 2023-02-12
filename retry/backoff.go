@@ -14,16 +14,24 @@ type BackoffInterface interface {
 }
 
 type Backoff struct {
-	Min    time.Duration // default 5ms
-	Max    time.Duration // default 5s
-	Jitter bool          // default true
+	min    time.Duration // default 5ms
+	max    time.Duration // default 5s
+	jitter bool          // default true
 }
 
 func DefaultBackoff() *Backoff {
 	return &Backoff{
-		Min:    5 * time.Millisecond,
-		Max:    5 * time.Second,
-		Jitter: true,
+		min:    5 * time.Millisecond,
+		max:    5 * time.Second,
+		jitter: true,
+	}
+}
+
+func NewBackoff(min, max time.Duration, jitter bool) *Backoff {
+	return &Backoff{
+		min:    min,
+		max:    max,
+		jitter: jitter,
 	}
 }
 
@@ -33,9 +41,9 @@ func (b *Backoff) Wait(n int) <-chan time.Time {
 
 // Decorrelated Jitter
 func (b *Backoff) Delay(i int) time.Duration {
-	rand.Seed(time.Now().UnixNano())
-	base := int64(b.Min)
-	cap := int64(b.Max)
+	rand.New(rand.NewSource(time.Now().UnixNano()))
+	base := int64(b.min)
+	cap := int64(b.max)
 
 	if base >= cap {
 		return time.Duration(cap)
@@ -51,8 +59,8 @@ func (b *Backoff) Delay(i int) time.Duration {
 		bf = cap
 	}
 
-	if !b.Jitter {
-		return time.Duration(rand.Int63n(bf + 1))
+	if !b.jitter {
+		return time.Duration(bf)
 	}
 
 	w := (bf >> 1) + rand.Int63n((bf>>1)+1)

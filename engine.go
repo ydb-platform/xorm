@@ -567,9 +567,6 @@ func (engine *Engine) dumpTables(ctx context.Context, tables []*schemas.Table, w
 		if err != nil {
 			return err
 		}
-		// !datbeohbbh! BUGFIX: move `rows.Close()` and `sess.Close()` to the end of loop, `defer` does not work until func return.
-		// `rows.Close()` must be called after used so that the connection can be freed and return to the pool.
-		// use defer in case of `err`
 		defer rows.Close()
 
 		types, err := rows.ColumnTypes()

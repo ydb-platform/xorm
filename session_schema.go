@@ -424,7 +424,7 @@ func (session *Session) ydbSync(beans ...interface{}) error {
 // Sync synchronize structs to database tables
 func (session *Session) Sync(beans ...interface{}) error {
 	engine := session.engine
-	
+
 	switch engine.dialect.URI().DBType {
 	case schemas.YDB:
 		return session.ydbSync(beans...)
