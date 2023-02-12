@@ -20,16 +20,6 @@ func TestDefaultBackoff(t *testing.T) {
 }
 
 func TestBackoff(t *testing.T) {
-	bf := DefaultBackoff()
-	for i := 0; i < 10; i++ {
-		d := bf.Delay(i)
-		n := time.Now()
-		start := n.Add(bf.min)
-		end := n.Add(bf.max)
-		cur := n.Add(d)
-		assert.WithinRange(t, cur, start, end)
-	}
-
 	for _, v := range []struct {
 		min      time.Duration
 		max      time.Duration
