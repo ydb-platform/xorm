@@ -370,3 +370,15 @@ func ColumnString(dialect Dialect, col *schemas.Column, includePrimaryKey bool) 
 
 	return bd.String(), nil
 }
+
+// !datbeohbbh! set the internal *core.DB, this function is necessary for YDB
+// because to query the metadata in YDB, need to provide *sql.Conn
+func SetInternalDB(dialect Dialect, db *core.DB) Dialect {
+	switch dia := dialect.(type) {
+	case *ydb:
+		dia.setDB(db)
+		return dia
+	default:
+		return dialect
+	}
+}

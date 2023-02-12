@@ -71,6 +71,10 @@ func newEngine(driverName, dataSourceName string, dialect dialects.Dialect, db *
 	mapper := names.NewCacheMapper(new(names.SnakeMapper))
 	tagParser := tags.NewParser("xorm", dialect, mapper, mapper, cacherMgr)
 
+	if dialect.URI().DBType == schemas.YDB {
+		dialect = dialects.SetInternalDB(dialect, db)
+	}
+
 	engine := &Engine{
 		dialect:        dialect,
 		driver:         dialects.QueryDriver(driverName),

@@ -7,9 +7,7 @@ import (
 	"fmt"
 	"net/url"
 	"path"
-	"runtime"
 	"strings"
-	"time"
 
 	"xorm.io/xorm/convert"
 	"xorm.io/xorm/core"
@@ -253,9 +251,6 @@ var (
 		Suffix:     '`',
 		IsReserved: schemas.AlwaysReserve,
 	}
-
-	ydbSDK = string("")
-	ydbDSN = string("")
 )
 
 var (
@@ -421,7 +416,7 @@ func removeOptional(s string) string {
 
 type ydb struct {
 	Base
-	ydb *sql.DB
+	ydb *core.DB
 }
 
 func (db *ydb) autoPrefix(s string) string {
@@ -432,30 +427,21 @@ func (db *ydb) autoPrefix(s string) string {
 	return s
 }
 
-func (db *ydb) SetDB(drvName, dsn string, maxConns, maxIdleConns int, maxIdleTime time.Duration) error {
-	var err error
-	db.ydb, err = sql.Open(drvName, dsn)
-	if err != nil {
-		return err
-	}
-	db.ydb.SetMaxOpenConns(maxConns)
-	db.ydb.SetMaxIdleConns(maxIdleConns)
-	db.ydb.SetConnMaxIdleTime(maxIdleTime)
-
-	runtime.SetFinalizer(db.ydb, func(ydb *sql.DB) {
-		_ = ydb.Close()
-	})
-
-	return nil
-}
-
 func (db *ydb) Init(uri *URI) error {
 	db.quoter = ydbQuoter
-	err := db.SetDB(ydbSDK, ydbDSN, 50, 50, time.Second)
-	if err != nil {
-		return err
-	}
 	return db.Base.Init(db, uri)
+}
+
+func (db *ydb) setDB(initDB *core.DB) {
+	db.ydb = initDB
+}
+
+func (db *ydb) getConn(ctx context.Context) (*sql.Conn, error) {
+	if db.ydb == nil {
+		return nil, fmt.Errorf("internal db must not be 'nil'")
+	}
+	cc, err := db.ydb.Conn(ctx)
+	return cc, err
 }
 
 func (db *ydb) Features() *DialectFeatures {
@@ -496,8 +482,8 @@ func (db *ydb) ColumnTypeKind(t string) int {
 	}
 }
 
-func (db *ydb) Version(ctx context.Context, queryer core.Queryer) (*schemas.Version, error) {
-	conn, err := db.ydb.Conn(ctx)
+func (db *ydb) Version(ctx context.Context, _ core.Queryer) (*schemas.Version, error) {
+	conn, err := db.getConn(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -531,11 +517,11 @@ func (db *ydb) IndexCheckSQL(tableName, indexName string) (string, []interface{}
 }
 
 func (db *ydb) IsTableExist(
-	queryer core.Queryer,
+	_ core.Queryer,
 	ctx context.Context,
 	tableName string) (bool, error) {
 	pathToTable := db.autoPrefix(tableName)
-	conn, err := db.ydb.Conn(ctx)
+	conn, err := db.getConn(ctx)
 	if err != nil {
 		return false, err
 	}
@@ -562,12 +548,12 @@ func (db *ydb) IsTableExist(
 	return exists, nil
 }
 
-func (db *ydb) AddColumnSQL(tableName string, column *schemas.Column) string {
+func (db *ydb) AddColumnSQL(tableName string, col *schemas.Column) string {
 	quote := db.dialect.Quoter()
 
 	pathToTable := quote.Quote(db.autoPrefix(tableName))
-	columnName := quote.Quote(column.Name)
-	dataType := db.SQLType(column)
+	columnName := quote.Quote(col.Name)
+	dataType := db.SQLType(col)
 
 	var buf strings.Builder
 	buf.WriteString(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s;", pathToTable, columnName, dataType))
@@ -613,12 +599,12 @@ func (db *ydb) DropIndexSQL(tableName string, index *schemas.Index) string {
 }
 
 func (db *ydb) IsColumnExist(
-	queryer core.Queryer,
+	_ core.Queryer,
 	ctx context.Context,
 	tableName,
 	columnName string) (bool, error) {
 	pathToTable := db.autoPrefix(tableName)
-	conn, err := db.ydb.Conn(ctx)
+	conn, err := db.getConn(ctx)
 	if err != nil {
 		return false, err
 	}
@@ -645,12 +631,12 @@ func (db *ydb) IsColumnExist(
 	return exists, nil
 }
 
-func (db *ydb) GetColumns(queryer core.Queryer, ctx context.Context, tableName string) (
+func (db *ydb) GetColumns(_ core.Queryer, ctx context.Context, tableName string) (
 	[]string,
 	map[string]*schemas.Column,
 	error) {
 	pathToTable := db.autoPrefix(tableName)
-	conn, err := db.ydb.Conn(ctx)
+	conn, err := db.getConn(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -702,9 +688,9 @@ func (db *ydb) GetColumns(queryer core.Queryer, ctx context.Context, tableName s
 	return colNames, colMaps, nil
 }
 
-func (db *ydb) GetTables(queryer core.Queryer, ctx context.Context) ([]*schemas.Table, error) {
+func (db *ydb) GetTables(_ core.Queryer, ctx context.Context) ([]*schemas.Table, error) {
 	dbName := db.URI().DBName
-	conn, err := db.ydb.Conn(ctx)
+	conn, err := db.getConn(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -736,11 +722,11 @@ func (db *ydb) GetTables(queryer core.Queryer, ctx context.Context) ([]*schemas.
 }
 
 func (db *ydb) GetIndexes(
-	queryer core.Queryer,
+	_ core.Queryer,
 	ctx context.Context,
 	tableName string) (map[string]*schemas.Index, error) {
 	pathToTable := db.autoPrefix(tableName)
-	conn, err := db.ydb.Conn(ctx)
+	conn, err := db.getConn(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -780,7 +766,7 @@ func (db *ydb) GetIndexes(
 
 func (db *ydb) CreateTableSQL(
 	ctx context.Context,
-	queryer core.Queryer,
+	_ core.Queryer,
 	table *schemas.Table,
 	tableName string) (string, bool, error) {
 
@@ -982,8 +968,6 @@ func (ydbDrv *ydbDriver) Features() *DriverFeatures {
 // DSN format: https://github.com/ydb-platform/ydb-go-sdk/blob/a804c31be0d3c44dfd7b21ed49d863619217b11d/connection.go#L339
 func (ydbDrv *ydbDriver) Parse(driverName, dataSourceName string) (*URI, error) {
 	info := &URI{DBType: schemas.YDB}
-	ydbDSN = dataSourceName
-	ydbSDK = driverName
 
 	uri, err := url.Parse(dataSourceName)
 	if err != nil {
