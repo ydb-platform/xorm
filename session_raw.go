@@ -8,12 +8,9 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
-	"fmt"
-	"reflect"
 	"strings"
 
 	"xorm.io/xorm/core"
-	"xorm.io/xorm/internal/statements"
 	"xorm.io/xorm/retry"
 	"xorm.io/xorm/schemas"
 )
