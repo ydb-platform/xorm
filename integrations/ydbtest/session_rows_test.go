@@ -166,15 +166,15 @@ func TestRowsOverManyResultSet(t *testing.T) {
 	assert.NoError(t, err)
 
 	expectedColumns := [][]string{
-		[]string{"series_id", "title", "series_info", "release_date", "comment"},
-		[]string{"series_id", "season_id", "title", "first_aired", "last_aired"},
-		[]string{"series_id", "season_id", "episode_id", "title", "air_date", "views"},
+		{"series_id", "title", "series_info", "release_date", "comment"},
+		{"series_id", "season_id", "title", "first_aired", "last_aired"},
+		{"series_id", "season_id", "episode_id", "title", "air_date", "views"},
 	}
 
 	expectedTypes := [][]string{
-		[]string{"String", "Utf8", "Utf8", "Timestamp", "Utf8"},
-		[]string{"String", "String", "Utf8", "Timestamp", "Timestamp"},
-		[]string{"String", "String", "String", "Utf8", "Timestamp", "Uint64"},
+		{"String", "Utf8", "Utf8", "Timestamp", "Utf8"},
+		{"String", "String", "Utf8", "Timestamp", "Timestamp"},
+		{"String", "String", "String", "Utf8", "Timestamp", "Uint64"},
 	}
 
 	for i := 0; rows.NextResultSet(); i++ {

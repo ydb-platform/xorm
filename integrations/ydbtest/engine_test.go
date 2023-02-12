@@ -239,11 +239,7 @@ func _TestSimulationRetry(t *testing.T) {
 		return nil
 	}, retry.WithID("retry-test-create-table"),
 		retry.WithIdempotent(true),
-		retry.WithBackoff(&retry.Backoff{
-			Min:    100 * time.Millisecond,
-			Max:    1 * time.Second,
-			Jitter: true,
-		}))
+		retry.WithBackoff(retry.NewBackoff(100*time.Millisecond, 1*time.Second, true)))
 	assert.NoError(t, err)
 
 	log.Println("no err:", err == nil)
@@ -289,11 +285,7 @@ func _TestSimulationRetryTx(t *testing.T) {
 		return nil
 	}, retry.WithID("retry-test-insert-tx"),
 		retry.WithIdempotent(true),
-		retry.WithBackoff(&retry.Backoff{
-			Min:    100 * time.Millisecond,
-			Max:    1 * time.Second,
-			Jitter: true,
-		}),
+		retry.WithBackoff(retry.NewBackoff(100*time.Millisecond, 1*time.Second, true)),
 		retry.WithMaxRetries(3))
 	assert.NoError(t, err)
 
