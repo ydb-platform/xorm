@@ -154,7 +154,7 @@ func (parser *Parser) getSQLTypeByType(t reflect.Type) (schemas.SQLType, error) 
 	if parser.dialect.URI() != nil {
 		switch parser.dialect.URI().DBType {
 		case schemas.YDB:
-			return schemas.YQL_TypeToSQLType(t), nil
+			return schemas.Type2SQLType2(t), nil
 		}
 	}
 

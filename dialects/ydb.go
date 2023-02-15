@@ -253,7 +253,7 @@ var (
 	}
 )
 
-var (
+const (
 	// numeric types
 	yql_Bool = "Bool"
 

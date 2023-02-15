@@ -170,7 +170,9 @@ func (statement *Statement) Value2Interface(col *schemas.Column, fieldValue refl
 	}
 }
 
-func (statement *Statement) YQL_ValueToInterface(col *schemas.Column, fieldValue reflect.Value) (interface{}, error) {
+// !datbeohbbh! Convert value to interface. If value is invalid return the nil poiner of that type.
+// This method can be considered a helper method for YDB to correctly generate `DECLARE` section.
+func (statement *Statement) Value2Interface2(col *schemas.Column, fieldValue reflect.Value) (interface{}, error) {
 	if fieldValue.CanAddr() {
 		if fieldConvert, ok := fieldValue.Addr().Interface().(convert.Conversion); ok {
 			data, err := fieldConvert.ToDB()
@@ -343,22 +345,14 @@ func (statement *Statement) YQL_ValueToInterface(col *schemas.Column, fieldValue
 		switch t := col.SQLType.Name; t {
 		case schemas.UnsignedTinyInt:
 			return uint8(val), nil
-		case schemas.TinyInt:
-			return int8(val), nil
 		case schemas.UnsignedSmallInt:
 			return uint16(val), nil
-		case schemas.SmallInt:
-			return int16(val), nil
 		case schemas.UnsignedMediumInt, schemas.UnsignedInt:
 			return uint32(val), nil
-		case schemas.MediumInt, schemas.Int:
-			return int32(val), nil
 		case schemas.UnsignedBigInt:
 			return uint64(val), nil
-		case schemas.BigInt:
-			return int64(val), nil
 		default:
-			return val, nil
+			return uint32(val), nil
 		}
 	case reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Int:
 		val := fieldValue.Int()
@@ -372,7 +366,7 @@ func (statement *Statement) YQL_ValueToInterface(col *schemas.Column, fieldValue
 		case schemas.BigInt:
 			return int64(val), nil
 		default:
-			return val, nil
+			return int32(val), nil
 		}
 	default:
 		if fieldValue.Interface() == nil {

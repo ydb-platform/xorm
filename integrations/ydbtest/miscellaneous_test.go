@@ -26,7 +26,7 @@ func TestInt(t *testing.T) {
 	assert.NoError(t, err)
 
 	var ret TestInt
-	has, err := engine.Where("data = ?", 1).Get(&ret)
+	has, err := engine.Where("data = ?", PR(1)).Get(&ret)
 	assert.NoError(t, err)
 	assert.True(t, has)
 }

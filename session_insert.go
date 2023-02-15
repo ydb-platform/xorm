@@ -184,7 +184,7 @@ func (session *Session) insertMultipleStruct(rowsSlicePtr interface{}) (int64, e
 				var arg interface{}
 				switch session.engine.dialect.URI().DBType {
 				case schemas.YDB:
-					arg, err = session.statement.YQL_ValueToInterface(col, fieldValue)
+					arg, err = session.statement.Value2Interface2(col, fieldValue)
 				default:
 					arg, err = session.statement.Value2Interface(col, fieldValue)
 				}
@@ -561,7 +561,7 @@ func (session *Session) genInsertColumns(bean interface{}) ([]string, []interfac
 			var arg interface{}
 			switch session.engine.dialect.URI().DBType {
 			case schemas.YDB:
-				arg, err = session.statement.YQL_ValueToInterface(col, fieldValue)
+				arg, err = session.statement.Value2Interface2(col, fieldValue)
 			default:
 				arg, err = session.statement.Value2Interface(col, fieldValue)
 			}

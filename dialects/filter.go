@@ -87,10 +87,15 @@ func (yf *SeqFilter) GenerateDeclareSection(args ...interface{}) string {
 		return ""
 	}
 
-	var index = yf.Start
-	var declareBuf strings.Builder
-	var declareOptional string = "DECLARE %s AS OPTIONAL<%s>;"
-	var declareNonOptional string = "DECLARE %s AS %s;"
+	var (
+		index      = yf.Start
+		declareBuf strings.Builder
+	)
+
+	const (
+		declareOptional    string = "DECLARE %s AS OPTIONAL<%s>;"
+		declareNonOptional string = "DECLARE %s AS %s;"
+	)
 
 	for _, arg := range args {
 		var t sql.NamedArg
@@ -122,7 +127,7 @@ func (yf *SeqFilter) GenerateDeclareSection(args ...interface{}) string {
 			} else {
 				declareType = declareNonOptional
 			}
-			st = schemas.YQL_TypeToSQLType(reflect.TypeOf(t.Value))
+			st = schemas.Type2SQLType2(reflect.TypeOf(t.Value))
 			tp = toYQLDataType(st.Name, st.DefaultLength, st.DefaultLength2)
 
 			switch tp {
@@ -131,14 +136,14 @@ func (yf *SeqFilter) GenerateDeclareSection(args ...interface{}) string {
 					fields := make([]string, 0)
 					to := reflect.TypeOf(t.Value)
 					for i := 0; i < to.NumField(); i++ {
-						st = schemas.YQL_TypeToSQLType(to.Field(i).Type)
+						st = schemas.Type2SQLType2(to.Field(i).Type)
 						tElem := toYQLDataType(st.Name, st.DefaultLength, st.DefaultLength2)
 						fields = append(fields, fmt.Sprintf("%s:%s", to.Field(i).Name, tElem))
 					}
 					tp = fmt.Sprintf("Struct<%s>", strings.Join(fields, ","))
 				}
 			case yql_List:
-				st = schemas.YQL_TypeToSQLType(reflect.TypeOf(t.Value).Elem())
+				st = schemas.Type2SQLType2(reflect.TypeOf(t.Value).Elem())
 				tElem := toYQLDataType(st.Name, st.DefaultLength, st.DefaultLength2)
 				tp = fmt.Sprintf("List<%s>", tElem)
 			}
