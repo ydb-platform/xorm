@@ -438,12 +438,28 @@ func (db *ydb) SetInternalDB(initDB *core.DB) {
 	db.ydb = initDB
 }
 
-func (db *ydb) getConn(ctx context.Context) (*sql.Conn, error) {
-	if db.ydb == nil {
-		return nil, fmt.Errorf("internal db must not be 'nil'")
+func (db *ydb) getDB() *core.DB {
+	return db.ydb
+}
+
+func (db *ydb) WithConn(ctx context.Context, f func(context.Context, *sql.Conn) error) error {
+	cc, err := db.getDB().Conn(ctx)
+	if err != nil {
+		return err
 	}
-	cc, err := db.ydb.Conn(ctx)
-	return cc, err
+	defer cc.Close()
+
+	err = f(ctx, cc)
+
+	return err
+}
+
+func (db *ydb) WithConnRaw(ctx context.Context, f func(d interface{}) error) (err error) {
+	err = db.WithConn(ctx, func(ctx context.Context, cc *sql.Conn) error {
+		err = cc.Raw(f)
+		return err
+	})
+	return err
 }
 
 func (db *ydb) Features() *DialectFeatures {
@@ -484,15 +500,9 @@ func (db *ydb) ColumnTypeKind(t string) int {
 	}
 }
 
-func (db *ydb) Version(ctx context.Context, _ core.Queryer) (*schemas.Version, error) {
-	conn, err := db.getConn(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer conn.Close()
-
+func (db *ydb) Version(ctx context.Context, _ core.Queryer) (_ *schemas.Version, err error) {
 	var version string
-	err = conn.Raw(func(dc interface{}) error {
+	err = db.WithConnRaw(ctx, func(dc interface{}) error {
 		q, ok := dc.(interface {
 			Version(ctx context.Context) (string, error)
 		})
@@ -521,16 +531,11 @@ func (db *ydb) IndexCheckSQL(tableName, indexName string) (string, []interface{}
 func (db *ydb) IsTableExist(
 	_ core.Queryer,
 	ctx context.Context,
-	tableName string) (bool, error) {
+	tableName string) (_ bool, err error) {
 	pathToTable := db.autoPrefix(tableName)
-	conn, err := db.getConn(ctx)
-	if err != nil {
-		return false, err
-	}
-	defer conn.Close()
 
 	var exists bool
-	err = conn.Raw(func(dc interface{}) error {
+	err = db.WithConnRaw(ctx, func(dc interface{}) error {
 		q, ok := dc.(interface {
 			IsTableExists(context.Context, string) (bool, error)
 		})
@@ -604,16 +609,11 @@ func (db *ydb) IsColumnExist(
 	_ core.Queryer,
 	ctx context.Context,
 	tableName,
-	columnName string) (bool, error) {
+	columnName string) (_ bool, err error) {
 	pathToTable := db.autoPrefix(tableName)
-	conn, err := db.getConn(ctx)
-	if err != nil {
-		return false, err
-	}
-	defer conn.Close()
 
 	var exists bool
-	err = conn.Raw(func(dc interface{}) error {
+	err = db.WithConnRaw(ctx, func(dc interface{}) error {
 		q, ok := dc.(interface {
 			IsColumnExists(context.Context, string, string) (bool, error)
 		})
@@ -634,20 +634,15 @@ func (db *ydb) IsColumnExist(
 }
 
 func (db *ydb) GetColumns(_ core.Queryer, ctx context.Context, tableName string) (
-	[]string,
-	map[string]*schemas.Column,
-	error) {
+	_ []string,
+	_ map[string]*schemas.Column,
+	err error) {
 	pathToTable := db.autoPrefix(tableName)
-	conn, err := db.getConn(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-	defer conn.Close()
 
 	colNames := make([]string, 0)
 	colMaps := make(map[string]*schemas.Column)
 
-	err = conn.Raw(func(dc interface{}) error {
+	err = db.WithConnRaw(ctx, func(dc interface{}) error {
 		q, ok := dc.(interface {
 			GetColumns(context.Context, string) ([]string, error)
 			GetColumnType(context.Context, string, string) (string, error)
@@ -690,16 +685,11 @@ func (db *ydb) GetColumns(_ core.Queryer, ctx context.Context, tableName string)
 	return colNames, colMaps, nil
 }
 
-func (db *ydb) GetTables(_ core.Queryer, ctx context.Context) ([]*schemas.Table, error) {
+func (db *ydb) GetTables(_ core.Queryer, ctx context.Context) (_ []*schemas.Table, err error) {
 	dbName := db.URI().DBName
-	conn, err := db.getConn(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer conn.Close()
 
 	tables := make([]*schemas.Table, 0)
-	err = conn.Raw(func(dc interface{}) error {
+	err = db.WithConnRaw(ctx, func(dc interface{}) error {
 		q, ok := dc.(interface {
 			GetAllTables(context.Context, string) ([]string, error)
 		})
@@ -726,16 +716,11 @@ func (db *ydb) GetTables(_ core.Queryer, ctx context.Context) ([]*schemas.Table,
 func (db *ydb) GetIndexes(
 	_ core.Queryer,
 	ctx context.Context,
-	tableName string) (map[string]*schemas.Index, error) {
+	tableName string) (_ map[string]*schemas.Index, err error) {
 	pathToTable := db.autoPrefix(tableName)
-	conn, err := db.getConn(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer conn.Close()
 
 	indexes := make(map[string]*schemas.Index, 0)
-	err = conn.Raw(func(dc interface{}) error {
+	err = db.WithConnRaw(ctx, func(dc interface{}) error {
 		q, ok := dc.(interface {
 			GetIndexes(context.Context, string) ([]string, error)
 			GetIndexColumns(context.Context, string, string) ([]string, error)
