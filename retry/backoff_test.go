@@ -9,7 +9,7 @@ import (
 
 func TestDefaultBackoff(t *testing.T) {
 	bf := DefaultBackoff()
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 64; i++ {
 		d := bf.Delay(i)
 		n := time.Now()
 		start := n.Add(bf.min)
