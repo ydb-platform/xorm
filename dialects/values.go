@@ -9,7 +9,13 @@ import (
 )
 
 // !datbeohbbh! this is a 'helper' function for YDB to generate declare section
-func getActualValue(fieldValue reflect.Value) interface{} {
+// Example:
+// --
+// type CustomInt int64
+// engine.Where("ID > ?", CustomInt(10)).Get(...)
+// --
+// ydb sdk does not know about CustomInt type and this cause error.
+func GetActualValue(fieldValue reflect.Value) interface{} {
 	fieldType := fieldValue.Type()
 	k := fieldType.Kind()
 	if k == reflect.Ptr {

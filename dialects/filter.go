@@ -102,11 +102,11 @@ func (yf *SeqFilter) GenerateDeclareSection(args ...interface{}) string {
 
 		if c, ok := arg.(sql.NamedArg); ok {
 			t.Name = fmt.Sprintf("%s%v", strings.TrimPrefix(yf.Prefix, "$"), index)
-			t.Value = getActualValue(reflect.ValueOf(c.Value))
+			t.Value = GetActualValue(reflect.ValueOf(c.Value))
 		} else {
 			t = sql.Named(
 				fmt.Sprintf("%s%v", strings.TrimPrefix(yf.Prefix, "$"), index),
-				getActualValue(reflect.ValueOf(arg)),
+				GetActualValue(reflect.ValueOf(arg)),
 			)
 		}
 		args[index-1] = t

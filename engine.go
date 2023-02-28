@@ -72,9 +72,12 @@ func newEngine(driverName, dataSourceName string, dialect dialects.Dialect, db *
 	tagParser := tags.NewParser("xorm", dialect, mapper, mapper, cacherMgr)
 
 	if dialect.URI().DBType == schemas.YDB {
-		dialect.(interface {
-			SetInternalDB(*core.DB)
-		}).SetInternalDB(db)
+		// set internal config for YDB
+		if setInternal, ok := dialect.(interface {
+			SetInternal(*core.DB)
+		}); ok {
+			setInternal.SetInternal(db)
+		}
 	}
 
 	engine := &Engine{

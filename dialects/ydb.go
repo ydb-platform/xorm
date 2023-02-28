@@ -434,7 +434,7 @@ func (db *ydb) Init(uri *URI) error {
 
 // !datbeohbbh! set the internal *core.DB, this function is necessary for YDB
 // because to query the metadata in YDB, need to provide *sql.Conn
-func (db *ydb) SetInternalDB(initDB *core.DB) {
+func (db *ydb) SetInternal(initDB *core.DB) {
 	db.ydb = initDB
 }
 
