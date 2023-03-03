@@ -36,25 +36,26 @@ func TestE2E(t *testing.T) {
 		engine, err := xorm.NewEngine("ydb", connString)
 		require.NoError(t, err)
 
-		err = engine.PingContext(scope.ctx)
+		err = engine.PingContext(ctx)
 		require.NoError(t, err)
 
 		err = engine.Close()
 		require.NoError(t, err)
 	})
 
-	t.Run("xorm.StartEngine", func(t *testing.T) {
-		for mode := range typeToString {
-			engine, err := scope.engines.getEngine(mode)
-			require.NoError(t, err)
+	t.Run("xorm.e2e", func(t *testing.T) {
+		t.Run("prepare-engine-stage", func(t *testing.T) {
+			for mode := range typeToString {
+				engine, err := scope.engines.getEngine(mode)
+				require.NoError(t, err)
 
-			err = engine.PingContext(scope.ctx)
-			require.NoError(t, err)
-		}
+				err = engine.PingContext(scope.ctx)
+				require.NoError(t, err)
+			}
+		})
 
 		defer func() {
-			err := scope.engines.Close()
-			require.NoError(t, err)
+			_ = scope.engines.Close()
 		}()
 
 		t.Run("prepare-stage", func(t *testing.T) {
