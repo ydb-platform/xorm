@@ -10,6 +10,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"xorm.io/xorm"
 	"xorm.io/xorm/retry"
+
+	_ "github.com/ydb-platform/ydb-go-sdk/v3"
 )
 
 type e2e struct {
