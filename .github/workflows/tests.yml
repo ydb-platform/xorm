@@ -16,7 +16,6 @@ jobs:
         os: [ubuntu-latest]
     env:
       OS: ${{ matrix.os }}
-      GO: ${{ matrix.go-version }}
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout code
@@ -49,7 +48,6 @@ jobs:
           POSTGRES_PASSWORD: postgres
     env:
       OS: ${{ matrix.os }}
-      GO: ${{ matrix.go-version }}
       TEST_PGSQL_HOST: "postgres:5432"
       TEST_PGSQL_SCHEMA: xorm
       TEST_PGSQL_DBNAME: xorm_test
