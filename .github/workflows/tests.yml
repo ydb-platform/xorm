@@ -46,6 +46,7 @@ jobs:
           POSTGRES_DB: xorm_test
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
+        options: '-h pgsql'
     env:
       OS: ${{ matrix.os }}
       TEST_PGSQL_SCHEMA: xorm
