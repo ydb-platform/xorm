@@ -30,7 +30,7 @@ jobs:
         run: make test
   test-postgres:
     concurrency:
-      group: test-postgres-integration-secure-connection-${{ github.ref }}-${{ matrix.os }}-${{ maxtrix.go-version }}
+      group: test-postgres-integration-secure-connection-${{ github.ref }}-${{ matrix.os }}-${{ matrix.go-version }}
       cancel-in-progress: true
     strategy:
       matrix:
