@@ -39,12 +39,12 @@ jobs:
     services:
       postgres:
         image: postgres:9.5
-      ports:
-        - 5432:5432
-      env:
-        POSTGRES_DB: xorm_test
-        POSTGRES_USER: postgres
-        POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        env:
+          POSTGRES_DB: xorm_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
     env:
       OS: ${{ matrix.os }}
       GO: ${{ matrix.go-version }}
