@@ -27,7 +27,9 @@ jobs:
           go-version: ${{ matrix.go-version }}
           cache: true
       - name: Test
-        run: make test
+        run: | 
+          sleep 5
+          make test
   test-postgres:
     concurrency:
       group: test-postgres-integration-secure-connection-${{ github.ref }}-${{ matrix.os }}-${{ matrix.go-version }}
@@ -63,7 +65,9 @@ jobs:
           go-version: ${{ matrix.go-version }}
           cache: true
       - name: test postgres
-        run: TEST_CACHE_ENABLE=true make test-postgres
+        run: |
+          sleep 5
+          TEST_CACHE_ENABLE=true make test-postgres
 #  test-ydb-integration-secure-connection:
 #    concurrency:
 #      group: test-ydb-integration-secure-connection-${{ github.ref }}-${{ matrix.os }}-${{ matrix.go-version }}
