@@ -27,7 +27,6 @@ jobs:
           cache: true
       - name: Test
         run: | 
-          sleep 5
           make test
   test-postgres:
     concurrency:
@@ -46,9 +45,10 @@ jobs:
           POSTGRES_DB: xorm_test
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
-        options: '-h pgsql'
+        options: '-h localhost'
     env:
       OS: ${{ matrix.os }}
+      TEST_PGSQL_HOST: 'localhost:5432'
       TEST_PGSQL_SCHEMA: xorm
       TEST_PGSQL_DBNAME: xorm_test
       TEST_PGSQL_USERNAME: postgres
@@ -64,7 +64,6 @@ jobs:
           cache: true
       - name: test postgres
         run: |
-          sleep 5
           TEST_CACHE_ENABLE=true make test-postgres
 #  test-ydb-integration-secure-connection:
 #    concurrency:
