@@ -18,7 +18,7 @@ type e2e struct {
 }
 
 func TestE2E(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
 	scope := &e2e{
@@ -57,30 +57,7 @@ func TestE2E(t *testing.T) {
 
 		t.Run("prepare-stage", func(t *testing.T) {
 			t.Run("scheme", func(t *testing.T) {
-				engine, err := scope.engines.GetScriptQueryEngine()
-				require.NoError(t, err)
-
-				err = engine.Do(scope.ctx, func(ctx context.Context, session *xorm.Session) (err error) {
-					for _, table := range []interface{}{
-						&Series{},
-						&Seasons{},
-						&Episodes{},
-					} {
-						err = session.DropTable(table)
-						if err != nil {
-							return err
-						}
-					}
-
-					err = session.Sync(
-						&Series{},
-						&Seasons{},
-						&Episodes{},
-					)
-					return err
-				}, retry.WithID("e2e-test-prepare-scheme"),
-					retry.WithIdempotent(true))
-
+				err := scope.prepareScheme()
 				require.NoError(t, err)
 			})
 		})
@@ -238,6 +215,36 @@ func (scope *e2e) fill() error {
 		return err
 	},
 		retry.WithID("e2e-test-fill-stage"),
+		retry.WithIdempotent(true))
+
+	return err
+}
+
+func (scope *e2e) prepareScheme() error {
+	engine, err := scope.engines.GetScriptQueryEngine()
+	if err != nil {
+		return err
+	}
+
+	err = engine.Do(scope.ctx, func(ctx context.Context, session *xorm.Session) (err error) {
+		for _, table := range []interface{}{
+			&Series{},
+			&Seasons{},
+			&Episodes{},
+		} {
+			err = session.DropTable(table)
+			if err != nil {
+				return err
+			}
+		}
+
+		err = session.Sync(
+			&Series{},
+			&Seasons{},
+			&Episodes{},
+		)
+		return err
+	}, retry.WithID("e2e-test-prepare-scheme"),
 		retry.WithIdempotent(true))
 
 	return err
