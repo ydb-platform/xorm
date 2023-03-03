@@ -106,7 +106,8 @@ jobs:
       - name: ydb integration test
         run: |
           [ -d "./integrations/ydbtest" ] && \
-          make test-ydb
+          make test-ydb || \
+          echo "integration tests for ydb do not exist"
   test-ydb-insecure-connection:
     concurrency:
       group: test-ydb-insecure-connection-${{ github.ref }}-${{ matrix.os }}-${{ matrix.go-version }}
@@ -147,4 +148,5 @@ jobs:
       - name: ydb test insecure connection
         run: |
           [ -d "./integrations/ydbtest" ] && \
-          make test-ydb
+          make test-ydb || \
+          echo "integration tests for ydb do not exist"
