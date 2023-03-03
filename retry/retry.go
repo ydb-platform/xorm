@@ -86,15 +86,15 @@ func Retry(ctx context.Context, check checkRetryable, f retryOperation, opts ...
 			}
 			canRetry := check(err)
 			if !canRetry {
-				return fmt.Errorf("error is not retryable. Retry process with id '%s': %v",
+				return fmt.Errorf("error is not retryable. Retry process with id '%s': %w",
 					options.id, err)
 			}
 			if !options.idempotent {
-				return fmt.Errorf("operation is not idempotent. Retry process with id '%s': %v",
+				return fmt.Errorf("operation is not idempotent. Retry process with id '%s': %w",
 					options.id, err)
 			}
 			if err = wait(ctx, options.backoff, attempts); err != nil {
-				return fmt.Errorf("error in retry process with id '%s': %v", options.id, err)
+				return fmt.Errorf("error in retry process with id '%s': %w", options.id, err)
 			}
 		}
 	}
