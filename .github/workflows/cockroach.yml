@@ -1,0 +1,44 @@
+name: test-cockroach
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+  workflow_dispatch:
+jobs:
+  test-cockroach:
+    concurrency:
+      group: test-cockroach-${{ github.ref }}-${{ matrix.os }}-${{ matrix.go-version }}
+      cancel-in-progress: true
+    strategy:
+      matrix:
+        go-version: [1.17.x, 1.18.x, 1.19.x, 1.20.x]
+        os: [ubuntu-latest]
+    services:
+      cockroach:
+        image: cockroachdb/cockroach:v19.2.4
+        ports:
+          - 26257:26257
+        env:
+          COCKROACH_DATABASE: xorm_test
+          COCKROACH_USER: root
+          COCKROACH_PASSWORD: cockroach-password
+        options: '-h localhost'
+    env:
+      OS: ${{ matrix.os }}
+      TEST_COCKROACH_HOST: "localhost:26257"
+      TEST_COCKROACH_DBNAME: xorm_test
+      TEST_COCKROACH_USERNAME: root
+      TEST_COCKROACH_PASSWORD: cockroach-password
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3  
+      - name: Install Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: ${{ matrix.go-version }}
+          cache: true
+      - name: test cockroach
+        run: |
+          make test-cockroach
