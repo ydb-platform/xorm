@@ -1,0 +1,45 @@
+name: test-mssql
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+  workflow_dispatch:
+jobs:
+  test-mssql:
+    concurrency:
+      group: test-mssql-${{ github.ref }}-${{ matrix.os }}-${{ matrix.go-version }}
+      cancel-in-progress: true
+    strategy:
+      matrix:
+        go-version: [1.17.x, 1.18.x, 1.19.x, 1.20.x]
+        os: [ubuntu-latest]
+    services:
+      mssql:
+        image: mcr.microsoft.com/mssql/server:latest
+        ports:
+          - 1433:1433
+        env:
+          ACCEPT_EULA: Y
+          MSSQL_SA_PASSWORD: yourStrong(!)Password
+          MSSQL_PID: Standard
+        options: '-h localhost'
+    env:
+      OS: ${{ matrix.os }}
+      TEST_MSSQL_HOST: 'localhost'
+      TEST_MSSQL_DBNAME: xorm_test
+      TEST_MSSQL_USERNAME: sa
+      TEST_MSSQL_PASSWORD: "yourStrong(!)Password"
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3  
+      - name: Install Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: ${{ matrix.go-version }}
+          cache: true
+      - name: test mssql
+        run: |
+          make test-mssql && \
+          TEST_MSSQL_DEFAULT_VARCHAR=NVARCHAR TEST_MSSQL_DEFAULT_CHAR=NCHAR make test-mssql

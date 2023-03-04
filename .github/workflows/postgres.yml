@@ -1,0 +1,51 @@
+name: test-postgres
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+  workflow_dispatch:
+jobs:
+  test-postgres:
+    concurrency:
+      group: test-postgres-${{ github.ref }}-${{ matrix.os }}-${{ matrix.go-version }}
+      cancel-in-progress: true
+    strategy:
+      matrix:
+        go-version: [1.17.x, 1.18.x, 1.19.x, 1.20.x]
+        os: [ubuntu-latest]
+    services:
+      pgsql:
+        image: postgres:9.5
+        ports:
+          - 5432:5432
+        env:
+          POSTGRES_DB: xorm_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        options: '-h localhost'
+    env:
+      OS: ${{ matrix.os }}
+      TEST_PGSQL_HOST: 'localhost:5432'
+      TEST_PGSQL_SCHEMA: xorm
+      TEST_PGSQL_DBNAME: xorm_test
+      TEST_PGSQL_USERNAME: postgres
+      TEST_PGSQL_PASSWORD: postgres
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3  
+      - name: Install Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: ${{ matrix.go-version }}
+          cache: true
+      - name: test postgres
+        run: |
+          TEST_CACHE_ENABLE=true make test-postgres
+      - name: test-pgx
+        run: |
+          TEST_PGSQL_SCHEMA='' TEST_CACHE_ENABLE=true make test-pgx
+      - name: test-pgx-schema
+        run: |
+          TEST_QUOTE_POLICY=reserved TEST_CACHE_ENABLE=true make test-pgx
