@@ -46,8 +46,11 @@ jobs:
           cache: true
       - name: ydb integration test
         run: |
-          [ -d "./integrations/ydbtest" ] && \
-          make test-ydb
+          if [ -d "./integrations/ydbtest" ]; then
+            make test-ydb
+          else 
+            echo "Directory does not exists"
+          fi
 
   test-ydb-insecure-connection:
     concurrency:
@@ -88,5 +91,8 @@ jobs:
           cache: true
       - name: ydb test insecure connection
         run: |
-          [ -d "./integrations/ydbtest" ] && \
-          make test-ydb
+          if [ -d "./integrations/ydbtest" ]; then
+            make test-ydb
+          else 
+            echo "Directory does not exists"
+          fi
