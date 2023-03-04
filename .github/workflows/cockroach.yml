@@ -23,7 +23,7 @@ jobs:
           COCKROACH_DATABASE: xorm_test
           COCKROACH_USER: root
           COCKROACH_PASSWORD: cockroach-password
-        options: '-h localhost --entrypoint "/cockroach/cockroach start --insecure"'
+        options: '-h localhost --entrypoint "./cockroach start --insecure"'
     env:
       OS: ${{ matrix.os }}
       TEST_COCKROACH_HOST: 'localhost:26257'
