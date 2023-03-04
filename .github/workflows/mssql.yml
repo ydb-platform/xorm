@@ -41,5 +41,5 @@ jobs:
           cache: true
       - name: test mssql
         run: |
-          make test-msssql && \
+          make test-mssql && \
           TEST_MSSQL_DEFAULT_VARCHAR=NVARCHAR TEST_MSSQL_DEFAULT_CHAR=NCHAR make test-mssql
