@@ -43,3 +43,9 @@ jobs:
       - name: test postgres
         run: |
           TEST_CACHE_ENABLE=true make test-postgres
+      - name: test-pgx
+        run: |
+          TEST_PGSQL_SCHEMA='' TEST_CACHE_ENABLE=true make test-pgx
+      - name: test-pgx-schema
+        run: |
+          TEST_QUOTE_POLICY=reserved TEST_CACHE_ENABLE=true make test-pgx
