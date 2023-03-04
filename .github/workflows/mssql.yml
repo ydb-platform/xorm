@@ -21,12 +21,12 @@ jobs:
           - 1433:1433
         env:
           ACCEPT_EULA: Y
-          SA_PASSWORD: yourStrong(!)Password
+          MSSQL_SA_PASSWORD: yourStrong(!)Password
           MSSQL_PID: Standard
         options: '-h localhost'
     env:
       OS: ${{ matrix.os }}
-      TEST_MSSQL_HOST: localhost:1433
+      TEST_MSSQL_HOST: 'localhost,1433'
       TEST_MSSQL_DBNAME: xorm_test
       TEST_MSSQL_USERNAME: sa
       TEST_MSSQL_PASSWORD: "yourStrong(!)Password"

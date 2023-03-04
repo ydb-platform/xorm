@@ -29,7 +29,7 @@ jobs:
         options: '-h localhost'
     env:
       TEST_YDB_SCHEME: grpcs
-      TEST_YDB_HOST: localhost:2135
+      TEST_YDB_HOST: 'localhost:2135'
       TEST_YDB_DBNAME: local
       OS: ${{ matrix.os }}
       YDB_SSL_ROOT_CERTIFICATES_FILE: /tmp/ydb_certs/ca.pem
@@ -72,7 +72,7 @@ jobs:
         options: '-h localhost'
     env:
       TEST_YDB_SCHEME: grpc
-      TEST_YDB_HOST: localhost:2136
+      TEST_YDB_HOST: 'localhost:2136'
       TEST_YDB_DBNAME: local
       OS: ${{ matrix.os }}
       YDB_SESSIONS_SHUTDOWN_URLS: http://localhost:8765/actors/kqp_proxy?force_shutdown=all
