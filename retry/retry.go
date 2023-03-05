@@ -94,21 +94,22 @@ func Retry(ctx context.Context, check checkRetryable, f retryOperation, opts ...
 			canRetry := check(err)
 			if !canRetry {
 				return fmt.Errorf("Retry process with id '%s': %w",
-					options.id, wrapError(ErrNonRetryable, err))
+					options.id, fmt.Errorf("%v: %w", err, ErrNonRetryable))
 			}
 			if !options.idempotent {
 				return fmt.Errorf("Retry process with id '%s': %w",
-					options.id, wrapError(ErrNonIdempotent, err))
+					options.id, fmt.Errorf("%v: %w", err, ErrNonIdempotent))
 			}
 			if err = wait(ctx, options.backoff, attempts); err != nil {
-				return fmt.Errorf("Retry process with id '%s': %w", options.id, wrapError(err))
+				return fmt.Errorf("Retry process with id '%s': %w", options.id, err)
 			}
 		}
 	}
 	return fmt.Errorf("Retry process with id '%s': %w",
 		options.id,
-		wrapError(ErrMaxRetriesLimitExceed,
+		fmt.Errorf("%v: %w",
 			fmt.Errorf("max retries: %v", options.ctx.Value(maxRetriesKey{})),
+			ErrMaxRetriesLimitExceed,
 		))
 }
 
@@ -119,19 +120,4 @@ func wait(ctx context.Context, backoff BackoffInterface, attempts int) error {
 	case <-backoff.Wait(attempts):
 		return nil
 	}
-}
-
-// wrap errors in format: "err1: err2: err3"
-func wrapError(errs ...error) error {
-	var err error = nil
-	for i := len(errs) - 1; i >= 0; i-- {
-		if errs[i] != nil {
-			if err == nil {
-				err = errs[i]
-			} else {
-				err = fmt.Errorf("%w: %w", errs[i], err)
-			}
-		}
-	}
-	return err
 }

@@ -117,7 +117,6 @@ func TestRetryCanRetry(t *testing.T) {
 		WithBackoff(NewBackoff(1*time.Millisecond, 2*time.Millisecond, true)))
 
 	assert.Error(t, err)
-	assert.True(t, errors.Is(err, utErr))
 	assert.True(t, errors.Is(err, ErrNonRetryable))
 }
 
@@ -136,7 +135,6 @@ func TestRetryIdempotent(t *testing.T) {
 		WithBackoff(NewBackoff(1*time.Millisecond, 2*time.Millisecond, true)))
 
 	assert.Error(t, err)
-	assert.True(t, errors.Is(err, utErr))
 	assert.True(t, errors.Is(err, ErrNonIdempotent))
 }
 
