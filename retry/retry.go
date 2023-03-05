@@ -121,6 +121,17 @@ func wait(ctx context.Context, backoff BackoffInterface, attempts int) error {
 	}
 }
 
+// wrap errors in format: "err1: err2: err3"
 func wrapError(errs ...error) error {
-	return errors.Join(errs...)
+	var err error = nil
+	for i := len(errs) - 1; i >= 0; i-- {
+		if errs[i] != nil {
+			if err == nil {
+				err = errs[i]
+			} else {
+				err = fmt.Errorf("%w: %w", errs[i], err)
+			}
+		}
+	}
+	return err
 }
