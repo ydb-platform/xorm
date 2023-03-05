@@ -3,6 +3,7 @@ package retry
 
 import (
 	"context"
+	"errors"
 	"fmt"
 )
 
@@ -12,6 +13,12 @@ type retryOptions struct {
 	backoff    BackoffInterface // default implement 'Decorrelated Jitter' algorithm
 	ctx        context.Context
 }
+
+var (
+	ErrNonRetryable          = errors.New("retry error: non-retryable operation")
+	ErrNonIdempotent         = errors.New("retry error: non-idempotent operation")
+	ErrMaxRetriesLimitExceed = errors.New("retry error: max retries limit exceeded")
+)
 
 // !datbeohbbh! This function can be dialect.IsRetryable(err)
 // or your custom function that check if an error can be retried
@@ -86,19 +93,23 @@ func Retry(ctx context.Context, check checkRetryable, f retryOperation, opts ...
 			}
 			canRetry := check(err)
 			if !canRetry {
-				return fmt.Errorf("error is not retryable. Retry process with id '%s': %v",
-					options.id, err)
+				return fmt.Errorf("Retry process with id '%s': %w",
+					options.id, wrapError(ErrNonRetryable, err))
 			}
 			if !options.idempotent {
-				return fmt.Errorf("operation is not idempotent. Retry process with id '%s': %v",
-					options.id, err)
+				return fmt.Errorf("Retry process with id '%s': %w",
+					options.id, wrapError(ErrNonIdempotent, err))
 			}
 			if err = wait(ctx, options.backoff, attempts); err != nil {
-				return fmt.Errorf("error in retry process with id '%s': %v", options.id, err)
+				return fmt.Errorf("Retry process with id '%s': %w", options.id, wrapError(err))
 			}
 		}
 	}
-	return fmt.Errorf("max retries limit: %d exceeded", options.ctx.Value(maxRetriesKey{}))
+	return fmt.Errorf("Retry process with id '%s': %w",
+		options.id,
+		wrapError(ErrMaxRetriesLimitExceed,
+			fmt.Errorf("max retries: %v", options.ctx.Value(maxRetriesKey{})),
+		))
 }
 
 func wait(ctx context.Context, backoff BackoffInterface, attempts int) error {
@@ -108,4 +119,8 @@ func wait(ctx context.Context, backoff BackoffInterface, attempts int) error {
 	case <-backoff.Wait(attempts):
 		return nil
 	}
+}
+
+func wrapError(errs ...error) error {
+	return errors.Join(errs...)
 }
