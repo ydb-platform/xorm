@@ -69,13 +69,16 @@ func TestRetryTimeOut(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
 	defer cancel()
 
-	time.Sleep(10 * time.Millisecond)
-
 	err := Retry(ctx, func(err error) bool {
 		return true
 	}, func(ctx context.Context) error {
-		return nil
-	})
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(3 * time.Millisecond):
+			return nil
+		}
+	}, WithIdempotent(true))
 
 	assert.True(t, errors.Is(err, context.DeadlineExceeded))
 }
@@ -96,17 +99,18 @@ func TestRetryMaxRetriesExceeded(t *testing.T) {
 		WithBackoff(NewBackoff(1*time.Millisecond, 2*time.Millisecond, true)))
 
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "max retries limit")
+	assert.True(t, errors.Is(err, ErrMaxRetriesLimitExceed))
 }
 
 func TestRetryCanRetry(t *testing.T) {
 	ctx := context.Background()
 
 	utErr := errors.New("ut-error-can-not-retry")
+	canRetryErr := errors.New("ut-error-retryable")
 	wrapErr := fmt.Errorf("[error-ut-test]: %w", utErr)
 
 	err := Retry(ctx, func(err error) bool {
-		return !errors.Is(err, utErr)
+		return errors.Is(err, canRetryErr)
 	}, func(ctx context.Context) error {
 		return wrapErr
 	},
@@ -114,6 +118,7 @@ func TestRetryCanRetry(t *testing.T) {
 
 	assert.Error(t, err)
 	assert.True(t, errors.Is(err, utErr))
+	assert.True(t, errors.Is(err, ErrNonRetryable))
 }
 
 func TestRetryIdempotent(t *testing.T) {
@@ -132,6 +137,7 @@ func TestRetryIdempotent(t *testing.T) {
 
 	assert.Error(t, err)
 	assert.True(t, errors.Is(err, utErr))
+	assert.True(t, errors.Is(err, ErrNonIdempotent))
 }
 
 func TestRetry(t *testing.T) {
