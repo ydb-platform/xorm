@@ -254,6 +254,11 @@ func (engine *Engine) SetConnMaxLifetime(d time.Duration) {
 	engine.DB().SetConnMaxLifetime(d)
 }
 
+// SetConnMaxIdleTime sets the maximum amount of time a connection may be idle.
+func (engine *Engine) SetConnMaxIdleTime(d time.Duration) {
+	engine.DB().SetConnMaxIdleTime(d)
+}
+
 // SetMaxOpenConns is only available for go 1.2+
 func (engine *Engine) SetMaxOpenConns(conns int) {
 	engine.DB().SetMaxOpenConns(conns)
@@ -1233,10 +1238,19 @@ func (engine *Engine) Update(bean interface{}, condiBeans ...interface{}) (int64
 }
 
 // Delete records, bean's non-empty fields are conditions
+// At least one condition must be set.
 func (engine *Engine) Delete(beans ...interface{}) (int64, error) {
 	session := engine.NewSession()
 	defer session.Close()
 	return session.Delete(beans...)
+}
+
+// Truncate records, bean's non-empty fields are conditions
+// In contrast to Delete this method allows deletes without conditions.
+func (engine *Engine) Truncate(beans ...interface{}) (int64, error) {
+	session := engine.NewSession()
+	defer session.Close()
+	return session.Truncate(beans...)
 }
 
 // Get retrieve one record from table, bean's non-empty fields
