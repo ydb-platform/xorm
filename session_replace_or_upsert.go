@@ -11,6 +11,14 @@ import (
 	"xorm.io/xorm/schemas"
 )
 
+func (session *Session) Replace(beans ...interface{}) (int64, error) {
+	return session.replaceOrUpsert("REPLACE", beans...)
+}
+
+func (session *Session) Upsert(beans ...interface{}) (int64, error) {
+	return session.replaceOrUpsert("UPSERT", beans...)
+}
+
 func (session *Session) replaceOrUpsert(modificationOp string, beans ...interface{}) (int64, error) {
 	if session.engine.dialect.URI().DBType != schemas.YDB {
 		return 0, fmt.Errorf("(*Session).%s is not supported in %s", modificationOp, session.engine.dialect.URI().DBType)
@@ -46,17 +54,10 @@ func (session *Session) replaceOrUpsert(modificationOp string, beans ...interfac
 		}
 
 		if err != nil {
-			switch session.engine.Dialect().URI().DBType {
-			case schemas.YDB:
-				_, rowsAffectedErr := driver.ResultNoRows.RowsAffected()
-				if err.Error() == rowsAffectedErr.Error() {
-					err = nil
-				} else {
-					return affected, err
-				}
-			default:
-				return affected, err
+			if session.engine.Dialect().URI().DBType == schemas.YDB && err.Error() == driver.ErrSkip.Error() {
+				continue
 			}
+			return affected, err
 		}
 		affected += cnt
 	}
