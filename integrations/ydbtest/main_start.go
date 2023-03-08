@@ -15,11 +15,12 @@ var (
 	dbType     string
 	connString string
 
-	db             = flag.String("db", "sqlite3", "the tested database")
-	showSQL        = flag.Bool("show_sql", true, "show generated SQLs")
-	ptrConnStr     = flag.String("conn_str", "./test.db?cache=shared&mode=rwc", "test database connection string")
-	cacheFlag      = flag.Bool("cache", false, "if enable cache")
-	quotePolicyStr = flag.String("quote", "always", "quote could be always, none, reversed")
+	db              = flag.String("db", "sqlite3", "the tested database")
+	showSQL         = flag.Bool("show_sql", true, "show generated SQLs")
+	ptrConnStr      = flag.String("conn_str", "./test.db?cache=shared&mode=rwc", "test database connection string")
+	cacheFlag       = flag.Bool("cache", false, "if enable cache")
+	quotePolicyStr  = flag.String("quote", "always", "quote could be always, none, reversed")
+	tablePathPrefix = flag.String("table_path_prefix", "", "path of test directory")
 )
 
 func MainTest(m *testing.M) int {
@@ -47,6 +48,8 @@ func MainTest(m *testing.M) int {
 	defer func() {
 		_ = enginePool.Close()
 	}()
+
+	enginePool.InitDirectory()
 
 	log.Println("testing", dbType, connString)
 

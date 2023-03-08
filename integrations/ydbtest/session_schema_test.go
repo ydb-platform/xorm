@@ -3,6 +3,7 @@ package ydb
 import (
 	"context"
 	"path"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -124,12 +125,12 @@ func TestGetTables(t *testing.T) {
 	assert.NoError(t, err)
 
 	expected := []string{
-		"/local/users",
-		"/local/account",
-		"/local/series",
-		"/local/seasons",
-		"/local/episodes",
-		"/local/test/episodes",
+		path.Join("/local", *tablePathPrefix, "/users"),
+		path.Join("/local", *tablePathPrefix, "/account"),
+		path.Join("/local", *tablePathPrefix, "/series"),
+		path.Join("/local", *tablePathPrefix, "/seasons"),
+		path.Join("/local", *tablePathPrefix, "/episodes"),
+		path.Join("/local", *tablePathPrefix, "/test/episodes"),
 	}
 
 	tableNames := []string{}
@@ -483,7 +484,7 @@ func TestDBMetas(t *testing.T) {
 		assert.NotNil(t, tables)
 		ok := false
 		for _, table := range tables {
-			if path.Join(dialect.URI().DBName, (&Users{}).TableName()) == table.Name {
+			if strings.HasSuffix(table.Name, (&Users{}).TableName()) {
 				ok = true
 				break
 			}

@@ -1,12 +1,12 @@
 -- Insert data into `/local/series`
 
-UPSERT INTO `/local/series` (`series_id`, `title`, `series_info`, `release_date`, `comment`) VALUES 
+UPSERT INTO `series` (`series_id`, `title`, `series_info`, `release_date`, `comment`) VALUES 
 ('8802e71f-d978-4379-8e7d-80090387c2c7',CAST('Silicon Valley' AS Optional<Utf8>),CAST('Silicon Valley is an American comedy television series created by Mike Judge, John Altschuler and Dave Krinsky. The series focuses on five young men who founded a startup company in Silicon Valley.' AS Optional<Utf8>),CAST(1396742400000000 AS Optional<Timestamp>),CAST('Some comment here' AS Optional<Utf8>)),
 ('e83bf413-6555-4db8-a71d-9d39c2e5cb88',CAST('IT Crowd' AS Optional<Utf8>),CAST('The IT Crowd is a British sitcom produced by Channel 4, written by Graham Linehan, produced by Ash Atalla and starring Chris O\'\'Dowd, Richard Ayoade, Katherine Parkinson, and Matt Berry.' AS Optional<Utf8>),CAST(1138924800000000 AS Optional<Timestamp>), '');
 
 -- Insert data into `/local/seasons`
 
-UPSERT INTO `/local/seasons` (`series_id`, `season_id`, `title`, `first_aired`, `last_aired`) VALUES 
+UPSERT INTO `seasons` (`series_id`, `season_id`, `title`, `first_aired`, `last_aired`) VALUES 
 ('8802e71f-d978-4379-8e7d-80090387c2c7','2b123989-6cf5-4e95-94cc-e5ec6eabd171',CAST('Season 4' AS Optional<Utf8>),CAST(1277424000000000 AS Optional<Timestamp>),CAST(1280448000000000 AS Optional<Timestamp>)),
 ('8802e71f-d978-4379-8e7d-80090387c2c7','54a1f467-ef2e-454e-977a-a82145484319',CAST('Season 5' AS Optional<Utf8>),CAST(1521936000000000 AS Optional<Timestamp>),CAST(1526169600000000 AS Optional<Timestamp>)),
 ('8802e71f-d978-4379-8e7d-80090387c2c7','be84cb36-ac22-4346-a74e-73cde0c7393c',CAST('Season 1' AS Optional<Utf8>),CAST(1138924800000000 AS Optional<Timestamp>),CAST(1141344000000000 AS Optional<Timestamp>)),
@@ -15,7 +15,7 @@ UPSERT INTO `/local/seasons` (`series_id`, `season_id`, `title`, `first_aired`, 
 
 -- Insert data into `/local/episodes`
 
-UPSERT INTO `/local/episodes` (`series_id`, `season_id`, `episode_id`, `title`, `air_date`, `views`) VALUES 
+UPSERT INTO `episodes` (`series_id`, `season_id`, `episode_id`, `title`, `air_date`, `views`) VALUES 
 ('8802e71f-d978-4379-8e7d-80090387c2c7','078601d7-5a23-429a-932b-5ad19e75b607','0a958d0a-920b-4745-9d79-d7e403e23903',CAST('White Hat/Black Hat' AS Optional<Utf8>),CAST(1433030400000000 AS Optional<Timestamp>),NULL),
 ('8802e71f-d978-4379-8e7d-80090387c2c7','078601d7-5a23-429a-932b-5ad19e75b607','1187c66e-db36-4f43-8f07-fd4f29384087',CAST('Homicide' AS Optional<Utf8>),CAST(1431820800000000 AS Optional<Timestamp>),NULL),
 ('8802e71f-d978-4379-8e7d-80090387c2c7','078601d7-5a23-429a-932b-5ad19e75b607','21d1b5b0-22c3-449d-bd88-9b5b5ed54a3f',CAST('test' AS Optional<Utf8>),CAST(1430611200000000 AS Optional<Timestamp>),CAST('999' AS Optional<Uint64>)),
