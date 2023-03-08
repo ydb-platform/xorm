@@ -91,7 +91,6 @@ func TestReplaceSinglePK(t *testing.T) {
 }
 
 func TestReplaceSinglePKByFetch(t *testing.T) {
-	t.Skip("FIXME")
 	engine, err := enginePool.GetScriptQueryEngine()
 	assert.NoError(t, err)
 	assert.NotNil(t, engine)

@@ -66,27 +66,6 @@ func (session *Session) replaceOrUpsert(modificationOp string, beans ...interfac
 	return affected, err
 }
 
-func splitCmds(sql string) (string, string, error) {
-	var declareSection, execCmd string
-	sql = strings.TrimSpace(sql)
-
-	cmds := strings.Split(sql, ";")
-	if len(cmds) == 0 {
-		return "", "", fmt.Errorf("builder generated empty SQL string")
-	}
-
-	for _, cmd := range cmds {
-		if strings.HasPrefix(cmd, "DECLARE") {
-			declareSection += cmd
-			declareSection += ";"
-		} else {
-			execCmd += cmd
-			execCmd += ";"
-		}
-	}
-	return declareSection, execCmd, nil
-}
-
 func (session *Session) replaceOrUpsertByFetchValues(op string, b *builder.Builder) (int64, error) {
 	// !datbeohbbh! note: xorm/builder does not apply quote policy
 	var (
@@ -108,20 +87,7 @@ func (session *Session) replaceOrUpsertByFetchValues(op string, b *builder.Build
 		args[i] = dialects.GetActualValue(reflect.ValueOf(arg))
 	}
 
-	declareSection, execCmd, err := splitCmds(fetchSQL)
-	if err != nil {
-		return 0, nil
-	}
-
-	if _, err = buf.WriteString(declareSection); err != nil {
-		return 0, err
-	}
-
-	if _, err = buf.WriteString(fmt.Sprintf("$fetchedData = %s", execCmd)); err != nil {
-		return 0, err
-	}
-
-	if _, err = buf.WriteString(fmt.Sprintf("%s INTO %s ( SELECT * FROM $fetchedData );", op, quoter.Quote(tableName))); err != nil {
+	if _, err = buf.WriteString(fmt.Sprintf("%s INTO %s %s;", op, quoter.Quote(tableName), fetchSQL)); err != nil {
 		return 0, err
 	}
 
