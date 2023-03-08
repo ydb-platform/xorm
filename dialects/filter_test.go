@@ -1,7 +1,6 @@
 package dialects
 
 import (
-	"database/sql"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -75,27 +74,5 @@ func TestSeqFilterComment(t *testing.T) {
 	}
 	for sql, result := range kases {
 		assert.EqualValues(t, result, convertQuestionMark(sql, "$", 1))
-	}
-}
-
-func TestSeqFilterForYdb(t *testing.T) {
-	var cases = map[string]string{
-		`SELECT season_id FROM seasons WHERE title LIKE ? AND views > ?`:             `DECLARE $param_1 AS Utf8;DECLARE $param_2 AS Uint64;SELECT season_id FROM seasons WHERE title LIKE $param_1 AND views > $param_2`,
-		`SELECT season_id FROM seasons WHERE title LIKE ? AND views > ? /* ????? */`: `DECLARE $param_1 AS Utf8;DECLARE $param_2 AS Uint64;SELECT season_id FROM seasons WHERE title LIKE $param_1 AND views > $param_2 /* ????? */`,
-	}
-
-	yf := &SeqFilter{
-		Prefix: "$param_",
-		Start:  1,
-	}
-
-	namedValue := []interface{}{
-		sql.Named("seasonTitle", "%Season 1%"),
-		sql.Named("views", uint64(1000)),
-	}
-	for sqlStr, result := range cases {
-		declareSection := yf.GenerateDeclareSection(namedValue...)
-		actual := declareSection + yf.Do(sqlStr)
-		assert.EqualValues(t, result, actual)
 	}
 }

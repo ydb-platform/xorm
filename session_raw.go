@@ -6,9 +6,11 @@ package xorm
 
 import (
 	"database/sql"
+	"reflect"
 	"strings"
 
 	"xorm.io/xorm/core"
+	"xorm.io/xorm/dialects"
 	"xorm.io/xorm/schemas"
 )
 
@@ -17,18 +19,10 @@ func (session *Session) queryPreprocess(sqlStr *string, paramStr ...interface{})
 		*sqlStr = filter.Do(*sqlStr)
 	}
 
-	switch session.engine.dialect.URI().DBType {
-	case schemas.YDB:
-		declareSection := ""
-		for _, filter := range session.engine.dialect.Filters() {
-			if f, ok := filter.(interface {
-				GenerateDeclareSection(...interface{}) string
-			}); ok {
-				declareSection += f.GenerateDeclareSection(paramStr...)
-			}
+	if session.engine.dialect.URI().DBType == schemas.YDB {
+		for i, arg := range paramStr {
+			paramStr[i] = dialects.GetActualValue(reflect.ValueOf(arg))
 		}
-		*sqlStr = declareSection + *sqlStr
-	default:
 	}
 
 	session.lastSQL = *sqlStr

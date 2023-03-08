@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"xorm.io/builder"
+	"xorm.io/xorm/dialects"
 	"xorm.io/xorm/schemas"
 )
 
@@ -103,16 +104,9 @@ func (session *Session) replaceOrUpsertByFetchValues(op string, b *builder.Build
 		fetchSQL = filter.Do(fetchSQL)
 	}
 
-	declare := ""
-	for _, filter := range session.engine.dialect.Filters() {
-		if f, ok := filter.(interface {
-			GenerateDeclareSection(...interface{}) string
-		}); ok {
-			declare += f.GenerateDeclareSection(args...)
-		}
+	for i, arg := range args {
+		args[i] = dialects.GetActualValue(reflect.ValueOf(arg))
 	}
-
-	fetchSQL = declare + fetchSQL
 
 	declareSection, execCmd, err := splitCmds(fetchSQL)
 	if err != nil {

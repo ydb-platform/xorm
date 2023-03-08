@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
-	"path"
 	"strings"
 
 	"xorm.io/xorm/convert"
@@ -419,14 +418,6 @@ type ydb struct {
 	ydb *core.DB
 }
 
-func (db *ydb) autoPrefix(s string) string {
-	dbName := db.dialect.URI().DBName
-	if !strings.HasPrefix(s, dbName) {
-		return path.Join(dbName, s)
-	}
-	return s
-}
-
 func (db *ydb) Init(uri *URI) error {
 	db.quoter = ydbQuoter
 	return db.Base.Init(db, uri)
@@ -532,8 +523,6 @@ func (db *ydb) IsTableExist(
 	_ core.Queryer,
 	ctx context.Context,
 	tableName string) (_ bool, err error) {
-	pathToTable := db.autoPrefix(tableName)
-
 	var exists bool
 	err = db.WithConnRaw(ctx, func(dc interface{}) error {
 		q, ok := dc.(interface {
@@ -542,7 +531,7 @@ func (db *ydb) IsTableExist(
 		if !ok {
 			return fmt.Errorf("driver does not support query metadata")
 		}
-		exists, err = q.IsTableExists(ctx, pathToTable)
+		exists, err = q.IsTableExists(ctx, tableName)
 		if err != nil {
 			return err
 		}
@@ -557,13 +546,12 @@ func (db *ydb) IsTableExist(
 
 func (db *ydb) AddColumnSQL(tableName string, col *schemas.Column) string {
 	quote := db.dialect.Quoter()
-
-	pathToTable := quote.Quote(db.autoPrefix(tableName))
+	tableName = quote.Quote(tableName)
 	columnName := quote.Quote(col.Name)
 	dataType := db.SQLType(col)
 
 	var buf strings.Builder
-	buf.WriteString(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s;", pathToTable, columnName, dataType))
+	buf.WriteString(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s;", tableName, columnName, dataType))
 
 	return buf.String()
 }
@@ -576,8 +564,7 @@ func (db *ydb) ModifyColumnSQL(tableName string, column *schemas.Column) string 
 // SYNC by default
 func (db *ydb) CreateIndexSQL(tableName string, index *schemas.Index) string {
 	quote := db.dialect.Quoter()
-
-	pathToTable := quote.Quote(db.autoPrefix(tableName))
+	tableName = quote.Quote(tableName)
 	indexName := quote.Quote(index.Name)
 
 	colsIndex := make([]string, len(index.Cols))
@@ -588,19 +575,18 @@ func (db *ydb) CreateIndexSQL(tableName string, index *schemas.Index) string {
 	indexOn := strings.Join(colsIndex, ",")
 
 	var buf strings.Builder
-	buf.WriteString(fmt.Sprintf("ALTER TABLE %s ADD INDEX %s GLOBAL ON ( %s );", pathToTable, indexName, indexOn))
+	buf.WriteString(fmt.Sprintf("ALTER TABLE %s ADD INDEX %s GLOBAL ON ( %s );", tableName, indexName, indexOn))
 
 	return buf.String()
 }
 
 func (db *ydb) DropIndexSQL(tableName string, index *schemas.Index) string {
 	quote := db.dialect.Quoter()
-
-	pathToTable := quote.Quote(db.autoPrefix(tableName))
+	tableName = quote.Quote(tableName)
 	indexName := quote.Quote(index.Name)
 
 	var buf strings.Builder
-	buf.WriteString(fmt.Sprintf("ALTER TABLE %s DROP INDEX %s;", pathToTable, indexName))
+	buf.WriteString(fmt.Sprintf("ALTER TABLE %s DROP INDEX %s;", tableName, indexName))
 
 	return buf.String()
 }
@@ -610,8 +596,6 @@ func (db *ydb) IsColumnExist(
 	ctx context.Context,
 	tableName,
 	columnName string) (_ bool, err error) {
-	pathToTable := db.autoPrefix(tableName)
-
 	var exists bool
 	err = db.WithConnRaw(ctx, func(dc interface{}) error {
 		q, ok := dc.(interface {
@@ -620,7 +604,7 @@ func (db *ydb) IsColumnExist(
 		if !ok {
 			return fmt.Errorf("driver does not support query metadata")
 		}
-		exists, err = q.IsColumnExists(ctx, pathToTable, columnName)
+		exists, err = q.IsColumnExists(ctx, tableName, columnName)
 		if err != nil {
 			return err
 		}
@@ -637,8 +621,6 @@ func (db *ydb) GetColumns(_ core.Queryer, ctx context.Context, tableName string)
 	_ []string,
 	_ map[string]*schemas.Column,
 	err error) {
-	pathToTable := db.autoPrefix(tableName)
-
 	colNames := make([]string, 0)
 	colMaps := make(map[string]*schemas.Column)
 
@@ -652,24 +634,24 @@ func (db *ydb) GetColumns(_ core.Queryer, ctx context.Context, tableName string)
 			return fmt.Errorf("driver does not support query metadata")
 		}
 
-		colNames, err = q.GetColumns(ctx, pathToTable)
+		colNames, err = q.GetColumns(ctx, tableName)
 		if err != nil {
 			return err
 		}
 
 		for _, colName := range colNames {
-			dataType, err := q.GetColumnType(ctx, pathToTable, colName)
+			dataType, err := q.GetColumnType(ctx, tableName, colName)
 			if err != nil {
 				return err
 			}
 			dataType = removeOptional(dataType)
-			isPK, err := q.IsPrimaryKey(ctx, pathToTable, colName)
+			isPK, err := q.IsPrimaryKey(ctx, tableName, colName)
 			if err != nil {
 				return err
 			}
 			col := &schemas.Column{
 				Name:         colName,
-				TableName:    pathToTable,
+				TableName:    tableName,
 				SQLType:      yqlToSQLType(dataType),
 				IsPrimaryKey: isPK,
 				Nullable:     !isPK,
@@ -686,8 +668,6 @@ func (db *ydb) GetColumns(_ core.Queryer, ctx context.Context, tableName string)
 }
 
 func (db *ydb) GetTables(_ core.Queryer, ctx context.Context) (_ []*schemas.Table, err error) {
-	dbName := db.URI().DBName
-
 	tables := make([]*schemas.Table, 0)
 	err = db.WithConnRaw(ctx, func(dc interface{}) error {
 		q, ok := dc.(interface {
@@ -696,7 +676,7 @@ func (db *ydb) GetTables(_ core.Queryer, ctx context.Context) (_ []*schemas.Tabl
 		if !ok {
 			return fmt.Errorf("driver does not support query metadata")
 		}
-		tableNames, err := q.GetAllTables(ctx, dbName)
+		tableNames, err := q.GetAllTables(ctx, ".")
 		if err != nil {
 			return err
 		}
@@ -717,8 +697,6 @@ func (db *ydb) GetIndexes(
 	_ core.Queryer,
 	ctx context.Context,
 	tableName string) (_ map[string]*schemas.Index, err error) {
-	pathToTable := db.autoPrefix(tableName)
-
 	indexes := make(map[string]*schemas.Index, 0)
 	err = db.WithConnRaw(ctx, func(dc interface{}) error {
 		q, ok := dc.(interface {
@@ -728,12 +706,12 @@ func (db *ydb) GetIndexes(
 		if !ok {
 			return fmt.Errorf("driver does not support query metadata")
 		}
-		indexNames, err := q.GetIndexes(ctx, pathToTable)
+		indexNames, err := q.GetIndexes(ctx, tableName)
 		if err != nil {
 			return err
 		}
 		for _, indexName := range indexNames {
-			cols, err := q.GetIndexColumns(ctx, pathToTable, indexName)
+			cols, err := q.GetIndexColumns(ctx, tableName, indexName)
 			if err != nil {
 				return err
 			}
@@ -756,13 +734,11 @@ func (db *ydb) CreateTableSQL(
 	_ core.Queryer,
 	table *schemas.Table,
 	tableName string) (string, bool, error) {
-
 	quote := db.dialect.Quoter()
-
-	pathToTable := quote.Quote(db.autoPrefix(tableName))
+	tableName = quote.Quote(tableName)
 
 	var buf strings.Builder
-	buf.WriteString(fmt.Sprintf("CREATE TABLE %s ( ", pathToTable))
+	buf.WriteString(fmt.Sprintf("CREATE TABLE %s ( ", tableName))
 
 	// 	build primary key
 	if len(table.PrimaryKeys) == 0 {
@@ -818,11 +794,10 @@ func (db *ydb) CreateTableSQL(
 
 func (db *ydb) DropTableSQL(tableName string) (string, bool) {
 	quote := db.dialect.Quoter()
-
-	pathToTable := quote.Quote(db.autoPrefix(tableName))
+	tableName = quote.Quote(tableName)
 
 	var buf strings.Builder
-	buf.WriteString(fmt.Sprintf("DROP TABLE %s;", pathToTable))
+	buf.WriteString(fmt.Sprintf("DROP TABLE %s;", tableName))
 
 	return buf.String(), false
 }
@@ -830,7 +805,7 @@ func (db *ydb) DropTableSQL(tableName string) (string, bool) {
 // https://github.com/ydb-platform/ydb-go-sdk/blob/master/SQL.md#specifying-query-parameters-
 func (db *ydb) Filters() []Filter {
 	return []Filter{&SeqFilter{
-		Prefix: "$param_",
+		Prefix: "$",
 		Start:  1,
 	}}
 }
