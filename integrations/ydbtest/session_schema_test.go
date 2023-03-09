@@ -2,7 +2,6 @@ package ydb
 
 import (
 	"context"
-	"path"
 	"strings"
 	"testing"
 
@@ -125,12 +124,12 @@ func TestGetTables(t *testing.T) {
 	assert.NoError(t, err)
 
 	expected := []string{
-		path.Join("/local", *tablePathPrefix, "/users"),
-		path.Join("/local", *tablePathPrefix, "/account"),
-		path.Join("/local", *tablePathPrefix, "/series"),
-		path.Join("/local", *tablePathPrefix, "/seasons"),
-		path.Join("/local", *tablePathPrefix, "/episodes"),
-		path.Join("/local", *tablePathPrefix, "/test/episodes"),
+		"users",
+		"account",
+		"series",
+		"seasons",
+		"episodes",
+		"test/episodes",
 	}
 
 	tableNames := []string{}

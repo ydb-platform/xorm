@@ -288,7 +288,6 @@ test-dameng\#%: go-check
 test-ydb: go-check
 	$(GO) test $(INTEGRATION_PACKAGES)/ydbtest -v -race -db=ydb -cache=$(TEST_CACHE_ENABLE) \
 	-conn_str="$(TEST_YDB_SCHEME)://$(TEST_YDB_HOST)/$(TEST_YDB_DBNAME)?table_path_prefix=$(TEST_YDB_TABLE_PATH_PREFIX)" \
-	-table_path_prefix=$(TEST_YDB_TABLE_PATH_PREFIX) \
 	-quote=$(TEST_QUOTE_POLICY) -coverprofile=ydb.$(TEST_QUOTE_POLICY).$(TEST_CACHE_ENABLE).coverage.out -covermode=atomic -timeout=20m
 
 .PHONY: vet

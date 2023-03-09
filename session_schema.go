@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path"
 	"strings"
 
 	"xorm.io/xorm/dialects"
@@ -278,48 +277,10 @@ func (session *Session) syncYDB(beans ...interface{}) error {
 		return err
 	}
 
-	tablePathPrefix := ""
-	{
-		pos, minLength := -1, 1000000000
-		for i, table := range tables {
-			if minLength > len(table.Name) {
-				minLength = len(table.Name)
-				pos = i
-			}
-		}
-
-		if pos != -1 {
-			tablePath := append([]string{"/"}, strings.Split(tables[pos].Name, "/")...)
-			lo, hi := 0, len(tablePath)-2
-			for lo <= hi {
-				mid := (lo + hi) / 2
-				prefix := path.Join(tablePath[:mid+1]...)
-
-				ok := true
-				for _, table := range tables {
-					if !strings.HasPrefix(table.Name, prefix) {
-						ok = false
-						break
-					}
-				}
-				if !ok {
-					hi = mid - 1
-				} else {
-					lo = mid + 1
-					tablePathPrefix = prefix + "/"
-				}
-			}
-		}
-	}
-
 	// Save table name in map for fast lookup.
-	// The result of `GetTables` is absolute path in form:
-	// path = database_name + table_path_prefix + table_name
-	// The part `database_name + table_path_prefix` is the longest common prefix between
-	// all the tables's name.
 	tablesMap := make(map[string]*schemas.Table)
 	for _, table := range tables {
-		tablesMap[strings.TrimPrefix(table.Name, tablePathPrefix)] = table
+		tablesMap[table.Name] = table
 	}
 
 	session.autoResetStatement = false
