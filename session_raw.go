@@ -9,8 +9,8 @@ import (
 	"reflect"
 	"strings"
 
+	"xorm.io/xorm/convert"
 	"xorm.io/xorm/core"
-	"xorm.io/xorm/dialects"
 	"xorm.io/xorm/schemas"
 )
 
@@ -21,7 +21,7 @@ func (session *Session) queryPreprocess(sqlStr *string, paramStr ...interface{})
 
 	if session.engine.dialect.URI().DBType == schemas.YDB {
 		for i, arg := range paramStr {
-			paramStr[i] = dialects.GetActualValue(reflect.ValueOf(arg))
+			paramStr[i] = convert.GetActualValue(reflect.ValueOf(arg))
 		}
 	}
 

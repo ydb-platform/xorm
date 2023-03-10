@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"xorm.io/builder"
-	"xorm.io/xorm/dialects"
+	"xorm.io/xorm/convert"
 	"xorm.io/xorm/schemas"
 )
 
@@ -84,7 +84,7 @@ func (session *Session) replaceOrUpsertByFetchValues(op string, b *builder.Build
 	}
 
 	for i, arg := range args {
-		args[i] = dialects.GetActualValue(reflect.ValueOf(arg))
+		args[i] = convert.GetActualValue(reflect.ValueOf(arg))
 	}
 
 	if _, err = buf.WriteString(fmt.Sprintf("%s INTO %s %s;", op, quoter.Quote(tableName), fetchSQL)); err != nil {
