@@ -66,24 +66,6 @@ func ConstructDSN(dsn string, query ...string) string {
 	return dsn
 }
 
-func (em *EngineWithMode) InitDirectory() {
-	type TestDirectory struct {
-		Uuid []byte `xorm:"pk 'uuid'"`
-	}
-
-	engine, err := enginePool.GetScriptQueryEngine()
-	if err != nil {
-		panic(fmt.Errorf("failed on init test directory"))
-	}
-
-	session := engine.NewSession()
-	defer session.Close()
-
-	session.DropTable(&TestDirectory{})
-	session.CreateTable(&TestDirectory{})
-	session.DropTable(&TestDirectory{})
-}
-
 func (em *EngineWithMode) getEngine(queryMode QueryMode) (*xorm.Engine, error) {
 	em.mu.Lock()
 	defer em.mu.Unlock()

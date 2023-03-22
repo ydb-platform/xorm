@@ -48,8 +48,6 @@ func MainTest(m *testing.M) int {
 		_ = enginePool.Close()
 	}()
 
-	enginePool.InitDirectory()
-
 	log.Println("testing", dbType, connString)
 
 	code := m.Run()

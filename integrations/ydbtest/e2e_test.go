@@ -239,14 +239,13 @@ func (scope *e2e) prepareScheme() error {
 			if err != nil {
 				return err
 			}
-		}
 
-		err = session.Sync(
-			&Series{},
-			&Seasons{},
-			&Episodes{},
-		)
-		return err
+			err = session.CreateTable(table)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
 	}, retry.WithID("e2e-test-prepare-scheme"),
 		retry.WithIdempotent(true))
 
