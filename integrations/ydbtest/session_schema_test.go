@@ -2,7 +2,7 @@ package ydb
 
 import (
 	"context"
-	"path"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -124,12 +124,12 @@ func TestGetTables(t *testing.T) {
 	assert.NoError(t, err)
 
 	expected := []string{
-		"/local/users",
-		"/local/account",
-		"/local/series",
-		"/local/seasons",
-		"/local/episodes",
-		"/local/test/episodes",
+		"users",
+		"account",
+		"series",
+		"seasons",
+		"episodes",
+		"test/episodes",
 	}
 
 	tableNames := []string{}
@@ -463,7 +463,7 @@ func TestSyncOverall(t *testing.T) {
 }
 
 func TestDBMetas(t *testing.T) {
-	engine, err := enginePool.GetScriptQueryEngine()
+	engine, err := enginePool.GetDataQueryEngine()
 	assert.NoError(t, err)
 
 	dialect := engine.Dialect()
@@ -483,7 +483,7 @@ func TestDBMetas(t *testing.T) {
 		assert.NotNil(t, tables)
 		ok := false
 		for _, table := range tables {
-			if path.Join(dialect.URI().DBName, (&Users{}).TableName()) == table.Name {
+			if strings.HasSuffix(table.Name, (&Users{}).TableName()) {
 				ok = true
 				break
 			}
@@ -493,30 +493,3 @@ func TestDBMetas(t *testing.T) {
 	})
 	assert.NoError(t, err)
 }
-
-/* func TestErr(t *testing.T) {
-	assert.NoError(t, PrepareScheme(&Users{}))
-	engine, err := enginePool.GetDataQueryEngine()
-	assert.NoError(t, err)
-
-	conn, err := engine.DB().Conn(enginePool.ctx)
-	assert.NoError(t, err)
-
-	table := path.Join(engine.Dialect().URI().DBName, (&Users{}).TableName())
-	err = conn.Raw(func(dc interface{}) error {
-		q, ok := dc.(interface {
-			GetTables(context.Context, string) ([]string, error)
-		})
-		if !ok {
-			return fmt.Errorf("driver does not supported query for metadata")
-		}
-		tbl, err := q.GetTables(enginePool.ctx, table)
-		if err != nil {
-			return err
-		}
-		log.Println("got:", tbl)
-		return nil
-	})
-	assert.NoError(t, err)
-}
-*/

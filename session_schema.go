@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path"
 	"strings"
 
 	"xorm.io/xorm/dialects"
@@ -262,7 +261,7 @@ func (session *Session) Sync2(beans ...interface{}) error {
 //     A = "/local/my_table"
 //     B = "/local/My_table"
 //     A and B are not same table
-func (session *Session) ydbSync(beans ...interface{}) error {
+func (session *Session) syncYDB(beans ...interface{}) error {
 	var (
 		engine  = session.engine
 		dialect = engine.Dialect()
@@ -278,6 +277,7 @@ func (session *Session) ydbSync(beans ...interface{}) error {
 		return err
 	}
 
+	// Save table name in map for fast lookup.
 	tablesMap := make(map[string]*schemas.Table)
 	for _, table := range tables {
 		tablesMap[table.Name] = table
@@ -289,7 +289,7 @@ func (session *Session) ydbSync(beans ...interface{}) error {
 		session.resetStatement()
 	}()
 
-	ydbIsEqualIndexes := func(lhsIndex, rhsIndex *schemas.Index) bool {
+	isEqualIndexes := func(lhsIndex, rhsIndex *schemas.Index) bool {
 		if lhsIndex.Type != rhsIndex.Type {
 			return false
 		}
@@ -321,7 +321,6 @@ func (session *Session) ydbSync(beans ...interface{}) error {
 		} else {
 			curTableName = engine.TableName(bean)
 		}
-		curTableName = path.Join(dialect.URI().DBName, curTableName)
 
 		var oriTable *schemas.Table
 		if _, has := tablesMap[curTableName]; has {
@@ -375,7 +374,6 @@ func (session *Session) ydbSync(beans ...interface{}) error {
 
 		// !datbeohbbh! https://ydb.tech/en/docs/yql/reference/syntax/create_table#secondary_index
 		// Currently, just support type of indexes is SYNC.
-		// Reason is that I can not (or don't know) how to get infor about indexes type from sdk side.
 
 		// sync indexes
 		commonIndexes := make(map[string]bool)
@@ -383,7 +381,7 @@ func (session *Session) ydbSync(beans ...interface{}) error {
 		for curIndexName, curIndex := range curTable.Indexes {
 			hasCommon := false
 			for oriIndexName, oriIndex := range oriTable.Indexes {
-				if ydbIsEqualIndexes(oriIndex, curIndex) {
+				if isEqualIndexes(oriIndex, curIndex) {
 					commonIndexes[oriIndexName] = true
 					hasCommon = true
 					break
@@ -425,9 +423,8 @@ func (session *Session) ydbSync(beans ...interface{}) error {
 func (session *Session) Sync(beans ...interface{}) error {
 	engine := session.engine
 
-	switch engine.dialect.URI().DBType {
-	case schemas.YDB:
-		return session.ydbSync(beans...)
+	if engine.dialect.URI().DBType == schemas.YDB {
+		return session.syncYDB(beans...)
 	}
 
 	if session.isAutoClose {

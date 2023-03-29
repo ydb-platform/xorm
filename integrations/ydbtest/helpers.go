@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -48,6 +50,40 @@ func CreateEngine(dsn string) (*xorm.Engine, error) {
 	return xorm.NewEngine(dbType, dsn)
 }
 
+func ConstructDSN(dsn string, query ...string) string {
+	info, err := url.Parse(dsn)
+	if err != nil {
+		panic(fmt.Errorf("failed to parse dsn: %s", dsn))
+	}
+
+	if info.RawQuery != "" {
+		dsn = strings.Join(append([]string{dsn}, query...), "&")
+	} else {
+		q := strings.Join(query, "&")
+		dsn = dsn + "?" + q
+	}
+
+	return dsn
+}
+
+func (em *EngineWithMode) InitDirectory() {
+	type TestDirectory struct {
+		Uuid []byte `xorm:"pk 'uuid'"`
+	}
+
+	engine, err := enginePool.GetScriptQueryEngine()
+	if err != nil {
+		panic(fmt.Errorf("failed on init test directory"))
+	}
+
+	session := engine.NewSession()
+	defer session.Close()
+
+	session.DropTable(&TestDirectory{})
+	session.CreateTable(&TestDirectory{})
+	session.DropTable(&TestDirectory{})
+}
+
 func (em *EngineWithMode) getEngine(queryMode QueryMode) (*xorm.Engine, error) {
 	em.mu.Lock()
 	defer em.mu.Unlock()
@@ -57,13 +93,14 @@ func (em *EngineWithMode) getEngine(queryMode QueryMode) (*xorm.Engine, error) {
 		return em.engineCached[mode], nil
 	}
 
-	engine, err := CreateEngine(fmt.Sprintf("%s?query_mode=%s", em.dsn, mode))
+	dsn := ConstructDSN(em.dsn, fmt.Sprintf("query_mode=%s", mode))
+	engine, err := CreateEngine(dsn)
 	if err != nil {
 		return nil, err
 	}
 
 	engine.ShowSQL(*showSQL)
-	engine.SetLogLevel(xormLog.LOG_WARNING)
+	engine.SetLogLevel(xormLog.LOG_DEBUG)
 
 	appLoc, _ := time.LoadLocation("Asia/Ho_Chi_Minh")
 	DbLoc, _ := time.LoadLocation("Europe/Moscow")

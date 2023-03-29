@@ -72,9 +72,12 @@ func newEngine(driverName, dataSourceName string, dialect dialects.Dialect, db *
 	tagParser := tags.NewParser("xorm", dialect, mapper, mapper, cacherMgr)
 
 	if dialect.URI().DBType == schemas.YDB {
-		dialect.(interface {
-			SetInternalDB(*core.DB)
-		}).SetInternalDB(db)
+		// set internal config for YDB
+		if setInternal, ok := dialect.(interface {
+			SetInternal(*core.DB)
+		}); ok {
+			setInternal.SetInternal(db)
+		}
 	}
 
 	engine := &Engine{
@@ -1274,22 +1277,6 @@ func (engine *Engine) InsertOne(bean interface{}) (int64, error) {
 	session := engine.NewSession()
 	defer session.Close()
 	return session.InsertOne(bean)
-}
-
-// !datbeohbbh! Replace one or more records
-// https://ydb.tech/en/docs/yql/reference/syntax/replace_into
-func (engine *Engine) Replace(beans ...interface{}) (int64, error) {
-	session := engine.NewSession()
-	defer session.Close()
-	return session.Replace(beans...)
-}
-
-// !datbeohbbh! Upsert
-// https://ydb.tech/en/docs/yql/reference/syntax/upsert_into
-func (engine *Engine) Upsert(beans ...interface{}) (int64, error) {
-	session := engine.NewSession()
-	defer session.Close()
-	return session.Upsert(beans...)
 }
 
 // Update records, bean's non-empty fields are updated contents,

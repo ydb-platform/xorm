@@ -1,6 +1,6 @@
 -- Create tables
 
-CREATE TABLE `/local/episodes` ( 
+CREATE TABLE `episodes` ( 
   `series_id` String NOT NULL, 
   `season_id` String NOT NULL, 
   `episode_id` String NOT NULL, 
@@ -11,7 +11,7 @@ CREATE TABLE `/local/episodes` (
   PRIMARY KEY ( `series_id`, `season_id`, `episode_id` ) 
 );
 
-CREATE TABLE `/local/seasons` ( 
+CREATE TABLE `seasons` ( 
   `series_id` String NOT NULL, 
   `season_id` String NOT NULL, 
   `title` Utf8, 
@@ -22,7 +22,7 @@ CREATE TABLE `/local/seasons` (
   PRIMARY KEY ( `series_id`, `season_id` ) 
 );
 
-CREATE TABLE `/local/series` ( 
+CREATE TABLE `series` ( 
   `series_id` String NOT NULL, 
   `title` Utf8, 
   `series_info` Utf8, 

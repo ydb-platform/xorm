@@ -329,8 +329,9 @@ func Type2SQLType(t reflect.Type) (st SQLType) {
 	return
 }
 
-// !datbeohbbh! YQL_TypeToSQLType return the SQLType that compatiable with YQL types
-func YQL_TypeToSQLType(t reflect.Type) (st SQLType) {
+// !datbeohbbh! Type2SQLType2 return the SQLType acorrding Go's type.
+// the returned SQLType is also compatible with YQL types
+func Type2SQLType2(t reflect.Type) (st SQLType) {
 	switch k := t.Kind(); k {
 	case reflect.Bool:
 		st = SQLType{Bool, 0, 0}
@@ -388,7 +389,7 @@ func YQL_TypeToSQLType(t reflect.Type) (st SQLType) {
 			st = SQLType{Blob, 0, 0}
 		}
 	case reflect.Ptr:
-		st = YQL_TypeToSQLType(t.Elem())
+		st = Type2SQLType2(t.Elem())
 	default:
 		st = SQLType{Blob, 0, 0}
 	}

@@ -48,12 +48,14 @@ func MainTest(m *testing.M) int {
 		_ = enginePool.Close()
 	}()
 
+	enginePool.InitDirectory()
+
 	log.Println("testing", dbType, connString)
 
 	code := m.Run()
 	defer func(code int) {
 		log.Println("Finished Testing >>> Cleaning up...")
-		// _ = CleanUp()
+		_ = CleanUp()
 	}(code)
 
 	return code

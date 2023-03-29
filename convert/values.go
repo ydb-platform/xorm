@@ -1,4 +1,4 @@
-package dialects
+package convert
 
 import (
 	"database/sql"
@@ -9,7 +9,13 @@ import (
 )
 
 // !datbeohbbh! this is a 'helper' function for YDB to generate declare section
-func getActualValue(fieldValue reflect.Value) interface{} {
+// Example:
+// --
+// type CustomInt int64
+// engine.Where("ID > ?", CustomInt(10)).Get(...)
+// --
+// ydb sdk does not know about CustomInt type and this cause error.
+func GetActualValue(fieldValue reflect.Value) interface{} {
 	fieldType := fieldValue.Type()
 	k := fieldType.Kind()
 	if k == reflect.Ptr {
@@ -41,6 +47,13 @@ func getActualValue(fieldValue reflect.Value) interface{} {
 				return ret
 			}
 			return t.Bool
+		} else if fieldType.ConvertibleTo(reflect.TypeOf((*NullFloat32)(nil)).Elem()) {
+			t := fieldValue.Convert(reflect.TypeOf((*NullFloat32)(nil)).Elem()).Interface().(NullFloat32)
+			if !t.Valid {
+				var ret *float32
+				return ret
+			}
+			return t.Float32
 		} else if fieldType.ConvertibleTo(schemas.NullFloat64Type) {
 			t := fieldValue.Convert(schemas.NullFloat64Type).Interface().(sql.NullFloat64)
 			if !t.Valid {

@@ -60,20 +60,10 @@ func (session *Session) Insert(beans ...interface{}) (int64, error) {
 			}
 		}
 		if err != nil {
-			switch session.engine.Dialect().URI().DBType {
-			case schemas.YDB:
-				_, rowsAffectedErr := driver.ResultNoRows.RowsAffected()
-				_, rowsLastInsertedId := driver.ResultNoRows.LastInsertId()
-				if err.Error() == rowsAffectedErr.Error() ||
-					err.Error() == rowsLastInsertedId.Error() ||
-					err.Error() == sql.ErrNoRows.Error() {
-					err = nil
-				} else {
-					return affected, err
-				}
-			default:
-				return affected, err
+			if session.engine.Dialect().URI().DBType == schemas.YDB && err.Error() == driver.ErrSkip.Error() {
+				continue
 			}
+			return affected, err
 		}
 		affected += cnt
 	}
@@ -213,7 +203,7 @@ func (session *Session) insertMultipleStruct(rowsSlicePtr interface{}) (int64, e
 				var arg interface{}
 				switch session.engine.dialect.URI().DBType {
 				case schemas.YDB:
-					arg, err = session.statement.YQL_ValueToInterface(col, fieldValue)
+					arg, err = session.statement.Value2Interface2(col, fieldValue)
 				default:
 					arg, err = session.statement.Value2Interface(col, fieldValue)
 				}
@@ -492,20 +482,10 @@ func (session *Session) InsertOne(bean interface{}) (int64, error) {
 
 	affected, err := session.insertStruct(bean)
 	if err != nil {
-		switch session.engine.Dialect().URI().DBType {
-		case schemas.YDB:
-			_, rowsAffectedErr := driver.ResultNoRows.RowsAffected()
-			_, rowsLastInsertedId := driver.ResultNoRows.LastInsertId()
-			if err.Error() == rowsAffectedErr.Error() ||
-				err.Error() == rowsLastInsertedId.Error() ||
-				err.Error() == sql.ErrNoRows.Error() {
-				err = nil
-			} else {
-				return affected, err
-			}
-		default:
-			return affected, err
+		if session.engine.Dialect().URI().DBType == schemas.YDB && err.Error() == driver.ErrSkip.Error() {
+			err = nil
 		}
+		return affected, err
 	}
 	return affected, err
 }
@@ -615,7 +595,7 @@ func (session *Session) genInsertColumns(bean interface{}) ([]string, []interfac
 			var arg interface{}
 			switch session.engine.dialect.URI().DBType {
 			case schemas.YDB:
-				arg, err = session.statement.YQL_ValueToInterface(col, fieldValue)
+				arg, err = session.statement.Value2Interface2(col, fieldValue)
 			default:
 				arg, err = session.statement.Value2Interface(col, fieldValue)
 			}

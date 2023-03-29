@@ -47,8 +47,10 @@ TEST_DAMENG_HOST ?= dameng:5236
 TEST_DAMENG_USERNAME ?= SYSDBA
 TEST_DAMENG_PASSWORD ?= SYSDBA
 
+TEST_YDB_SCHEME ?= grpc
 TEST_YDB_HOST ?= ydb:2136
 TEST_YDB_DBNAME ?= local
+TEST_YDB_TABLE_PATH_PREFIX = xorm/test
 TEST_YDB_USERNAME ?= 
 TEST_YDB_PASSWORD ?= 
 
@@ -285,7 +287,7 @@ test-dameng\#%: go-check
 .PHONY: test-ydb
 test-ydb: go-check
 	$(GO) test $(INTEGRATION_PACKAGES)/ydbtest -v -race -db=ydb -cache=$(TEST_CACHE_ENABLE) \
-	-conn_str="grpc://$(TEST_YDB_HOST)/$(TEST_YDB_DBNAME)" \
+	-conn_str="$(TEST_YDB_SCHEME)://$(TEST_YDB_HOST)/$(TEST_YDB_DBNAME)?table_path_prefix=$(TEST_YDB_TABLE_PATH_PREFIX)" \
 	-quote=$(TEST_QUOTE_POLICY) -coverprofile=ydb.$(TEST_QUOTE_POLICY).$(TEST_CACHE_ENABLE).coverage.out -covermode=atomic -timeout=20m
 
 .PHONY: vet
