@@ -5,7 +5,6 @@
 package xorm
 
 import (
-	"database/sql"
 	"database/sql/driver"
 	"errors"
 	"fmt"
