@@ -8,7 +8,6 @@ import (
 	"context"
 	"database/sql"
 	"reflect"
-	"database/sql/driver"
 	"strings"
 
 	"xorm.io/xorm/convert"
@@ -179,6 +178,7 @@ func (session *Session) exec(sqlStr string, args ...interface{}) (sql.Result, er
 		switch session.engine.dialect.URI().DBType {
 		case schemas.YDB:
 			dialect := session.engine.dialect
+			var res sql.Result
 			err := retry.Retry(session.ctx, dialect.IsRetryable, func(ctx context.Context) (err error) {
 				if !session.IsInTx() {
 					if err = session.Begin(); err != nil {
@@ -190,7 +190,7 @@ func (session *Session) exec(sqlStr string, args ...interface{}) (sql.Result, er
 					_ = session.Rollback()
 				}()
 
-				_, err = session.tx.ExecContext(ctx, sqlStr, args...)
+				res, err = session.tx.ExecContext(ctx, sqlStr, args...)
 
 				if err != nil {
 					return err
@@ -209,7 +209,7 @@ func (session *Session) exec(sqlStr string, args ...interface{}) (sql.Result, er
 			if err != nil {
 				return nil, err
 			}
-			return driver.ResultNoRows, session.Begin()
+			return res, session.Begin()
 		default:
 			return session.tx.ExecContext(session.ctx, sqlStr, args...)
 		}

@@ -60,6 +60,7 @@ func (session *Session) Insert(beans ...interface{}) (int64, error) {
 		}
 		if err != nil {
 			if session.engine.Dialect().URI().DBType == schemas.YDB && err.Error() == driver.ErrSkip.Error() {
+				err = nil
 				continue
 			}
 			return affected, err
