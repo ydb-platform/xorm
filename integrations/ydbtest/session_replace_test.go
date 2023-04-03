@@ -29,7 +29,7 @@ func (*ReplaceUserB) TableName() string {
 	return "test/replace_user_b"
 }
 
-func TestSQLReplaceSinglePK(t *testing.T) {
+func TestYQLReplaceSinglePK(t *testing.T) {
 	assert.NoError(t, PrepareScheme(&ReplaceUserA{}))
 	engine, err := enginePool.GetDataQueryEngine()
 	assert.NoError(t, err)
@@ -82,7 +82,7 @@ func TestSQLReplaceSinglePK(t *testing.T) {
 	assert.EqualValues(t, 0, ret.Age) // replace with default value
 }
 
-func TestSQLReplaceSinglePKByFetch(t *testing.T) {
+func TestYQLReplaceSinglePKByFetch(t *testing.T) {
 	engine, err := enginePool.GetScriptQueryEngine()
 	assert.NoError(t, err)
 	assert.NotNil(t, engine)
@@ -111,7 +111,7 @@ func (*ReplaceUsers) TableName() string {
 	return "replace_users"
 }
 
-func TestSQLReplaceCompositePK(t *testing.T) {
+func TestYQLReplaceCompositePK(t *testing.T) {
 	assert.NoError(t, PrepareScheme(&Users{}))
 	assert.NoError(t, PrepareScheme(&ReplaceUsers{}))
 	engine, err := enginePool.GetDataQueryEngine()
