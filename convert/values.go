@@ -47,13 +47,6 @@ func GetActualValue(fieldValue reflect.Value) interface{} {
 				return ret
 			}
 			return t.Bool
-		} else if fieldType.ConvertibleTo(reflect.TypeOf((*NullFloat32)(nil)).Elem()) {
-			t := fieldValue.Convert(reflect.TypeOf((*NullFloat32)(nil)).Elem()).Interface().(NullFloat32)
-			if !t.Valid {
-				var ret *float32
-				return ret
-			}
-			return t.Float32
 		} else if fieldType.ConvertibleTo(schemas.NullFloat64Type) {
 			t := fieldValue.Convert(schemas.NullFloat64Type).Interface().(sql.NullFloat64)
 			if !t.Valid {

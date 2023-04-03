@@ -43,17 +43,6 @@ func Interface2Interface(userLocation *time.Location, v interface{}) (interface{
 			return vv.Time.In(userLocation).Format("2006-01-02 15:04:05"), nil
 		}
 		return "", nil
-	// !datbeohbbh! only YDB?: new type that implement scanner interface
-	case *NullInt8:
-		if vv.Valid {
-			return vv.Int8, nil
-		}
-		return nil, nil
-	case *NullUint16:
-		if vv.Valid {
-			return vv.Uint16, nil
-		}
-		return nil, nil
 	case *NullUint32:
 		if vv.Valid {
 			return vv.Uint32, nil
@@ -62,11 +51,6 @@ func Interface2Interface(userLocation *time.Location, v interface{}) (interface{
 	case *NullUint64:
 		if vv.Valid {
 			return vv.Uint64, nil
-		}
-		return nil, nil
-	case *NullFloat32:
-		if vv.Valid {
-			return vv.Float32, nil
 		}
 		return nil, nil
 	default:
