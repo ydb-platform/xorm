@@ -6,14 +6,16 @@ on:
   pull_request:
   workflow_dispatch:
 jobs:
-  test-ydb-secure-connection:
+  tests:
     concurrency:
-      group: test-ydb-secure-connection-${{ github.ref }}-${{ matrix.os }}-${{ matrix.go-version }}
+      group: test-ydb-${{ github.ref }}-${{ matrix.os }}-${{ matrix.go-version }}-${{ matrix.ydb-version }}
       cancel-in-progress: true
+    runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
-        go-version: [1.17.x, 1.18.x, 1.19.x, 1.20.x]
         ydb-version: [22-5, 23-1]
+        go-version: [1.17.x, 1.18.x, 1.19.x, 1.20.x]
         os: [ubuntu-latest]
     services:
       ydb:
@@ -29,14 +31,11 @@ jobs:
           YDB_USE_IN_MEMORY_PDISKS: true
         options: '-h localhost'
     env:
-      TEST_YDB_SCHEME: grpcs
-      TEST_YDB_HOST: 'localhost:2135'
-      TEST_YDB_DBNAME: local
+      INTEGRATION_TESTS_DIR: /integrations/ydbtest
       OS: ${{ matrix.os }}
       YDB_SSL_ROOT_CERTIFICATES_FILE: /tmp/ydb_certs/ca.pem
       YDB_SESSIONS_SHUTDOWN_URLS: http://localhost:8765/actors/kqp_proxy?force_shutdown=all
       HIDE_APPLICATION_OUTPUT: 1
-    runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -45,56 +44,17 @@ jobs:
         with:
           go-version: ${{ matrix.go-version }}
           cache: true
-      - name: ydb integration test
+      - name: secure connection
         run: |
-          if [ -d "./integrations/ydbtest" ]; then
-            make test-ydb
+          if [ -d $INTEGRATION_TESTS_DIR ]; then
+            TEST_YDB_SCHEME=grpcs TEST_YDB_HOST=localhost:2135 TEST_YDB_DBNAME=local make test-ydb
           else 
             echo "Directory does not exists"
           fi
-
-  test-ydb-insecure-connection:
-    concurrency:
-      group: test-ydb-insecure-connection-${{ github.ref }}-${{ matrix.os }}-${{ matrix.go-version }}
-      cancel-in-progress: true
-    strategy:
-      matrix:
-        go-version: [1.17.x, 1.18.x, 1.19.x, 1.20.x]
-        ydb-version: [22-5, 23-1]
-        os: [ubuntu-latest]
-    services:
-      ydb:
-        image: cr.yandex/yc/yandex-docker-local-ydb:stable-${{ matrix.ydb-version }}-slim
-        ports:
-          - 2135:2135
-          - 2136:2136
-          - 8765:8765
-        volumes:
-          - /tmp/ydb_certs:/ydb_certs
-        env:
-          YDB_LOCAL_SURVIVE_RESTART: true
-          YDB_USE_IN_MEMORY_PDISKS: true
-        options: '-h localhost'
-    env:
-      TEST_YDB_SCHEME: grpc
-      TEST_YDB_HOST: 'localhost:2136'
-      TEST_YDB_DBNAME: local
-      OS: ${{ matrix.os }}
-      YDB_SESSIONS_SHUTDOWN_URLS: http://localhost:8765/actors/kqp_proxy?force_shutdown=all
-      HIDE_APPLICATION_OUTPUT: 1
-    runs-on: ${{ matrix.os }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-      - name: Install Go
-        uses: actions/setup-go@v3
-        with:
-          go-version: ${{ matrix.go-version }}
-          cache: true
-      - name: ydb test insecure connection
+      - name: insecure connection
         run: |
-          if [ -d "./integrations/ydbtest" ]; then
-            make test-ydb
+          if [ -d $INTEGRATION_TESTS_DIR ]; then
+            TEST_YDB_SCHEME=grpc TEST_YDB_HOST=localhost:2136 TEST_YDB_DBNAME=local make test-ydb
           else 
             echo "Directory does not exists"
           fi
