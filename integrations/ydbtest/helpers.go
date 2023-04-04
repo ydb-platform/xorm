@@ -47,7 +47,7 @@ var (
 )
 
 func CreateEngine(dsn string) (*xorm.Engine, error) {
-	return xorm.NewEngine(dbType, dsn)
+	return xorm.NewEngine(*db, dsn)
 }
 
 func ConstructDSN(dsn string, query ...string) string {
@@ -71,8 +71,10 @@ func (em *EngineWithMode) getEngine(queryMode QueryMode) (*xorm.Engine, error) {
 	defer em.mu.Unlock()
 	mode := typeToString[queryMode]
 
-	if _, has := em.engineCached[mode]; has {
-		return em.engineCached[mode], nil
+	if e, has := em.engineCached[mode]; has {
+		if e.PingContext(em.ctx) == nil {
+			return em.engineCached[mode], nil
+		}
 	}
 
 	dsn := ConstructDSN(em.dsn, fmt.Sprintf("query_mode=%s", mode))
@@ -82,7 +84,7 @@ func (em *EngineWithMode) getEngine(queryMode QueryMode) (*xorm.Engine, error) {
 	}
 
 	engine.ShowSQL(*showSQL)
-	engine.SetLogLevel(xormLog.LOG_WARNING)
+	engine.SetLogLevel(xormLog.LOG_DEBUG)
 
 	appLoc, _ := time.LoadLocation("Asia/Ho_Chi_Minh")
 	DbLoc, _ := time.LoadLocation("Europe/Moscow")
