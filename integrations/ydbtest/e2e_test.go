@@ -33,7 +33,7 @@ func TestE2E(t *testing.T) {
 	}
 
 	t.Run("xorm.CreateEngine", func(t *testing.T) {
-		engine, err := xorm.NewEngine("ydb", connString)
+		engine, err := scope.engines.GetDefaultEngine()
 		require.NoError(t, err)
 
 		err = engine.PingContext(ctx)
@@ -44,16 +44,6 @@ func TestE2E(t *testing.T) {
 	})
 
 	t.Run("xorm.e2e", func(t *testing.T) {
-		t.Run("prepare-engine-stage", func(t *testing.T) {
-			for mode := range typeToString {
-				engine, err := scope.engines.getEngine(mode)
-				require.NoError(t, err)
-
-				err = engine.PingContext(scope.ctx)
-				require.NoError(t, err)
-			}
-		})
-
 		defer func() {
 			_ = scope.engines.Close()
 		}()
@@ -239,14 +229,13 @@ func (scope *e2e) prepareScheme() error {
 			if err != nil {
 				return err
 			}
-		}
 
-		err = session.Sync(
-			&Series{},
-			&Seasons{},
-			&Episodes{},
-		)
-		return err
+			err = session.CreateTable(table)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
 	}, retry.WithID("e2e-test-prepare-scheme"),
 		retry.WithIdempotent(true))
 

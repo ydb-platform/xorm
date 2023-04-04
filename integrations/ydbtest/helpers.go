@@ -47,7 +47,7 @@ var (
 )
 
 func CreateEngine(dsn string) (*xorm.Engine, error) {
-	return xorm.NewEngine(dbType, dsn)
+	return xorm.NewEngine(*db, dsn)
 }
 
 func ConstructDSN(dsn string, query ...string) string {
@@ -66,31 +66,15 @@ func ConstructDSN(dsn string, query ...string) string {
 	return dsn
 }
 
-func (em *EngineWithMode) InitDirectory() {
-	type TestDirectory struct {
-		Uuid []byte `xorm:"pk 'uuid'"`
-	}
-
-	engine, err := enginePool.GetScriptQueryEngine()
-	if err != nil {
-		panic(fmt.Errorf("failed on init test directory"))
-	}
-
-	session := engine.NewSession()
-	defer session.Close()
-
-	session.DropTable(&TestDirectory{})
-	session.CreateTable(&TestDirectory{})
-	session.DropTable(&TestDirectory{})
-}
-
 func (em *EngineWithMode) getEngine(queryMode QueryMode) (*xorm.Engine, error) {
 	em.mu.Lock()
 	defer em.mu.Unlock()
 	mode := typeToString[queryMode]
 
-	if _, has := em.engineCached[mode]; has {
-		return em.engineCached[mode], nil
+	if e, has := em.engineCached[mode]; has {
+		if e.PingContext(em.ctx) == nil {
+			return em.engineCached[mode], nil
+		}
 	}
 
 	dsn := ConstructDSN(em.dsn, fmt.Sprintf("query_mode=%s", mode))

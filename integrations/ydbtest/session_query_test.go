@@ -15,7 +15,7 @@ func TestQueryString(t *testing.T) {
 		Uuid    int64  `xorm:"pk"`
 		Msg     string `xorm:"varchar(255)"`
 		Age     int
-		Money   float32
+		Money   float64
 		Created time.Time `xorm:"created"`
 	}
 
@@ -82,7 +82,7 @@ func TestQueryInterface(t *testing.T) {
 		Uuid    int64  `xorm:"pk"`
 		Msg     string `xorm:"varchar(255)"`
 		Age     int32
-		Money   float32
+		Money   float64
 		Created time.Time `xorm:"created"`
 	}
 
@@ -110,7 +110,7 @@ func TestQueryInterface(t *testing.T) {
 	assert.EqualValues(t, 1, records[0]["uuid"].(int64))
 	assert.Equal(t, "hi", string(records[0]["msg"].(string)))
 	assert.EqualValues(t, 28, records[0]["age"].(int32))
-	assert.EqualValues(t, 1.5, records[0]["money"].(float32))
+	assert.EqualValues(t, 1.5, records[0]["money"].(float64))
 }
 
 func TestQueryNoParams(t *testing.T) {
@@ -118,7 +118,7 @@ func TestQueryNoParams(t *testing.T) {
 		Uuid    int64  `xorm:"pk"`
 		Msg     string `xorm:"varchar(255)"`
 		Age     int
-		Money   float32
+		Money   float64
 		Created time.Time `xorm:"created"`
 	}
 
@@ -265,7 +265,7 @@ func TestQueryWithBuilder(t *testing.T) {
 		Uuid    int64  `xorm:"pk"`
 		Msg     string `xorm:"varchar(255)"`
 		Age     int
-		Money   float32
+		Money   float64
 		Created time.Time `xorm:"created"`
 	}
 
@@ -308,7 +308,7 @@ func TestJoinWithSubQuery(t *testing.T) {
 		Uuid     int64  `xorm:"pk"`
 		Msg      string `xorm:"varchar(255)"`
 		DepartId int64
-		Money    float32
+		Money    float64
 	}
 
 	type JoinWithSubQueryDepart struct {
@@ -371,7 +371,7 @@ func TestQueryStringWithLimit(t *testing.T) {
 		Uuid     int64  `xorm:"pk"`
 		Msg      string `xorm:"varchar(255)"`
 		DepartId int64
-		Money    float32
+		Money    float64
 	}
 
 	assert.NoError(t, PrepareScheme(&QueryWithLimit{}))

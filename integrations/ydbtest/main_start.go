@@ -12,9 +12,10 @@ import (
 
 var (
 	enginePool *EngineWithMode
-	dbType     string
 	connString string
+)
 
+var (
 	db             = flag.String("db", "sqlite3", "the tested database")
 	showSQL        = flag.Bool("show_sql", true, "show generated SQLs")
 	ptrConnStr     = flag.String("conn_str", "./test.db?cache=shared&mode=rwc", "test database connection string")
@@ -25,11 +26,11 @@ var (
 func MainTest(m *testing.M) int {
 	flag.Parse()
 
-	dbType = *db
-	if dbType != string(schemas.YDB) {
+	if db == nil || *db != string(schemas.YDB) {
 		log.Println("this tests only apply for ydb")
 		return -1
 	}
+
 	if ptrConnStr == nil {
 		log.Println("you should indicate conn string")
 		return -1
@@ -48,13 +49,9 @@ func MainTest(m *testing.M) int {
 		_ = enginePool.Close()
 	}()
 
-	enginePool.InitDirectory()
-
-	log.Println("testing", dbType, connString)
-
 	code := m.Run()
 	defer func(code int) {
-		log.Println("Finished Testing >>> Cleaning up...")
+		log.Println("> Clean up")
 		_ = CleanUp()
 	}(code)
 

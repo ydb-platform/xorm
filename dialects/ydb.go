@@ -972,9 +972,6 @@ func (ydbDrv *ydbDriver) GenScanResult(columnType string) (interface{}, error) {
 	case "BOOL":
 		var ret sql.NullBool
 		return &ret, nil
-	case "INT8":
-		var ret convert.NullInt8
-		return &ret, nil
 	case "INT16":
 		var ret sql.NullInt16
 		return &ret, nil
@@ -987,17 +984,11 @@ func (ydbDrv *ydbDriver) GenScanResult(columnType string) (interface{}, error) {
 	case "UINT8":
 		var ret sql.NullByte
 		return &ret, nil
-	case "UINT16":
-		var ret convert.NullUint16
-		return &ret, nil
 	case "UINT32":
 		var ret convert.NullUint32
 		return &ret, nil
 	case "UINT64":
 		var ret convert.NullUint64
-		return &ret, nil
-	case "FLOAT":
-		var ret convert.NullFloat32
 		return &ret, nil
 	case "DOUBLE":
 		var ret sql.NullFloat64
