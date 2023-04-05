@@ -31,7 +31,6 @@ jobs:
           YDB_USE_IN_MEMORY_PDISKS: true
         options: '-h localhost'
     env:
-      INTEGRATION_TESTS_DIR: /integrations/ydbtest
       OS: ${{ matrix.os }}
       YDB_SSL_ROOT_CERTIFICATES_FILE: /tmp/ydb_certs/ca.pem
       YDB_SESSIONS_SHUTDOWN_URLS: http://localhost:8765/actors/kqp_proxy?force_shutdown=all
@@ -46,14 +45,14 @@ jobs:
           cache: true
       - name: secure connection
         run: |
-          if [ -d $INTEGRATION_TESTS_DIR ]; then
+          if [ -d ./integrations/ydbtest ]; then
             TEST_YDB_SCHEME=grpcs TEST_YDB_HOST=localhost:2135 TEST_YDB_DBNAME=local make test-ydb
           else 
             echo "Directory does not exists"
           fi
       - name: insecure connection
         run: |
-          if [ -d $INTEGRATION_TESTS_DIR ]; then
+          if [ -d ./integrations/ydbtest ]; then
             TEST_YDB_SCHEME=grpc TEST_YDB_HOST=localhost:2136 TEST_YDB_DBNAME=local make test-ydb
           else 
             echo "Directory does not exists"
