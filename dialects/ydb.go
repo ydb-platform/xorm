@@ -415,7 +415,9 @@ func removeOptional(s string) string {
 
 type ydb struct {
 	Base
-	ydb *core.DB
+	ydb         *core.DB
+	generator   func() (uint64, error)
+	is_autoincr bool
 }
 
 func (db *ydb) Init(uri *URI) error {
@@ -427,6 +429,44 @@ func (db *ydb) Init(uri *URI) error {
 // because to query the metadata in YDB, need to provide *sql.Conn
 func (db *ydb) SetInternal(initDB *core.DB) {
 	db.ydb = initDB
+}
+
+func (db *ydb) ParseGeneratorInfo(dataSourceName string) (string, string, error) {
+	uri, err := url.Parse(dataSourceName)
+	if err != nil {
+		return "", "", err
+	}
+	t := uri.Query().Get("dev_autoincr")
+	if t == "" {
+		return "", "", nil
+	}
+
+	var (
+		drv        string
+		dataSource string
+	)
+	for drvName := range drivers {
+		if strings.HasPrefix(t, drvName) {
+			drv = drvName
+			tt := strings.TrimPrefix(t, drv)
+			if len(tt) <= 2 || tt[0] != '(' || tt[len(tt)-1] != ')' {
+				return "", "", fmt.Errorf("wrong form of slave: got %s", t)
+			}
+			dataSource = tt[1 : len(tt)-1]
+			break
+		}
+	}
+
+	return drv, dataSource, nil
+}
+
+func (db *ydb) WithGenerator(f func() (uint64, error)) {
+	db.generator = f
+	db.is_autoincr = true
+}
+
+func (db *ydb) NextID() (uint64, error) {
+	return db.generator()
 }
 
 func (db *ydb) getDB() *core.DB {
@@ -750,6 +790,10 @@ func (db *ydb) CreateTableSQL(
 		pk[i] = quote.Quote(table.PrimaryKeys[i])
 		pkMap[pk[i]] = true
 	}
+
+	if db.is_autoincr {
+		pk = append(pk, quote.Quote("dev_hash"))
+	}
 	primaryKey := fmt.Sprintf("PRIMARY KEY ( %s )", strings.Join(pk, ", "))
 
 	// build column
@@ -763,6 +807,10 @@ func (db *ydb) CreateTableSQL(
 		} else {
 			columnsList = append(columnsList, fmt.Sprintf("%s %s", columnName, dataType))
 		}
+	}
+
+	if db.is_autoincr {
+		columnsList = append(columnsList, fmt.Sprintf("%s %s NOT NULL", quote.Quote("dev_hash"), "Uint64"))
 	}
 	joinColumns := strings.Join(columnsList, ", ")
 

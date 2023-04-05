@@ -75,8 +75,30 @@ func newEngine(driverName, dataSourceName string, dialect dialects.Dialect, db *
 		// set internal config for YDB
 		if setInternal, ok := dialect.(interface {
 			SetInternal(*core.DB)
+			ParseGeneratorInfo(string) (string, string, error)
+			WithGenerator(func() (uint64, error))
 		}); ok {
 			setInternal.SetInternal(db)
+			gDrv, gDataSource, err := setInternal.ParseGeneratorInfo(dataSourceName)
+			if err != nil {
+				return nil, err
+			}
+			if gDataSource != "" && gDrv != "" {
+				genEngine, err := NewGeneratorEngine(gDrv, gDataSource)
+				if err != nil {
+					return nil, err
+				}
+
+				err = genEngine.CreateIdTable()
+				if err != nil {
+					return nil, err
+				}
+
+				setInternal.WithGenerator(func() (uint64, error) {
+					id, err := genEngine.GenNextID()
+					return id, err
+				})
+			}
 		}
 	}
 
