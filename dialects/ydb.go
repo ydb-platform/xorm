@@ -944,7 +944,6 @@ func (ydbDrv *ydbDriver) Parse(driverName, dataSourceName string) (*URI, error) 
 	if uri.Scheme != secure && uri.Scheme != insecure {
 		return nil, fmt.Errorf("unsupported scheme %v", uri.Scheme)
 	}
-	// info.Schema = uri.Scheme
 
 	info.Host = uri.Host
 	if spl := strings.Split(uri.Host, ":"); len(spl) > 1 {
