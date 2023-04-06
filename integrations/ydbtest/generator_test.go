@@ -32,7 +32,7 @@ func TestGenerator(t *testing.T) {
 }
 
 func TestYDBGenerator(t *testing.T) {
-	connStr := "grpc://localhost:2136/local?go_query_bind=table_path_prefix(/local/xorm/test),numeric,declare" +
+	connStr := "grpc://localhost:2136/local?go_query_bind=table_path_prefix(/local/test),numeric,declare" +
 		"&dev_autoincr=postgres(postgres://postgres:password@localhost:5430/dev-autoincr?sslmode=disable)"
 
 	engine, err := xorm.NewEngine("ydb", connStr)
@@ -57,7 +57,7 @@ func TestYDBGenerator(t *testing.T) {
 }
 
 func TestYDBGeneratorCreateTable(t *testing.T) {
-	connStr := "grpc://localhost:2136/local?query_mode=scripting&go_query_bind=table_path_prefix(/local/xorm/test),numeric,declare" +
+	connStr := "grpc://localhost:2136/local?query_mode=scripting&go_query_bind=table_path_prefix(/local/test),numeric,declare" +
 		"&dev_autoincr=postgres(postgres://postgres:password@localhost:5430/dev-autoincr?sslmode=disable)"
 
 	engine, err := xorm.NewEngine("ydb", connStr)
@@ -76,5 +76,8 @@ func TestYDBGeneratorCreateTable(t *testing.T) {
 
 	session := engine.NewSession()
 	err = session.CreateTable(&GenTable{})
+	require.NoError(t, err)
+
+	err = session.DropTable(&GenTable{})
 	require.NoError(t, err)
 }

@@ -415,9 +415,8 @@ func removeOptional(s string) string {
 
 type ydb struct {
 	Base
-	ydb         *core.DB
-	generator   func() (uint64, error)
-	is_autoincr bool
+	ydb       *core.DB
+	generator func() (uint64, error)
 }
 
 func (db *ydb) Init(uri *URI) error {
@@ -462,7 +461,6 @@ func (db *ydb) ParseGeneratorInfo(dataSourceName string) (string, string, error)
 
 func (db *ydb) WithGenerator(f func() (uint64, error)) {
 	db.generator = f
-	db.is_autoincr = true
 }
 
 func (db *ydb) NextID() (uint64, error) {
@@ -784,6 +782,14 @@ func (db *ydb) CreateTableSQL(
 	if len(table.PrimaryKeys) == 0 {
 		return "", false, errors.New("table must have at least one primary key")
 	}
+
+	var is_autoincr bool = false
+	for _, c := range table.Columns() {
+		if c.IsPrimaryKey && c.IsAutoIncrement {
+			is_autoincr = true
+		}
+	}
+
 	pk := make([]string, len(table.PrimaryKeys))
 	pkMap := make(map[string]bool)
 	for i := 0; i < len(table.PrimaryKeys); i++ {
@@ -791,7 +797,7 @@ func (db *ydb) CreateTableSQL(
 		pkMap[pk[i]] = true
 	}
 
-	if db.is_autoincr {
+	if is_autoincr {
 		pk = append(pk, quote.Quote("dev_hash"))
 	}
 	primaryKey := fmt.Sprintf("PRIMARY KEY ( %s )", strings.Join(pk, ", "))
@@ -809,7 +815,7 @@ func (db *ydb) CreateTableSQL(
 		}
 	}
 
-	if db.is_autoincr {
+	if is_autoincr {
 		columnsList = append(columnsList, fmt.Sprintf("%s %s NOT NULL", quote.Quote("dev_hash"), "Uint64"))
 	}
 	joinColumns := strings.Join(columnsList, ", ")

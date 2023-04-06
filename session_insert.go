@@ -137,25 +137,45 @@ func (session *Session) insertMultipleStruct(rowsSlicePtr interface{}) (int64, e
 
 				switch session.engine.dialect.URI().DBType {
 				case schemas.YDB:
-					randValue := rand.RandValue(fieldValue)
-					args = append(args, randValue)
-					colPlaces = append(colPlaces, "?")
-					if i == 0 {
-						colNames = append(colNames, col.Name)
-					}
+					if gen, ok := session.engine.Dialect().(interface {
+						NextID() (uint64, error)
+					}); ok {
+						nxtID, err := gen.NextID()
+						if err != nil {
+							return 0, err
+						}
 
-					if reflect.ValueOf(randValue).CanInt() {
-						rr := reflect.ValueOf(randValue).Int()
-						var colName = col.Name
-						col := table.GetColumn(colName)
-						setColumnInt(reflect.Indirect(sliceValue.Index(i)).Addr().Interface(), col, rr)
-					}
+						args = append(args, nxtID, nxtID)
+						colPlaces = append(colPlaces, "?", "Digest::IntHash64(?)")
+						if i == 0 {
+							colNames = append(colNames, col.Name, "dev_hash")
+						}
 
-					if reflect.ValueOf(randValue).CanUint() {
-						rr := reflect.ValueOf(randValue).Uint()
+						rr := reflect.ValueOf(nxtID).Uint()
 						var colName = col.Name
 						col := table.GetColumn(colName)
 						setColumnInt(reflect.Indirect(sliceValue.Index(i)).Addr().Interface(), col, int64(rr))
+					} else {
+						randValue := rand.RandValue(fieldValue)
+						args = append(args, randValue)
+						colPlaces = append(colPlaces, "?")
+						if i == 0 {
+							colNames = append(colNames, col.Name)
+						}
+
+						if reflect.ValueOf(randValue).CanInt() {
+							rr := reflect.ValueOf(randValue).Int()
+							var colName = col.Name
+							col := table.GetColumn(colName)
+							setColumnInt(reflect.Indirect(sliceValue.Index(i)).Addr().Interface(), col, rr)
+						}
+
+						if reflect.ValueOf(randValue).CanUint() {
+							rr := reflect.ValueOf(randValue).Uint()
+							var colName = col.Name
+							col := table.GetColumn(colName)
+							setColumnInt(reflect.Indirect(sliceValue.Index(i)).Addr().Interface(), col, int64(rr))
+						}
 					}
 				}
 				continue
@@ -546,22 +566,45 @@ func (session *Session) genInsertColumns(bean interface{}) ([]string, []interfac
 		if col.IsAutoIncrement && utils.IsValueZero(fieldValue) {
 			switch session.engine.dialect.URI().DBType {
 			case schemas.YDB:
-				randValue := rand.RandValue(fieldValue)
-				args = append(args, randValue)
-				colNames = append(colNames, col.Name)
+				if gen, ok := session.engine.Dialect().(interface {
+					NextID() (uint64, error)
+				}); ok {
+					nxtID, err := gen.NextID()
+					if err != nil {
+						return nil, nil, err
+					}
 
-				if reflect.ValueOf(randValue).CanInt() {
-					rr := reflect.ValueOf(randValue).Int()
-					var colName = col.Name
-					col := table.GetColumn(colName)
-					setColumnInt(bean, col, rr)
-				}
+					var hash uint64
+					rows := session.queryRow(fmt.Sprintf("SELECT Digest::IntHash64(%d);", nxtID))
+					if err = rows.Scan(&hash); err != nil {
+						return nil, nil, err
+					}
 
-				if reflect.ValueOf(randValue).CanUint() {
-					rr := reflect.ValueOf(randValue).Uint()
+					colNames = append(colNames, col.Name, "dev_hash")
+					args = append(args, nxtID, hash)
+
+					rr := reflect.ValueOf(nxtID).Uint()
 					var colName = col.Name
 					col := table.GetColumn(colName)
 					setColumnInt(bean, col, int64(rr))
+				} else {
+					randValue := rand.RandValue(fieldValue)
+					args = append(args, randValue)
+					colNames = append(colNames, col.Name)
+
+					if reflect.ValueOf(randValue).CanInt() {
+						rr := reflect.ValueOf(randValue).Int()
+						var colName = col.Name
+						col := table.GetColumn(colName)
+						setColumnInt(bean, col, rr)
+					}
+
+					if reflect.ValueOf(randValue).CanUint() {
+						rr := reflect.ValueOf(randValue).Uint()
+						var colName = col.Name
+						col := table.GetColumn(colName)
+						setColumnInt(bean, col, int64(rr))
+					}
 				}
 			}
 			continue
