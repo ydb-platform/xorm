@@ -44,7 +44,7 @@ jobs:
           go-version: ${{ matrix.go-version }}
           cache: true
       - name: has integration tests for ydb
-      - run: |
+        run: |
           [ -d ./integrations/ydbtest ]
       - name: secure connection
         if: ${{ success() }}
