@@ -47,6 +47,7 @@ var (
 )
 
 func CreateEngine(dsn string) (*xorm.Engine, error) {
+	log.Printf("> connect: %s\n", dsn)
 	return xorm.NewEngine(*db, dsn)
 }
 
@@ -106,11 +107,11 @@ func (em *EngineWithMode) Close() error {
 	defer em.mu.Unlock()
 	var retErr error = nil
 	for mode, engine := range em.engineCached {
-		log.Println("Close", mode, "engine")
 		if err := engine.Close(); err != nil {
 			retErr = err
 			break
 		}
+		log.Println("> close engine:", mode)
 		delete(em.engineCached, mode)
 	}
 	return retErr
@@ -152,11 +153,9 @@ func PrepareScheme(bean interface{}) error {
 	if err := session.DropTable(bean); err != nil {
 		return err
 	}
-
 	if err := session.CreateTable(bean); err != nil {
 		return err
 	}
-
 	return nil
 }
 
@@ -179,7 +178,7 @@ func CleanUp() error {
 		if err := session.DropTable(bean); err != nil {
 			return err
 		}
-		log.Printf("drop table `%s`\n", table.Name)
+		log.Printf("> drop table: `%s`\n", table.Name)
 	}
 
 	return nil

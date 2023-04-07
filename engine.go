@@ -71,15 +71,6 @@ func newEngine(driverName, dataSourceName string, dialect dialects.Dialect, db *
 	mapper := names.NewCacheMapper(new(names.SnakeMapper))
 	tagParser := tags.NewParser("xorm", dialect, mapper, mapper, cacherMgr)
 
-	if dialect.URI().DBType == schemas.YDB {
-		// set internal config for YDB
-		if setInternal, ok := dialect.(interface {
-			SetInternal(*core.DB)
-		}); ok {
-			setInternal.SetInternal(db)
-		}
-	}
-
 	engine := &Engine{
 		dialect:        dialect,
 		driver:         dialects.QueryDriver(driverName),
@@ -91,6 +82,15 @@ func newEngine(driverName, dataSourceName string, dialect dialects.Dialect, db *
 		dataSourceName: dataSourceName,
 		db:             db,
 		logSessionID:   false,
+	}
+
+	if dialect.URI().DBType == schemas.YDB {
+		// internal configuration for YDB
+		if confInternal, ok := dialect.(interface {
+			WithInternalDB(*core.DB)
+		}); ok {
+			confInternal.WithInternalDB(db)
+		}
 	}
 
 	if dialect.URI().DBType == schemas.SQLITE {
