@@ -11,14 +11,13 @@ require (
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/google/uuid v1.3.0
 	github.com/jackc/pgx/v4 v4.12.0
-	github.com/jonboulle/clockwork v0.3.0 // indirect
 	github.com/json-iterator/go v1.1.12
 	github.com/lib/pq v1.10.2
 	github.com/mattn/go-sqlite3 v1.14.9
 	github.com/shopspring/decimal v1.2.0
 	github.com/stretchr/testify v1.8.1
 	github.com/syndtr/goleveldb v1.0.0
-	github.com/ydb-platform/ydb-go-sdk/v3 v3.44.0-rc5
+	github.com/ydb-platform/ydb-go-sdk/v3 v3.44.0-rc6
 	github.com/ziutek/mymysql v1.5.4
 	golang.org/x/net v0.7.0
 	google.golang.org/genproto v0.0.0-20230131230820-1c016267d619 // indirect
