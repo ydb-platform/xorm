@@ -77,7 +77,7 @@ func (em *EngineWithMode) getEngine(queryMode QueryMode) (*xorm.Engine, error) {
 		}
 	}
 
-	dsn := ConstructDSN(em.dsn, fmt.Sprintf("query_mode=%s", mode))
+	dsn := ConstructDSN(em.dsn, fmt.Sprintf("go_query_mode=%s", mode))
 	engine, err := CreateEngine(dsn)
 	if err != nil {
 		return nil, err
