@@ -5,6 +5,7 @@
 package xorm
 
 import (
+	"database/sql/driver"
 	"errors"
 	"fmt"
 	"reflect"
@@ -57,6 +58,9 @@ func (session *Session) Insert(beans ...interface{}) (int64, error) {
 			}
 		}
 		if err != nil {
+			if session.engine.Dialect().URI().DBType == schemas.YDB && err.Error() == driver.ErrSkip.Error() {
+				continue
+			}
 			return affected, err
 		}
 		affected += cnt
@@ -169,7 +173,14 @@ func (session *Session) insertMultipleStruct(rowsSlicePtr interface{}) (int64, e
 					setColumnInt(bean, col, 1)
 				})
 			} else {
-				arg, err := session.statement.Value2Interface(col, fieldValue)
+				var err error
+				var arg interface{}
+				switch session.engine.dialect.URI().DBType {
+				case schemas.YDB:
+					arg, err = session.statement.Value2Interface2(col, fieldValue)
+				default:
+					arg, err = session.statement.Value2Interface(col, fieldValue)
+				}
 				if err != nil {
 					return 0, err
 				}
@@ -441,7 +452,14 @@ func (session *Session) InsertOne(bean interface{}) (int64, error) {
 		defer session.Close()
 	}
 
-	return session.insertStruct(bean)
+	affected, err := session.insertStruct(bean)
+	if err != nil {
+		if session.engine.Dialect().URI().DBType == schemas.YDB && err.Error() == driver.ErrSkip.Error() {
+			err = nil
+		}
+		return affected, err
+	}
+	return affected, err
 }
 
 func (session *Session) cacheInsert(table string) error {
@@ -525,7 +543,14 @@ func (session *Session) genInsertColumns(bean interface{}) ([]string, []interfac
 		} else if col.IsVersion && session.statement.CheckVersion {
 			args = append(args, 1)
 		} else {
-			arg, err := session.statement.Value2Interface(col, fieldValue)
+			var err error
+			var arg interface{}
+			switch session.engine.dialect.URI().DBType {
+			case schemas.YDB:
+				arg, err = session.statement.Value2Interface2(col, fieldValue)
+			default:
+				arg, err = session.statement.Value2Interface(col, fieldValue)
+			}
 			if err != nil {
 				return colNames, args, err
 			}

@@ -400,6 +400,38 @@ services:
 
 ---
 kind: pipeline
+name: test-ydb
+depends_on:
+  - test-cockroach
+trigger:
+  ref:
+  - refs/heads/master
+  - refs/pull/*/head
+steps:
+- name: test-ydb
+  pull: if-not-exists
+  image: golang:1.17
+  volumes:
+  - name: cache
+    path: /go/pkg/mod
+  environment:
+    TEST_YDB_HOST: "ydb:2136"
+    TEST_YDB_DBNAME: "local"
+  commands:
+  - sleep 20
+  - make test-ydb
+
+volumes:
+- name: cache
+  host:
+    path: /tmp/cache
+
+services:
+- name: ydb
+  image: cr.yandex/yc/yandex-docker-local-ydb:latest
+
+---
+kind: pipeline
 name: merge_coverage
 depends_on:
   - test-mysql
@@ -410,6 +442,7 @@ depends_on:
   - test-tidb
   - test-cockroach
   #- test-dameng
+  - test-ydb
 trigger:
   ref:
   - refs/heads/master

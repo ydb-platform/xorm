@@ -24,6 +24,7 @@ import (
 	"xorm.io/xorm/internal/utils"
 	"xorm.io/xorm/log"
 	"xorm.io/xorm/names"
+	"xorm.io/xorm/retry"
 	"xorm.io/xorm/schemas"
 	"xorm.io/xorm/tags"
 )
@@ -81,6 +82,15 @@ func newEngine(driverName, dataSourceName string, dialect dialects.Dialect, db *
 		dataSourceName: dataSourceName,
 		db:             db,
 		logSessionID:   false,
+	}
+
+	if dialect.URI().DBType == schemas.YDB {
+		// internal configuration for YDB
+		if confInternal, ok := dialect.(interface {
+			WithInternalDB(*core.DB)
+		}); ok {
+			confInternal.WithInternalDB(db)
+		}
 	}
 
 	if dialect.URI().DBType == schemas.SQLITE {
@@ -792,6 +802,51 @@ func (engine *Engine) dumpTables(ctx context.Context, tables []*schemas.Table, w
 								return err
 							}
 						}
+					} else if dstDialect.URI().DBType == schemas.YDB {
+						castTmpl := "CAST(%v AS Optional<%v>)"
+						yqlType := dstDialect.SQLType(dstTable.Columns()[i])
+						if dstTable.Columns()[i].IsPrimaryKey {
+							if strings.HasPrefix(yqlType, "Uint") || strings.HasPrefix(yqlType, "Int") {
+								if _, err = io.WriteString(w, s.String); err != nil {
+									return err
+								}
+							} else if yqlType == "Timestamp" {
+								t, err := time.Parse(time.RFC3339Nano, s.String)
+								if err != nil {
+									return err
+								}
+								if _, err = io.WriteString(w, fmt.Sprintf("%v", t.UnixMicro())); err != nil {
+									return err
+								}
+							} else {
+								if _, err = io.WriteString(w, "'"+strings.ReplaceAll(s.String, "'", "''")+"'"); err != nil {
+									return err
+								}
+							}
+						} else {
+							if yqlType == "Timestamp" {
+								t, err := time.Parse(time.RFC3339Nano, s.String)
+								if err != nil {
+									return err
+								}
+								if _, err = io.WriteString(w, fmt.Sprintf(castTmpl, t.UnixMicro(), yqlType)); err != nil {
+									return err
+								}
+							} else if yqlType == "Interval" {
+								d, err := strconv.ParseInt(s.String, 10, 64) // received microsecond
+								var sec float64 = float64(d) / float64(time.Microsecond)
+								if err != nil {
+									return err
+								}
+								if _, err = io.WriteString(w, fmt.Sprintf(castTmpl, sec, yqlType)); err != nil {
+									return err
+								}
+							} else {
+								if _, err = io.WriteString(w, fmt.Sprintf(castTmpl, "'"+strings.ReplaceAll(s.String, "'", "''")+"'", yqlType)); err != nil {
+									return err
+								}
+							}
+						}
 					} else {
 						if _, err = io.WriteString(w, "'"+strings.ReplaceAll(s.String, "'", "''")+"'"); err != nil {
 							return err
@@ -1447,4 +1502,81 @@ func (engine *Engine) Transaction(f func(*Session) (interface{}, error)) (interf
 	}
 
 	return result, nil
+}
+
+// !datbeohbbh! Transaction Execute sql wrapped in a transaction with provided context
+func (engine *Engine) TransactionContext(ctx context.Context, f func(context.Context, *Session) (interface{}, error)) (interface{}, error) {
+	session := engine.NewSession().Context(ctx)
+	defer session.Close()
+
+	if err := session.Begin(); err != nil {
+		return nil, err
+	}
+	defer session.Rollback()
+
+	result, err := f(ctx, session)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := session.Commit(); err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+// Do is a retryer of session
+func (engine *Engine) Do(ctx context.Context, f func(context.Context, *Session) error, opts ...retry.RetryOption) error {
+	var (
+		dialect  = engine.Dialect()
+		attempts = 0
+	)
+	err := retry.Retry(ctx, dialect.IsRetryable, func(ctx context.Context) (err error) {
+		attempts++
+		session := engine.NewSession().Context(ctx)
+		defer func() {
+			_ = session.Close()
+		}()
+		if err = f(ctx, session); err != nil {
+			return err
+		}
+		return nil
+	}, opts...)
+	if err != nil {
+		return fmt.Errorf("operation failed after %d attempts: %v", attempts, err)
+	}
+	return nil
+}
+
+// DoTx is a retryer of session transactions
+func (engine *Engine) DoTx(ctx context.Context, f func(context.Context, *Session) error, opts ...retry.RetryOption) error {
+	var (
+		dialect  = engine.Dialect()
+		attempts = 0
+	)
+	err := retry.Retry(ctx, dialect.IsRetryable, func(ctx context.Context) (err error) {
+		attempts++
+		session := engine.NewSession().Context(ctx)
+		defer func() {
+			_ = session.Close()
+		}()
+		if err = session.Begin(); err != nil {
+			return err
+		}
+		defer func() {
+			_ = session.Rollback()
+		}()
+		if err = f(ctx, session); err != nil {
+			return err
+		}
+		if err = session.Commit(); err != nil {
+			return err
+		}
+		return nil
+	}, opts...)
+	if err != nil {
+		return fmt.Errorf("tx failed after %d attempts: %v", attempts, err)
+	}
+	return nil
 }

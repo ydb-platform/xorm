@@ -6,14 +6,23 @@ package xorm
 
 import (
 	"database/sql"
+	"reflect"
 	"strings"
 
+	"xorm.io/xorm/convert"
 	"xorm.io/xorm/core"
+	"xorm.io/xorm/schemas"
 )
 
 func (session *Session) queryPreprocess(sqlStr *string, paramStr ...interface{}) {
 	for _, filter := range session.engine.dialect.Filters() {
 		*sqlStr = filter.Do(*sqlStr)
+	}
+
+	if session.engine.dialect.URI().DBType == schemas.YDB {
+		for i, arg := range paramStr {
+			paramStr[i] = convert.GetActualValue(reflect.ValueOf(arg))
+		}
 	}
 
 	session.lastSQL = *sqlStr

@@ -149,6 +149,12 @@ func (parser *Parser) getSQLTypeByType(t reflect.Type) (schemas.SQLType, error) 
 			}
 		}
 	}
+
+	// !datbeohbbh! type support for YDB: from Go type -> SQLType compatiable that with YQL types
+	if parser.dialect.URI() != nil && parser.dialect.URI().DBType == schemas.YDB {
+		return schemas.Type2SQLType2(t), nil
+	}
+
 	return schemas.Type2SQLType(t), nil
 }
 

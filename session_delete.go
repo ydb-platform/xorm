@@ -5,6 +5,7 @@
 package xorm
 
 import (
+	"database/sql/driver"
 	"errors"
 	"fmt"
 	"strconv"
@@ -185,6 +186,9 @@ func (session *Session) delete(beans []interface{}, mustHaveConditions bool) (in
 			// TODO: how to handle delete limit on mssql?
 		case schemas.MSSQL:
 			return 0, ErrNotImplemented
+		case schemas.YDB:
+			// !datbeohbbh! consider to add support for DELETE FROM ... ON
+			return 0, ErrNotImplemented
 		default:
 			fmt.Fprint(orderCondWriter, orderSQLWriter.String())
 			orderCondWriter.Append(orderSQLWriter.Args()...)
@@ -264,5 +268,12 @@ func (session *Session) delete(beans []interface{}, mustHaveConditions bool) (in
 	cleanupProcessorsClosures(&session.afterClosures)
 	// --
 
-	return res.RowsAffected()
+	affected, err := res.RowsAffected()
+	if err != nil {
+		if session.engine.Dialect().URI().DBType == schemas.YDB && err.Error() == driver.ErrSkip.Error() {
+			err = nil
+		}
+		return affected, err
+	}
+	return affected, err
 }

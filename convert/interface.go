@@ -43,6 +43,16 @@ func Interface2Interface(userLocation *time.Location, v interface{}) (interface{
 			return vv.Time.In(userLocation).Format("2006-01-02 15:04:05"), nil
 		}
 		return "", nil
+	case *NullUint32:
+		if vv.Valid {
+			return vv.Uint32, nil
+		}
+		return nil, nil
+	case *NullUint64:
+		if vv.Valid {
+			return vv.Uint64, nil
+		}
+		return nil, nil
 	default:
 		return "", fmt.Errorf("convert assign string unsupported type: %#v", vv)
 	}

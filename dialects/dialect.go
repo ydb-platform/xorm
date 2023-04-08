@@ -89,6 +89,8 @@ type Dialect interface {
 
 	Filters() []Filter
 	SetParams(params map[string]string)
+
+	IsRetryable(err error) (canRetry bool)
 }
 
 // Base represents a basic dialect and all real dialects could embed this struct
@@ -254,6 +256,11 @@ func (db *Base) ForUpdateSQL(query string) string {
 func (db *Base) SetParams(params map[string]string) {
 }
 
+// check if an error is retryable
+func (db *Base) IsRetryable(err error) bool {
+	return true
+}
+
 var (
 	dialects = map[string]func() Dialect{}
 )
@@ -290,6 +297,7 @@ func regDrvsNDialects() bool {
 		"sqlite":   {"sqlite3", func() Driver { return &sqlite3Driver{} }, func() Dialect { return &sqlite3{} }},
 		"oci8":     {"oracle", func() Driver { return &oci8Driver{} }, func() Dialect { return &oracle{} }},
 		"godror":   {"oracle", func() Driver { return &godrorDriver{} }, func() Dialect { return &oracle{} }},
+		"ydb":      {"ydb", func() Driver { return &ydbDriver{} }, func() Dialect { return &ydb{} }},
 		"oracle":   {"oracle", func() Driver { return &oracleDriver{} }, func() Dialect { return &oracle{} }},
 	}
 

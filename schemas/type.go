@@ -23,6 +23,7 @@ const (
 	MSSQL    DBType = "mssql"
 	ORACLE   DBType = "oracle"
 	DAMENG   DBType = "dameng"
+	YDB      DBType = "ydb"
 )
 
 // SQLType represents SQL types
@@ -131,6 +132,7 @@ var (
 	SmallDateTime = "SMALLDATETIME"
 	Time          = "TIME"
 	TimeStamp     = "TIMESTAMP"
+	Interval      = "INTERVAL"
 	TimeStampz    = "TIMESTAMPZ"
 	Year          = "YEAR"
 
@@ -264,12 +266,15 @@ var (
 	BytesType  = reflect.SliceOf(ByteType)
 
 	TimeType        = reflect.TypeOf((*time.Time)(nil)).Elem()
+	IntervalType    = reflect.TypeOf((*time.Duration)(nil)).Elem()
 	BigFloatType    = reflect.TypeOf((*big.Float)(nil)).Elem()
 	NullFloat64Type = reflect.TypeOf((*sql.NullFloat64)(nil)).Elem()
 	NullStringType  = reflect.TypeOf((*sql.NullString)(nil)).Elem()
+	NullInt16Type   = reflect.TypeOf((*sql.NullInt16)(nil)).Elem()
 	NullInt32Type   = reflect.TypeOf((*sql.NullInt32)(nil)).Elem()
 	NullInt64Type   = reflect.TypeOf((*sql.NullInt64)(nil)).Elem()
 	NullBoolType    = reflect.TypeOf((*sql.NullBool)(nil)).Elem()
+	NullTimeType    = reflect.TypeOf((*sql.NullTime)(nil)).Elem()
 )
 
 // Type2SQLType generate SQLType acorrding Go's type
@@ -320,6 +325,73 @@ func Type2SQLType(t reflect.Type) (st SQLType) {
 		st = Type2SQLType(t.Elem())
 	default:
 		st = SQLType{Text, 0, 0}
+	}
+	return
+}
+
+// !datbeohbbh! Type2SQLType2 return the SQLType acorrding Go's type.
+// the returned SQLType is also compatible with YQL types
+func Type2SQLType2(t reflect.Type) (st SQLType) {
+	switch k := t.Kind(); k {
+	case reflect.Bool:
+		st = SQLType{Bool, 0, 0}
+	case reflect.Int8:
+		st = SQLType{TinyInt, 0, 0}
+	case reflect.Uint8:
+		st = SQLType{UnsignedTinyInt, 0, 0}
+	case reflect.Int16:
+		st = SQLType{SmallInt, 0, 0}
+	case reflect.Uint16:
+		st = SQLType{UnsignedSmallInt, 0, 0}
+	case reflect.Int32, reflect.Int:
+		st = SQLType{MediumInt, 0, 0}
+	case reflect.Uint32, reflect.Uint:
+		st = SQLType{UnsignedMediumInt, 0, 0}
+	case reflect.Int64:
+		st = SQLType{BigInt, 0, 0}
+	case reflect.Uint64:
+		st = SQLType{UnsignedBigInt, 0, 0}
+	case reflect.Float32:
+		st = SQLType{Float, 0, 0}
+	case reflect.Float64:
+		st = SQLType{Double, 0, 0}
+	case reflect.Array, reflect.Slice:
+		if t.Elem() == ByteType {
+			st = SQLType{Blob, 0, 0}
+		} else {
+			st = SQLType{Text, 0, 0}
+		}
+	case reflect.Map:
+		st = SQLType{Blob, 0, 0}
+	case reflect.String:
+		st = SQLType{Varchar, 255, 0}
+	case reflect.Struct:
+		// support for driver.Valuer
+		if t.ConvertibleTo(TimeType) {
+			st = SQLType{TimeStamp, 0, 0}
+		} else if t.ConvertibleTo(IntervalType) {
+			st = SQLType{Interval, 0, 0}
+		} else if t.ConvertibleTo(NullBoolType) {
+			st = SQLType{Bool, 0, 0}
+		} else if t.ConvertibleTo(NullFloat64Type) {
+			st = SQLType{Double, 0, 0}
+		} else if t.ConvertibleTo(NullInt16Type) {
+			st = SQLType{SmallInt, 0, 0}
+		} else if t.ConvertibleTo(NullInt32Type) {
+			st = SQLType{MediumInt, 0, 0}
+		} else if t.ConvertibleTo(NullInt64Type) {
+			st = SQLType{BigInt, 0, 0}
+		} else if t.ConvertibleTo(NullStringType) {
+			st = SQLType{Varchar, 255, 0}
+		} else if t.ConvertibleTo(NullTimeType) {
+			st = SQLType{TimeStamp, 0, 0}
+		} else {
+			st = SQLType{Blob, 0, 0}
+		}
+	case reflect.Ptr:
+		st = Type2SQLType2(t.Elem())
+	default:
+		st = SQLType{Blob, 0, 0}
 	}
 	return
 }

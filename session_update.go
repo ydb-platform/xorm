@@ -5,6 +5,7 @@
 package xorm
 
 import (
+	"database/sql/driver"
 	"errors"
 	"fmt"
 	"reflect"
@@ -280,7 +281,12 @@ func (session *Session) Update(bean interface{}, condiBean ...interface{}) (int6
 	if !session.statement.NoAutoCondition {
 		condBeanIsStruct := false
 		if len(condiBean) > 0 {
-			if c, ok := condiBean[0].(map[string]interface{}); ok {
+			// !datbeohbbh! check if condiBean[0].(builder.Cond) help to expand the condition to other like Gte, Neq, ... .
+			// but it makes the part check condiBean[0].(map[string]interface{}) may become unreachable.
+			// Another problem need to be considered when implement this way is that the columns need to be quoted by xorm user themselves.
+			if c, ok := condiBean[0].(builder.Cond); ok {
+				autoCond = c
+			} else if c, ok := condiBean[0].(map[string]interface{}); ok {
 				eq := make(builder.Eq)
 				for k, v := range c {
 					eq[session.engine.Quote(k)] = v
@@ -400,6 +406,9 @@ func (session *Session) Update(bean interface{}, condiBean ...interface{}) (int6
 			} else {
 				top = fmt.Sprintf("TOP (%d) ", limitValue)
 			}
+		case schemas.YDB:
+			// !datbeohbbh! consider to add support for UPDATE ON
+			return 0, ErrNotImplemented
 		}
 	}
 
@@ -472,7 +481,14 @@ func (session *Session) Update(bean interface{}, condiBean ...interface{}) (int6
 	cleanupProcessorsClosures(&session.afterClosures) // cleanup after used
 	// --
 
-	return res.RowsAffected()
+	affected, err := res.RowsAffected()
+	if err != nil {
+		if session.engine.Dialect().URI().DBType == schemas.YDB && err.Error() == driver.ErrSkip.Error() {
+			err = nil
+		}
+		return affected, err
+	}
+	return affected, err
 }
 
 func (session *Session) genUpdateColumns(bean interface{}) ([]string, []interface{}, error) {
@@ -541,7 +557,14 @@ func (session *Session) genUpdateColumns(bean interface{}) ([]string, []interfac
 		} else if col.IsVersion && session.statement.CheckVersion {
 			args = append(args, 1)
 		} else {
-			arg, err := session.statement.Value2Interface(col, fieldValue)
+			var err error
+			var arg interface{}
+			switch session.engine.dialect.URI().DBType {
+			case schemas.YDB:
+				arg, err = session.statement.Value2Interface2(col, fieldValue)
+			default:
+				arg, err = session.statement.Value2Interface(col, fieldValue)
+			}
 			if err != nil {
 				return colNames, args, err
 			}
