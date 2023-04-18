@@ -864,6 +864,10 @@ github.com/ydb-platform/ydb-go-sdk/v3 v3.44.0-rc5 h1:dHZlLLh0XTYYY7bIo3fgWqPGmd8
 github.com/ydb-platform/ydb-go-sdk/v3 v3.44.0-rc5/go.mod h1:oSLwnuilwIpaF5bJJMAofnGgzPJusoI3zWMNb8I+GnM=
 github.com/ydb-platform/ydb-go-sdk/v3 v3.44.0-rc6 h1:bcXrECAl4+t/4ZyTPtqrWa0MJpjKIHoVqlIa4HTtnnw=
 github.com/ydb-platform/ydb-go-sdk/v3 v3.44.0-rc6/go.mod h1:oSLwnuilwIpaF5bJJMAofnGgzPJusoI3zWMNb8I+GnM=
+github.com/ydb-platform/ydb-go-sdk/v3 v3.44.0-rc9 h1:Q4qcaIINJemibBCoVvIqRcgag/G4S0SY58hjwLqeAS8=
+github.com/ydb-platform/ydb-go-sdk/v3 v3.44.0-rc9/go.mod h1:oSLwnuilwIpaF5bJJMAofnGgzPJusoI3zWMNb8I+GnM=
+github.com/ydb-platform/ydb-go-sdk/v3 v3.44.0 h1:QaJU87Qfh5Y3GB9NefavinTZQTePVPNSBYnjm6AV+wk=
+github.com/ydb-platform/ydb-go-sdk/v3 v3.44.0/go.mod h1:oSLwnuilwIpaF5bJJMAofnGgzPJusoI3zWMNb8I+GnM=
 github.com/yuin/goldmark v1.1.25/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 github.com/yuin/goldmark v1.1.27/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 github.com/yuin/goldmark v1.1.32/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
