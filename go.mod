@@ -19,7 +19,6 @@ require (
 	github.com/syndtr/goleveldb v1.0.0
 	github.com/ydb-platform/ydb-go-sdk/v3 v3.45.0
 	github.com/ziutek/mymysql v1.5.4
-	golang.org/x/net v0.7.0
 	google.golang.org/genproto v0.0.0-20230131230820-1c016267d619 // indirect
 	google.golang.org/grpc v1.52.3 // indirect
 	modernc.org/sqlite v1.14.2
