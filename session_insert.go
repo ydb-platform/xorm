@@ -57,10 +57,12 @@ func (session *Session) Insert(beans ...interface{}) (int64, error) {
 				cnt, err = session.insertStruct(bean)
 			}
 		}
+		// !datbeohbbh! YDB does not support (sql.Result).LastInsertId() and (sql.Result) RowsAffected().
+		// YDB returns `0, driver.ErrSkip` instead.
+		if errors.Is(err, driver.ErrSkip) {
+			err = nil
+		}
 		if err != nil {
-			if session.engine.Dialect().URI().DBType == schemas.YDB && err.Error() == driver.ErrSkip.Error() {
-				continue
-			}
 			return affected, err
 		}
 		affected += cnt
@@ -453,10 +455,10 @@ func (session *Session) InsertOne(bean interface{}) (int64, error) {
 	}
 
 	affected, err := session.insertStruct(bean)
+	if errors.Is(err, driver.ErrSkip) {
+		err = nil
+	}
 	if err != nil {
-		if session.engine.Dialect().URI().DBType == schemas.YDB && err.Error() == driver.ErrSkip.Error() {
-			err = nil
-		}
 		return affected, err
 	}
 	return affected, err

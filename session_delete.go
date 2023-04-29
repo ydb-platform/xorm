@@ -269,10 +269,10 @@ func (session *Session) delete(beans []interface{}, mustHaveConditions bool) (in
 	// --
 
 	affected, err := res.RowsAffected()
+	if errors.Is(err, driver.ErrSkip) {
+		err = nil
+	}
 	if err != nil {
-		if session.engine.Dialect().URI().DBType == schemas.YDB && err.Error() == driver.ErrSkip.Error() {
-			err = nil
-		}
 		return affected, err
 	}
 	return affected, err

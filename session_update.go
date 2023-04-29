@@ -482,10 +482,10 @@ func (session *Session) Update(bean interface{}, condiBean ...interface{}) (int6
 	// --
 
 	affected, err := res.RowsAffected()
+	if errors.Is(err, driver.ErrSkip) {
+		err = nil
+	}
 	if err != nil {
-		if session.engine.Dialect().URI().DBType == schemas.YDB && err.Error() == driver.ErrSkip.Error() {
-			err = nil
-		}
 		return affected, err
 	}
 	return affected, err
