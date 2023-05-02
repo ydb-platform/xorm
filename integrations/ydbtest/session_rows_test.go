@@ -5,10 +5,8 @@ import (
 	"fmt"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
-	"golang.org/x/net/context"
 	"xorm.io/xorm"
 )
 
@@ -52,10 +50,7 @@ func TestRowsCond(t *testing.T) {
 	_, err = session.Insert(users)
 	assert.NoError(t, err)
 
-	timeoutCtx, cancelFunc := context.WithTimeout(enginePool.ctx, 10*time.Second)
-	defer cancelFunc()
-
-	result, err := engine.TransactionContext(timeoutCtx, func(ctx context.Context, session *xorm.Session) (interface{}, error) {
+	result, err := engine.Transaction(func(session *xorm.Session) (interface{}, error) {
 		rows, err := session.
 			Cols("user_id", "number", "name", "age").
 			Where("user_id >= ?", sql.NullInt64{Int64: 5, Valid: true}).
@@ -66,11 +61,6 @@ func TestRowsCond(t *testing.T) {
 		if err != nil {
 			return nil, err
 		}
-
-		if ctx.Err() != nil {
-			return nil, ctx.Err()
-		}
-
 		return rows, nil
 	})
 	assert.NoError(t, err)
@@ -140,7 +130,7 @@ func TestRowsOverManyResultSet(t *testing.T) {
 
 	series, seasons, episodes := getData()
 
-	_, err = engine.TransactionContext(enginePool.ctx, func(ctx context.Context, session *xorm.Session) (interface{}, error) {
+	_, err = engine.Transaction(func(session *xorm.Session) (interface{}, error) {
 		_, err := session.Insert(&series)
 		if err != nil {
 			return nil, err

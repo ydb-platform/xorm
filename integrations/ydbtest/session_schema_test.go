@@ -1,7 +1,6 @@
 package ydb
 
 import (
-	"context"
 	"strings"
 	"testing"
 
@@ -468,17 +467,17 @@ func TestDBMetas(t *testing.T) {
 
 	dialect := engine.Dialect()
 
-	_, err = engine.TransactionContext(enginePool.ctx, func(ctx context.Context, session *xorm.Session) (interface{}, error) {
+	_, err = engine.Transaction(func(session *xorm.Session) (interface{}, error) {
 		assert.NoError(t, session.Sync(&Users{}))
 
-		exist, err := dialect.IsTableExist(session.Tx(), ctx, (&Users{}).TableName())
+		exist, err := dialect.IsTableExist(session.Tx(), enginePool.ctx, (&Users{}).TableName())
 		assert.NoError(t, err)
 		if err != nil {
 			return nil, err
 		}
 		assert.True(t, exist)
 
-		tables, err := dialect.GetTables(session.Tx(), ctx)
+		tables, err := dialect.GetTables(session.Tx(), enginePool.ctx)
 		assert.NoError(t, err)
 		assert.NotNil(t, tables)
 		ok := false

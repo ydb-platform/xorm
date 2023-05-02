@@ -1504,28 +1504,6 @@ func (engine *Engine) Transaction(f func(*Session) (interface{}, error)) (interf
 	return result, nil
 }
 
-// !datbeohbbh! Transaction Execute sql wrapped in a transaction with provided context
-func (engine *Engine) TransactionContext(ctx context.Context, f func(context.Context, *Session) (interface{}, error)) (interface{}, error) {
-	session := engine.NewSession().Context(ctx)
-	defer session.Close()
-
-	if err := session.Begin(); err != nil {
-		return nil, err
-	}
-	defer session.Rollback()
-
-	result, err := f(ctx, session)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := session.Commit(); err != nil {
-		return nil, err
-	}
-
-	return result, nil
-}
-
 // Do is a retryer of session
 func (engine *Engine) Do(ctx context.Context, f func(context.Context, *Session) error, opts ...retry.RetryOption) error {
 	var (
