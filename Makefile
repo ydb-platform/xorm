@@ -52,7 +52,7 @@ TEST_YDB_HOST ?= ydb:2136
 TEST_YDB_DBNAME ?= local
 TEST_YDB_TABLE_PATH_PREFIX ?= /local/xorm/test
 TEST_YDB_QUERY_BIND ?= table_path_prefix($(TEST_YDB_TABLE_PATH_PREFIX)),declare,numeric
-TEST_YDB_FAKE_TX ?= data,scheme,scripting
+TEST_YDB_FAKE_TX ?= scheme,scripting
 TEST_YDB_USERNAME ?= 
 TEST_YDB_PASSWORD ?= 
 
