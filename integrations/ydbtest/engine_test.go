@@ -78,7 +78,7 @@ func TestDumpTables(t *testing.T) {
 
 	// dump table to a ydb-table.yql file
 	// this file is used in the TestImportFromDumpFile
-	fp := fmt.Sprintf("./testdata/%v-table.yql", engine.Dialect().URI().DBType)
+	fp := fmt.Sprintf(".dump/%v-table.yql", engine.Dialect().URI().DBType)
 	_, _ = os.Create(fp)
 	tb, err := engine.TableInfo(new(Users))
 	assert.NoError(t, err)
@@ -104,7 +104,7 @@ func TestImportFromDumpFile(t *testing.T) {
 	err = session.DropTable(&Users{})
 	assert.NoError(t, err)
 
-	_, err = session.ImportFile("./testdata/ydb-table.yql")
+	_, err = session.ImportFile(".dump/ydb-table.yql")
 	assert.NoError(t, err)
 }
 
@@ -116,7 +116,7 @@ func TestImportDDL(t *testing.T) {
 	session := engine.NewSession()
 	defer session.Close()
 
-	_, err = session.ImportFile("./testdata/DDL.sql")
+	_, err = session.ImportFile("testdata/DDL.yql")
 	assert.NoError(t, err)
 }
 
@@ -131,7 +131,7 @@ func TestImportDML(t *testing.T) {
 
 	assert.NoError(t, session.Begin())
 
-	_, err = session.ImportFile("./testdata/DML.sql")
+	_, err = session.ImportFile("testdata/DML.yql")
 	assert.NoError(t, err)
 
 	assert.NoError(t, session.Commit())
