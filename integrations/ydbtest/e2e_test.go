@@ -24,12 +24,8 @@ func TestE2E(t *testing.T) {
 	defer cancel()
 
 	scope := &e2e{
-		ctx: ctx,
-		engines: &EngineWithMode{
-			engineCached: make(map[string]*xorm.Engine),
-			dsn:          connString,
-			ctx:          ctx,
-		},
+		ctx:     ctx,
+		engines: NewEngineWithMode(ctx, connString),
 	}
 
 	t.Run("create-engine", func(t *testing.T) {
@@ -137,7 +133,7 @@ func TestE2E(t *testing.T) {
 			})
 
 			t.Run("select", func(t *testing.T) {
-				engine, err := scope.engines.GetDataQueryEngine()
+				engine, err := scope.engines.GetScanQueryEngine()
 				require.NoError(t, err)
 
 				err = engine.DoTx(scope.ctx, func(ctx context.Context, session *xorm.Session) (err error) {

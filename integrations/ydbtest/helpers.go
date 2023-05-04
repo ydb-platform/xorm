@@ -18,16 +18,8 @@ import (
 
 type QueryMode int
 
-type EngineWithMode struct {
-	engineCached map[string]*xorm.Engine
-	dsn          string
-	ctx          context.Context
-	mu           sync.Mutex
-}
-
 const (
-	UnknownQueryMode = iota
-	DataQueryMode
+	DataQueryMode = QueryMode(iota)
 	ExplainQueryMode
 	ScanQueryMode
 	SchemeQueryMode
@@ -36,22 +28,44 @@ const (
 	DefaultQueryMode = DataQueryMode
 )
 
-var (
-	typeToString = map[QueryMode]string{
-		DataQueryMode:      "data",
-		ScanQueryMode:      "scan",
-		ExplainQueryMode:   "explain",
-		SchemeQueryMode:    "scheme",
-		ScriptingQueryMode: "scripting",
+func (mode QueryMode) String() string {
+	switch mode {
+	case DataQueryMode:
+		return "data"
+	case ScanQueryMode:
+		return "scan"
+	case ExplainQueryMode:
+		return "explain"
+	case SchemeQueryMode:
+		return "scheme"
+	case ScriptingQueryMode:
+		return "scripting"
+	default:
+		return "data"
 	}
-)
+}
 
-func CreateEngine(dsn string) (*xorm.Engine, error) {
+type EngineWithMode struct {
+	engineCached map[QueryMode]*xorm.Engine
+	dsn          string
+	ctx          context.Context
+	mu           sync.Mutex
+}
+
+func NewEngineWithMode(ctx context.Context, dsn string) *EngineWithMode {
+	return &EngineWithMode{
+		ctx:          ctx,
+		dsn:          dsn,
+		engineCached: make(map[QueryMode]*xorm.Engine),
+	}
+}
+
+func createEngine(dsn string) (*xorm.Engine, error) {
 	log.Printf("> connect: %s\n", dsn)
 	return xorm.NewEngine(*db, dsn)
 }
 
-func ConstructDSN(dsn string, query ...string) string {
+func constructDSN(dsn string, query ...string) string {
 	info, err := url.Parse(dsn)
 	if err != nil {
 		panic(fmt.Errorf("failed to parse dsn: %s", dsn))
@@ -70,16 +84,15 @@ func ConstructDSN(dsn string, query ...string) string {
 func (em *EngineWithMode) getEngine(queryMode QueryMode) (*xorm.Engine, error) {
 	em.mu.Lock()
 	defer em.mu.Unlock()
-	mode := typeToString[queryMode]
 
-	if e, has := em.engineCached[mode]; has {
+	if e, has := em.engineCached[queryMode]; has {
 		if e.PingContext(em.ctx) == nil {
-			return em.engineCached[mode], nil
+			return em.engineCached[queryMode], nil
 		}
 	}
 
-	dsn := ConstructDSN(em.dsn, fmt.Sprintf("go_query_mode=%s", mode))
-	engine, err := CreateEngine(dsn)
+	dsn := constructDSN(em.dsn, fmt.Sprintf("go_query_mode=%s", queryMode))
+	engine, err := createEngine(dsn)
 	if err != nil {
 		return nil, err
 	}
@@ -98,8 +111,8 @@ func (em *EngineWithMode) getEngine(queryMode QueryMode) (*xorm.Engine, error) {
 	engine.SetMaxIdleConns(50)
 	engine.SetConnMaxIdleTime(time.Second)
 
-	em.engineCached[mode] = engine
-	return em.engineCached[mode], nil
+	em.engineCached[queryMode] = engine
+	return em.engineCached[queryMode], nil
 }
 
 func (em *EngineWithMode) Close() error {
@@ -111,7 +124,7 @@ func (em *EngineWithMode) Close() error {
 			retErr = err
 			break
 		}
-		log.Println("> close engine:", mode)
+		log.Printf("> close engine: %s\n", mode)
 		delete(em.engineCached, mode)
 	}
 	return retErr
