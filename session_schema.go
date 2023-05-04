@@ -165,11 +165,6 @@ func (session *Session) dropTable(beanOrTableName interface{}) error {
 		return err
 	}
 
-	// !datbeohbbh! above process is enough for ydb
-	if session.engine.dialect.URI().DBType == schemas.YDB {
-		return nil
-	}
-
 	if session.engine.dialect.Features().AutoincrMode == dialects.IncrAutoincrMode {
 		return nil
 	}

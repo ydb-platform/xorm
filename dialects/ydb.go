@@ -459,6 +459,11 @@ func (db *ydb) Features() *DialectFeatures {
 	}
 }
 
+// unsupported feature
+func (db *ydb) IsSequenceExist(_ context.Context, _ core.Queryer, _ string) (bool, error) {
+	return false, nil
+}
+
 func (db *ydb) AutoIncrStr() string {
 	return ""
 }
