@@ -6,7 +6,6 @@ import (
 	"log"
 	"testing"
 
-	"xorm.io/xorm"
 	"xorm.io/xorm/schemas"
 )
 
@@ -40,11 +39,7 @@ func MainTest(m *testing.M) int {
 	ctx, cancelFunc := context.WithCancel(context.Background())
 	defer cancelFunc()
 
-	enginePool = &EngineWithMode{
-		engineCached: make(map[string]*xorm.Engine),
-		dsn:          connString,
-		ctx:          ctx,
-	}
+	enginePool = NewEngineWithMode(ctx, connString)
 	defer func() {
 		_ = enginePool.Close()
 	}()

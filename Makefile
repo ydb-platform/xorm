@@ -52,6 +52,7 @@ TEST_YDB_HOST ?= ydb:2136
 TEST_YDB_DBNAME ?= local
 TEST_YDB_TABLE_PATH_PREFIX ?= /local/xorm/test
 TEST_YDB_QUERY_BIND ?= table_path_prefix($(TEST_YDB_TABLE_PATH_PREFIX)),declare,numeric
+TEST_YDB_FAKE_TX ?= scan,scheme,scripting
 TEST_YDB_USERNAME ?= 
 TEST_YDB_PASSWORD ?= 
 
@@ -288,7 +289,7 @@ test-dameng\#%: go-check
 .PHONY: test-ydb
 test-ydb: go-check
 	$(GO) test $(INTEGRATION_PACKAGES)/ydbtest -v -race -db=ydb -cache=$(TEST_CACHE_ENABLE) \
-	-conn_str="$(TEST_YDB_SCHEME)://$(TEST_YDB_HOST)/$(TEST_YDB_DBNAME)?go_query_bind=$(TEST_YDB_QUERY_BIND)" \
+	-conn_str="$(TEST_YDB_SCHEME)://$(TEST_YDB_HOST)/$(TEST_YDB_DBNAME)?go_query_bind=$(TEST_YDB_QUERY_BIND)&go_fake_tx=$(TEST_YDB_FAKE_TX)" \
 	-quote=$(TEST_QUOTE_POLICY) -coverprofile=ydb.$(TEST_QUOTE_POLICY).$(TEST_CACHE_ENABLE).coverage.out -covermode=atomic -timeout=20m
 
 .PHONY: vet

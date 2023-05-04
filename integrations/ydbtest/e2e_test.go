@@ -24,15 +24,11 @@ func TestE2E(t *testing.T) {
 	defer cancel()
 
 	scope := &e2e{
-		ctx: ctx,
-		engines: &EngineWithMode{
-			engineCached: make(map[string]*xorm.Engine),
-			dsn:          connString,
-			ctx:          ctx,
-		},
+		ctx:     ctx,
+		engines: NewEngineWithMode(ctx, connString),
 	}
 
-	t.Run("xorm.CreateEngine", func(t *testing.T) {
+	t.Run("create-engine", func(t *testing.T) {
 		engine, err := scope.engines.GetDefaultEngine()
 		require.NoError(t, err)
 
@@ -43,11 +39,7 @@ func TestE2E(t *testing.T) {
 		require.NoError(t, err)
 	})
 
-	t.Run("xorm.e2e", func(t *testing.T) {
-		defer func() {
-			_ = scope.engines.Close()
-		}()
-
+	t.Run("e2e", func(t *testing.T) {
 		t.Run("prepare-stage", func(t *testing.T) {
 			t.Run("scheme", func(t *testing.T) {
 				err := scope.prepareScheme()
@@ -73,19 +65,14 @@ func TestE2E(t *testing.T) {
 					And("episode_id = ?", uuid.New()).
 					QueryString()
 				require.NoError(t, err)
+				require.Greater(t, len(results), 0)
 
-				for _, result := range results {
-					var (
-						ast  string
-						plan string
-					)
+				explain := results[0]
+				ast := explain["AST"]
+				plan := explain["Plan"]
 
-					ast = result["AST"]
-					plan = result["Plan"]
-
-					t.Logf("ast = %v\n", ast)
-					t.Logf("plan = %v\n", plan)
-				}
+				t.Logf("ast = %v\n", ast)
+				t.Logf("plan = %v\n", plan)
 			})
 
 			t.Run("increment", func(t *testing.T) {
@@ -146,7 +133,7 @@ func TestE2E(t *testing.T) {
 			})
 
 			t.Run("select", func(t *testing.T) {
-				engine, err := scope.engines.GetDataQueryEngine()
+				engine, err := scope.engines.GetScanQueryEngine()
 				require.NoError(t, err)
 
 				err = engine.DoTx(scope.ctx, func(ctx context.Context, session *xorm.Session) (err error) {
@@ -193,6 +180,11 @@ func TestE2E(t *testing.T) {
 				require.NoError(t, err)
 			})
 		})
+
+		t.Run("close-engines", func(t *testing.T) {
+			err := scope.engines.Close()
+			require.NoError(t, err)
+		})
 	})
 }
 
@@ -201,7 +193,6 @@ func (scope *e2e) fill() error {
 	if err != nil {
 		return err
 	}
-
 	series, seasons, episodes := getData()
 	err = engine.DoTx(scope.ctx, func(ctx context.Context, session *xorm.Session) (err error) {
 		_, err = session.Insert(series, seasons, episodes)
@@ -209,35 +200,19 @@ func (scope *e2e) fill() error {
 	},
 		retry.WithID("e2e-test-fill-stage"),
 		retry.WithIdempotent(true))
-
 	return err
 }
 
 func (scope *e2e) prepareScheme() error {
-	engine, err := scope.engines.GetScriptQueryEngine()
+	engine, err := scope.engines.GetSchemeQueryEngine()
 	if err != nil {
 		return err
 	}
-
-	err = engine.Do(scope.ctx, func(ctx context.Context, session *xorm.Session) (err error) {
-		for _, table := range []interface{}{
-			&Series{},
-			&Seasons{},
-			&Episodes{},
-		} {
-			err = session.DropTable(table)
-			if err != nil {
-				return err
-			}
-
-			err = session.CreateTable(table)
-			if err != nil {
-				return err
-			}
-		}
-		return nil
-	}, retry.WithID("e2e-test-prepare-scheme"),
-		retry.WithIdempotent(true))
-
-	return err
+	if err = engine.DropTables(&Series{}, &Seasons{}, &Episodes{}); err != nil {
+		return err
+	}
+	if err = engine.CreateTables(&Series{}, &Seasons{}, &Episodes{}); err != nil {
+		return err
+	}
+	return nil
 }

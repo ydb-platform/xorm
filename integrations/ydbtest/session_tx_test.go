@@ -178,3 +178,28 @@ func TestEngineTx(t *testing.T) {
 	})
 	assert.NoError(t, err)
 }
+
+func TestDDLTx(t *testing.T) {
+	engine, err := enginePool.GetSchemeQueryEngine()
+	assert.NoError(t, err)
+
+	err = engine.DropTables(&Users{}, &Series{}, &Seasons{}, &Episodes{})
+	assert.NoError(t, err)
+
+	err = engine.CreateTables(&Users{}, &Series{}, &Seasons{}, &Episodes{})
+	assert.NoError(t, err)
+}
+
+func TestDDLTxSync(t *testing.T) {
+	engine, err := enginePool.GetSchemeQueryEngine()
+	assert.NoError(t, err)
+
+	err = engine.DropTables(&Users{}, &Series{}, &Seasons{}, &Episodes{})
+	assert.NoError(t, err)
+
+	_, err = engine.Transaction(func(session *xorm.Session) (_ interface{}, err error) {
+		err = session.Sync(&Users{}, &Series{}, &Seasons{}, &Episodes{})
+		return nil, err
+	})
+	assert.NoError(t, err)
+}
