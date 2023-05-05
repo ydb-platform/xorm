@@ -2,10 +2,8 @@ package ydb
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"io/fs"
-	"log"
-	"os"
 	"testing"
 	"time"
 
@@ -18,7 +16,6 @@ import (
 func TestPing(t *testing.T) {
 	engine, err := enginePool.GetDefaultEngine()
 	assert.NoError(t, err)
-
 	assert.NoError(t, engine.Ping())
 }
 
@@ -32,12 +29,11 @@ func TestPingContext(t *testing.T) {
 	time.Sleep(time.Nanosecond)
 
 	err = engine.PingContext(ctx)
-	if assert.Error(t, err) {
-		assert.Contains(t, err.Error(), "context deadline exceeded")
-	}
+	assert.Error(t, err)
+	assert.True(t, errors.Is(err, context.DeadlineExceeded))
 }
 
-var dbtypes = []schemas.DBType{schemas.SQLITE, schemas.MYSQL, schemas.POSTGRES, schemas.MSSQL, schemas.YDB}
+var dbtypes = []schemas.DBType{schemas.SQLITE, schemas.MYSQL, schemas.POSTGRES, schemas.MSSQL, schemas.ORACLE, schemas.YDB}
 
 func TestDump(t *testing.T) {
 	assert.NoError(t, PrepareScheme(&Users{}))
@@ -46,19 +42,11 @@ func TestDump(t *testing.T) {
 	assert.NotNil(t, engine)
 
 	users := getUsersData()
-
 	_, err = engine.Insert(&users)
 	assert.NoError(t, err)
 
-	err = os.MkdirAll(".dump", fs.ModeDir|fs.ModePerm)
-	assert.NoError(t, err)
-
-	fp := fmt.Sprintf(".dump/%v.sql", engine.Dialect().URI().DBType)
-	_, _ = os.Create(fp)
-	assert.NoError(t, engine.DumpAllToFile(fp))
-
 	for _, tp := range dbtypes {
-		name := fmt.Sprintf(".dump/dump_%v.sql", tp)
+		name := fmt.Sprintf("%s/dump_%v-all.sql", t.TempDir(), tp)
 		t.Run(name, func(t *testing.T) {
 			assert.NoError(t, engine.DumpAllToFile(name, tp))
 		})
@@ -72,21 +60,14 @@ func TestDumpTables(t *testing.T) {
 	assert.NotNil(t, engine)
 
 	users := getUsersData()
-
 	_, err = engine.Insert(&users)
 	assert.NoError(t, err)
 
-	// dump table to a ydb-table.yql file
-	// this file is used in the TestImportFromDumpFile
-	fp := fmt.Sprintf(".dump/%v-table.yql", engine.Dialect().URI().DBType)
-	_, _ = os.Create(fp)
 	tb, err := engine.TableInfo(new(Users))
 	assert.NoError(t, err)
-	assert.NoError(t, engine.DumpTablesToFile([]*schemas.Table{tb}, fp))
 
 	for _, tp := range dbtypes {
-		name := fmt.Sprintf(".dump/dump_%v-table.sql", tp)
-		_, _ = os.Create(name)
+		name := fmt.Sprintf("%s/dump_%v-table.sql", t.TempDir(), tp)
 		t.Run(name, func(t *testing.T) {
 			assert.NoError(t, engine.DumpTablesToFile([]*schemas.Table{tb}, name, tp))
 		})
@@ -98,13 +79,20 @@ func TestImportFromDumpFile(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, engine)
 
-	session := engine.NewSession()
-	defer session.Close()
-
-	err = session.DropTable(&Users{})
+	users := getUsersData()
+	_, err = engine.Insert(&users)
 	assert.NoError(t, err)
 
-	_, err = session.ImportFile(".dump/ydb-table.yql")
+	tb, err := engine.TableInfo(new(Users))
+	assert.NoError(t, err)
+
+	name := fmt.Sprintf("%s/dump_%v-table.yql", t.TempDir(), schemas.YDB)
+	assert.NoError(t, engine.DumpTablesToFile([]*schemas.Table{tb}, name))
+
+	err = engine.DropTables(&Users{})
+	assert.NoError(t, err)
+
+	_, err = engine.ImportFile(name)
 	assert.NoError(t, err)
 }
 
@@ -144,7 +132,7 @@ func TestDBVersion(t *testing.T) {
 
 	version, err := engine.DBVersion()
 	assert.NoError(t, err)
-	log.Println(version.Edition + " " + version.Number)
+	t.Log(version.Edition + " " + version.Number)
 }
 
 func TestRetry(t *testing.T) {
