@@ -246,39 +246,29 @@ func TestFindString(t *testing.T) {
 	_, err = engine.Insert(&usersData)
 	assert.NoError(t, err)
 
+	expectedName := []string{}
+	for _, user := range usersData {
+		expectedName = append(expectedName, user.Name)
+	}
+
+	expectedNumber := []string{}
+	for _, user := range usersData {
+		expectedNumber = append(expectedNumber, user.Number)
+	}
+
 	names := []string{}
 	err = engine.Table(&Users{}).Cols("name").Asc("name").Find(&names)
 	assert.NoError(t, err)
 	assert.Equal(t, len(usersData), len(names))
-
-	for _, name := range names {
-		has := false
-		for _, user := range usersData {
-			if name == user.Name {
-				has = true
-				break
-			}
-		}
-		assert.True(t, has)
-	}
+	assert.ElementsMatch(t, expectedName, names)
 
 	numbers := []string{}
 	err = engine.Table(&Users{}).Cols("number").Find(&numbers)
 	assert.NoError(t, err)
 	assert.Equal(t, len(usersData), len(numbers))
-
-	for _, number := range numbers {
-		has := false
-		for _, user := range usersData {
-			if number == user.Number {
-				has = true
-				break
-			}
-		}
-		assert.True(t, has)
-	}
-
+	assert.ElementsMatch(t, expectedNumber, numbers)
 }
+
 func TestFindCustomType(t *testing.T) {
 	assert.NoError(t, PrepareScheme(&Users{}))
 
@@ -291,22 +281,17 @@ func TestFindCustomType(t *testing.T) {
 	assert.NoError(t, err)
 
 	type cstring string
-	names := []cstring{}
 
+	expectedName := []cstring{}
+	for _, user := range usersData {
+		expectedName = append(expectedName, cstring(user.Name))
+	}
+
+	names := []cstring{}
 	err = engine.Table(&Users{}).Cols("name").Asc("name").Find(&names)
 	assert.NoError(t, err)
 	assert.Equal(t, len(usersData), len(names))
-
-	for _, name := range names {
-		has := false
-		for _, user := range usersData {
-			if name == cstring(user.Name) {
-				has = true
-				break
-			}
-		}
-		assert.True(t, has)
-	}
+	assert.ElementsMatch(t, expectedName, names)
 }
 
 func TestFindInterface(t *testing.T) {
@@ -341,19 +326,15 @@ func TestFindSliceBytes(t *testing.T) {
 	_, err = engine.Insert(&seriesData)
 	assert.NoError(t, err)
 
+	expectedSeriesId := []string{}
+	for _, series := range seriesData {
+		expectedSeriesId = append(expectedSeriesId, string(series.SeriesID))
+	}
+
 	seriesIds := make([]string, 0)
 	err = engine.Table(&Series{}).Cols("series_id").Find(&seriesIds)
 	assert.NoError(t, err)
-
-	for _, seriesId := range seriesIds {
-		has := false
-		for _, series := range seriesData {
-			if string(series.SeriesID) == string(seriesId) {
-				has = true
-			}
-		}
-		assert.True(t, has)
-	}
+	assert.ElementsMatch(t, expectedSeriesId, seriesIds)
 }
 
 func TestFindBool(t *testing.T) {
