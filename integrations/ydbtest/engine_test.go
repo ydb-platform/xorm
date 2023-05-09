@@ -75,25 +75,33 @@ func TestDumpTables(t *testing.T) {
 }
 
 func TestImportFromDumpFile(t *testing.T) {
+	assert.NoError(t, PrepareScheme(&Users{}))
+	assert.NoError(t, PrepareScheme(&Series{}))
+	assert.NoError(t, PrepareScheme(&Episodes{}))
+	assert.NoError(t, PrepareScheme(&Seasons{}))
+
 	engine, err := enginePool.GetScriptQueryEngine()
 	assert.NoError(t, err)
 	assert.NotNil(t, engine)
 
-	users := getUsersData()
-	_, err = engine.Insert(&users)
-	assert.NoError(t, err)
+	t.Run("dump-and-import", func(t *testing.T) {
+		name := fmt.Sprintf("%s/dump_%v-all-tables.yql", t.TempDir(), schemas.YDB)
+		assert.NoError(t, engine.DumpAllToFile(name, schemas.YDB))
 
-	tb, err := engine.TableInfo(new(Users))
-	assert.NoError(t, err)
+		err = engine.DropTables(&Users{}, &Series{}, &Seasons{}, &Episodes{})
+		assert.NoError(t, err)
 
-	name := fmt.Sprintf("%s/dump_%v-table.yql", t.TempDir(), schemas.YDB)
-	assert.NoError(t, engine.DumpTablesToFile([]*schemas.Table{tb}, name))
+		_, err = engine.ImportFile(name)
+		assert.NoError(t, err)
+	})
 
-	err = engine.DropTables(&Users{})
-	assert.NoError(t, err)
+	t.Run("insert-data", func(t *testing.T) {
+		users := getUsersData()
+		seriesData, seasonsData, episodesData := getData()
 
-	_, err = engine.ImportFile(name)
-	assert.NoError(t, err)
+		_, err = engine.Insert(&seriesData, &seasonsData, &episodesData, &users)
+		assert.NoError(t, err)
+	})
 }
 
 func TestImportDDL(t *testing.T) {

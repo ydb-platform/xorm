@@ -842,6 +842,7 @@ func (engine *Engine) dumpTables(ctx context.Context, tables []*schemas.Table, w
 									return err
 								}
 							} else if yqlType == "Interval" {
+								// !datbeohbbh! TODO: only work if database represent interval time in microsecond. Need more research.
 								d, err := strconv.ParseInt(s.String, 10, 64)
 								if err != nil {
 									return err
