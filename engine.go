@@ -19,6 +19,7 @@ import (
 
 	"xorm.io/xorm/caches"
 	"xorm.io/xorm/contexts"
+	"xorm.io/xorm/convert"
 	"xorm.io/xorm/core"
 	"xorm.io/xorm/dialects"
 	"xorm.io/xorm/internal/utils"
@@ -560,6 +561,10 @@ func (engine *Engine) dumpTables(ctx context.Context, tables []*schemas.Table, w
 		}
 
 		for _, index := range dstTable.Indexes {
+			// !datbeohbbh! with YDB, if there are indexes in table, these indexes have already been created in CREATE TABLE script.
+			if dstDialect.URI().DBType == schemas.YDB {
+				continue
+			}
 			_, err = io.WriteString(w, dstDialect.CreateIndexSQL(dstTable.Name, index)+";\n")
 			if err != nil {
 				return err
@@ -811,7 +816,9 @@ func (engine *Engine) dumpTables(ctx context.Context, tables []*schemas.Table, w
 									return err
 								}
 							} else if yqlType == "Timestamp" {
-								t, err := time.Parse(time.RFC3339Nano, s.String)
+								fromLoc := engine.GetTZLocation()
+								toLoc := engine.GetTZDatabase()
+								t, err := convert.String2Time(s.String, fromLoc, toLoc)
 								if err != nil {
 									return err
 								}
@@ -819,13 +826,15 @@ func (engine *Engine) dumpTables(ctx context.Context, tables []*schemas.Table, w
 									return err
 								}
 							} else {
-								if _, err = io.WriteString(w, "'"+strings.ReplaceAll(s.String, "'", "''")+"'"); err != nil {
+								if _, err = io.WriteString(w, "'"+strings.ReplaceAll(s.String, "'", "\\'")+"'"); err != nil {
 									return err
 								}
 							}
 						} else {
 							if yqlType == "Timestamp" {
-								t, err := time.Parse(time.RFC3339Nano, s.String)
+								fromLoc := engine.GetTZLocation()
+								toLoc := engine.GetTZDatabase()
+								t, err := convert.String2Time(s.String, fromLoc, toLoc)
 								if err != nil {
 									return err
 								}
@@ -833,16 +842,17 @@ func (engine *Engine) dumpTables(ctx context.Context, tables []*schemas.Table, w
 									return err
 								}
 							} else if yqlType == "Interval" {
-								d, err := strconv.ParseInt(s.String, 10, 64) // received microsecond
-								var sec float64 = float64(d) / float64(time.Microsecond)
+								// !datbeohbbh! TODO: only work if database represent interval time in microsecond.
+								d, err := strconv.ParseInt(s.String, 10, 64)
 								if err != nil {
 									return err
 								}
+								sec := float64(d) / float64(time.Microsecond)
 								if _, err = io.WriteString(w, fmt.Sprintf(castTmpl, sec, yqlType)); err != nil {
 									return err
 								}
 							} else {
-								if _, err = io.WriteString(w, fmt.Sprintf(castTmpl, "'"+strings.ReplaceAll(s.String, "'", "''")+"'", yqlType)); err != nil {
+								if _, err = io.WriteString(w, fmt.Sprintf(castTmpl, "'"+strings.ReplaceAll(s.String, "'", "\\'")+"'", yqlType)); err != nil {
 									return err
 								}
 							}

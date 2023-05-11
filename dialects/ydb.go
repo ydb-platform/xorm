@@ -334,7 +334,7 @@ func toYQLDataType(t string, defaultLength, defaultLength2 int64) (yqlType strin
 	case schemas.Varchar, schemas.Text:
 		yqlType = yql_Utf8
 		return
-	case schemas.TimeStamp:
+	case schemas.TimeStamp, schemas.DateTime:
 		yqlType = yql_Timestamp
 		return
 	case schemas.Interval:
@@ -457,6 +457,11 @@ func (db *ydb) Features() *DialectFeatures {
 	return &DialectFeatures{
 		AutoincrMode: -1,
 	}
+}
+
+// unsupported feature
+func (db *ydb) IsSequenceExist(_ context.Context, _ core.Queryer, _ string) (bool, error) {
+	return false, nil
 }
 
 func (db *ydb) AutoIncrStr() string {
