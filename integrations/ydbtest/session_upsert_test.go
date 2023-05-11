@@ -113,8 +113,7 @@ func (*UpsertUsers) TableName() string {
 }
 
 func TestYQLUpsertCompositePK(t *testing.T) {
-	assert.NoError(t, PrepareScheme(&Users{}))
-	assert.NoError(t, PrepareScheme(&UpsertUsers{}))
+	assert.NoError(t, PrepareScheme(&Users{}, &UpsertUsers{}))
 	engine, err := enginePool.GetDataQueryEngine()
 	assert.NoError(t, err)
 	assert.NotNil(t, engine)

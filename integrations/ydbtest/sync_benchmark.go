@@ -7,10 +7,7 @@ import (
 )
 
 func BenchmarkSync(b *testing.B) {
-	assert.NoError(b, PrepareScheme(&Users{}))
-	assert.NoError(b, PrepareScheme(&Series{}))
-	assert.NoError(b, PrepareScheme(&Seasons{}))
-	assert.NoError(b, PrepareScheme(&Episodes{}))
+	assert.NoError(b, PrepareScheme(&Users{}, &Series{}, &Seasons{}, &Episodes{}))
 
 	engine, err := enginePool.GetSchemeQueryEngine()
 	assert.NoError(b, err)

@@ -6,7 +6,6 @@ import (
 	"log"
 	"net/url"
 	"strings"
-	"sync"
 	"time"
 
 	xormLog "xorm.io/xorm/log"
@@ -49,7 +48,6 @@ type EngineWithMode struct {
 	engineCached map[QueryMode]*xorm.Engine
 	dsn          string
 	ctx          context.Context
-	mu           sync.Mutex
 }
 
 func NewEngineWithMode(ctx context.Context, dsn string) *EngineWithMode {
@@ -82,9 +80,6 @@ func constructDSN(dsn string, query ...string) string {
 }
 
 func (em *EngineWithMode) getEngine(queryMode QueryMode) (*xorm.Engine, error) {
-	em.mu.Lock()
-	defer em.mu.Unlock()
-
 	if e, has := em.engineCached[queryMode]; has {
 		if e.PingContext(em.ctx) == nil {
 			return em.engineCached[queryMode], nil
@@ -116,18 +111,14 @@ func (em *EngineWithMode) getEngine(queryMode QueryMode) (*xorm.Engine, error) {
 }
 
 func (em *EngineWithMode) Close() error {
-	em.mu.Lock()
-	defer em.mu.Unlock()
-	var retErr error = nil
 	for mode, engine := range em.engineCached {
 		if err := engine.Close(); err != nil {
-			retErr = err
-			break
+			return err
 		}
 		log.Printf("> close engine: %s\n", mode)
 		delete(em.engineCached, mode)
 	}
-	return retErr
+	return nil
 }
 
 func (em *EngineWithMode) GetDefaultEngine() (*xorm.Engine, error) {
@@ -154,26 +145,23 @@ func (em *EngineWithMode) GetScriptQueryEngine() (*xorm.Engine, error) {
 	return em.getEngine(ScriptingQueryMode)
 }
 
-func PrepareScheme(bean interface{}) error {
-	engine, err := enginePool.GetScriptQueryEngine()
+func PrepareScheme(bean ...interface{}) error {
+	engine, err := enginePool.GetSchemeQueryEngine()
 	if err != nil {
 		return err
 	}
 
-	session := engine.NewSession()
-	defer session.Close()
-
-	if err := session.DropTable(bean); err != nil {
+	if err := engine.DropTables(bean...); err != nil {
 		return err
 	}
-	if err := session.CreateTable(bean); err != nil {
+	if err := engine.CreateTables(bean...); err != nil {
 		return err
 	}
 	return nil
 }
 
 func CleanUp() error {
-	engine, err := enginePool.GetScriptQueryEngine()
+	engine, err := enginePool.GetSchemeQueryEngine()
 	if err != nil {
 		return err
 	}

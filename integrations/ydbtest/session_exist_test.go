@@ -121,9 +121,7 @@ func TestExistStructForJoin(t *testing.T) {
 		Name string
 	}
 
-	assert.NoError(t, PrepareScheme(&Number{}))
-	assert.NoError(t, PrepareScheme(&OrderList{}))
-	assert.NoError(t, PrepareScheme(&Player{}))
+	assert.NoError(t, PrepareScheme(&Number{}, &OrderList{}, &Player{}))
 
 	engine, err := enginePool.GetScriptQueryEngine()
 	assert.NoError(t, err)

@@ -23,9 +23,7 @@ func TestFindJoinLimit(t *testing.T) {
 		Uuid int64 `xorm:"pk"`
 		Name string
 	}
-	assert.NoError(t, PrepareScheme(&Salary{}))
-	assert.NoError(t, PrepareScheme(&CheckList{}))
-	assert.NoError(t, PrepareScheme(&Empsetting{}))
+	assert.NoError(t, PrepareScheme(&Salary{}, &CheckList{}, &Empsetting{}))
 
 	engine, err := enginePool.GetDataQueryEngine()
 	assert.NoError(t, err)

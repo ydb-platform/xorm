@@ -160,9 +160,7 @@ func TestRetry(t *testing.T) {
 }
 
 func TestRetryTx(t *testing.T) {
-	assert.NoError(t, PrepareScheme(&Seasons{}))
-	assert.NoError(t, PrepareScheme(&Series{}))
-	assert.NoError(t, PrepareScheme(&Episodes{}))
+	assert.NoError(t, PrepareScheme(&Seasons{}, &Series{}, &Episodes{}))
 	engine, err := enginePool.GetDataQueryEngine()
 	assert.NoError(t, err)
 
