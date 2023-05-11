@@ -860,8 +860,8 @@ github.com/urfave/cli v1.22.1/go.mod h1:Gos4lmkARVdJ6EkW0WaNv/tZAAMe9V7XWyB60NtX
 github.com/xiang90/probing v0.0.0-20190116061207-43a291ad63a2/go.mod h1:UETIi67q53MR2AWcXfiuqkDkRtnGDLqkBTpCHuJHxtU=
 github.com/ydb-platform/ydb-go-genproto v0.0.0-20221215182650-986f9d10542f h1:BBczNIM1MJHT7XkIUA8pThXWxJvxoBjcWvne3xwe2RI=
 github.com/ydb-platform/ydb-go-genproto v0.0.0-20221215182650-986f9d10542f/go.mod h1:Er+FePu1dNUieD+XTMDduGpQuCPssK5Q4BjF+IIXJ3I=
-github.com/ydb-platform/ydb-go-sdk/v3 v3.45.0 h1:mv/P4iWBMAp2MZnm0XjyfGFuF40fL+LSrZ5S50qDCKI=
-github.com/ydb-platform/ydb-go-sdk/v3 v3.45.0/go.mod h1:oSLwnuilwIpaF5bJJMAofnGgzPJusoI3zWMNb8I+GnM=
+github.com/ydb-platform/ydb-go-sdk/v3 v3.46.0 h1:QgSQ/ObGetEEuPCv40tZoO8UYMlCYHtqXsKfPMOeNjY=
+github.com/ydb-platform/ydb-go-sdk/v3 v3.46.0/go.mod h1:oSLwnuilwIpaF5bJJMAofnGgzPJusoI3zWMNb8I+GnM=
 github.com/yuin/goldmark v1.1.25/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 github.com/yuin/goldmark v1.1.27/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 github.com/yuin/goldmark v1.1.32/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
