@@ -43,14 +43,9 @@ jobs:
         with:
           go-version: ${{ matrix.go-version }}
           cache: true
-      - name: has integration tests for ydb
-        run: |
-          [ ! -d ./integrations/ydbtest ]
       - name: secure connection
-        if: ${{ failure() }}
         run: |
           TEST_YDB_SCHEME=grpcs TEST_YDB_HOST=localhost:2135 TEST_YDB_DBNAME=local make test-ydb
       - name: insecure connection
-        if: ${{ failure() }}
         run: |
           TEST_YDB_SCHEME=grpc TEST_YDB_HOST=localhost:2136 TEST_YDB_DBNAME=local make test-ydb
