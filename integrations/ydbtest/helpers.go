@@ -154,9 +154,11 @@ func PrepareScheme(bean ...interface{}) error {
 	if err := engine.DropTables(bean...); err != nil {
 		return err
 	}
+
 	if err := engine.CreateTables(bean...); err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -171,16 +173,11 @@ func CleanUp() error {
 		return err
 	}
 
-	session := engine.NewSession()
-	defer session.Close()
-
+	beans := make([]interface{}, 0)
 	for _, table := range tables {
-		bean := table.Name
-		if err := session.DropTable(bean); err != nil {
-			return err
-		}
-		log.Printf("> drop table: `%s`\n", table.Name)
+		beans = append(beans, table.Name)
 	}
 
-	return nil
+	err = engine.DropTables(beans...)
+	return err
 }
