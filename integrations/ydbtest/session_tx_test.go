@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"xorm.io/xorm"
@@ -229,4 +230,41 @@ func TestDDLTxSync(t *testing.T) {
 	}, retry.WithIdempotent(true))
 
 	assert.NoError(t, err)
+}
+
+func TestInsertMulti2InterfaceTransaction(t *testing.T) {
+	type Multi2InterfaceTransaction struct {
+		ID         uint64 `xorm:"id pk"`
+		Name       string
+		Alias      string
+		CreateTime time.Time `xorm:"created"`
+		UpdateTime time.Time `xorm:"updated"`
+	}
+
+	engine, err := enginePool.GetScriptQueryEngine()
+	assert.NoError(t, err)
+	assert.NotNil(t, engine)
+
+	assert.NoError(t, engine.Sync(&Multi2InterfaceTransaction{}))
+
+	session := engine.NewSession()
+	defer session.Close()
+
+	err = session.Begin()
+	assert.NoError(t, err)
+
+	users := []interface{}{
+		&Multi2InterfaceTransaction{ID: 1, Name: "a", Alias: "A"},
+		&Multi2InterfaceTransaction{ID: 2, Name: "b", Alias: "B"},
+		&Multi2InterfaceTransaction{ID: 3, Name: "c", Alias: "C"},
+		&Multi2InterfaceTransaction{ID: 4, Name: "d", Alias: "D"},
+	}
+	_, err = session.Insert(&users)
+
+	assert.NoError(t, err)
+
+	assert.NotPanics(t, func() {
+		err = session.Commit()
+		assert.NoError(t, err)
+	})
 }
