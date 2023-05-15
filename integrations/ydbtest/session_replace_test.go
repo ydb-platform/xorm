@@ -112,8 +112,7 @@ func (*ReplaceUsers) TableName() string {
 }
 
 func TestYQLReplaceCompositePK(t *testing.T) {
-	assert.NoError(t, PrepareScheme(&Users{}))
-	assert.NoError(t, PrepareScheme(&ReplaceUsers{}))
+	assert.NoError(t, PrepareScheme(&Users{}, &ReplaceUsers{}))
 	engine, err := enginePool.GetDataQueryEngine()
 	assert.NoError(t, err)
 	assert.NotNil(t, engine)

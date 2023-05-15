@@ -1,12 +1,15 @@
 package ydb
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"xorm.io/xorm"
+	"xorm.io/xorm/retry"
 )
 
 // !datbeohbbh! transactions concept
@@ -182,24 +185,86 @@ func TestEngineTx(t *testing.T) {
 func TestDDLTx(t *testing.T) {
 	engine, err := enginePool.GetSchemeQueryEngine()
 	assert.NoError(t, err)
+	assert.NotNil(t, engine)
 
-	err = engine.DropTables(&Users{}, &Series{}, &Seasons{}, &Episodes{})
-	assert.NoError(t, err)
+	err = engine.DoTx(enginePool.ctx, func(ctx context.Context, session *xorm.Session) error {
+		for _, bean := range []interface{}{
+			&Users{},
+			&Series{},
+			&Seasons{},
+			&Episodes{},
+		} {
+			if err := session.DropTable(bean); err != nil {
+				return err
+			}
+			if err := session.CreateTable(bean); err != nil {
+				return err
+			}
+		}
 
-	err = engine.CreateTables(&Users{}, &Series{}, &Seasons{}, &Episodes{})
+		return nil
+	}, retry.WithIdempotent(true))
+
 	assert.NoError(t, err)
 }
 
 func TestDDLTxSync(t *testing.T) {
 	engine, err := enginePool.GetSchemeQueryEngine()
 	assert.NoError(t, err)
+	assert.NotNil(t, engine)
 
-	err = engine.DropTables(&Users{}, &Series{}, &Seasons{}, &Episodes{})
+	err = engine.DoTx(enginePool.ctx, func(ctx context.Context, session *xorm.Session) error {
+		for _, bean := range []interface{}{
+			&Users{},
+			&Series{},
+			&Seasons{},
+			&Episodes{},
+		} {
+			if err := session.DropTable(bean); err != nil {
+				return err
+			}
+		}
+
+		err := session.Sync(&Users{}, &Series{}, &Seasons{}, &Episodes{})
+		return err
+	}, retry.WithIdempotent(true))
+
+	assert.NoError(t, err)
+}
+
+func TestInsertMulti2InterfaceTransaction(t *testing.T) {
+	type Multi2InterfaceTransaction struct {
+		ID         uint64 `xorm:"id pk"`
+		Name       string
+		Alias      string
+		CreateTime time.Time `xorm:"created"`
+		UpdateTime time.Time `xorm:"updated"`
+	}
+
+	engine, err := enginePool.GetScriptQueryEngine()
+	assert.NoError(t, err)
+	assert.NotNil(t, engine)
+
+	assert.NoError(t, engine.Sync(&Multi2InterfaceTransaction{}))
+
+	session := engine.NewSession()
+	defer session.Close()
+
+	err = session.Begin()
 	assert.NoError(t, err)
 
-	_, err = engine.Transaction(func(session *xorm.Session) (_ interface{}, err error) {
-		err = session.Sync(&Users{}, &Series{}, &Seasons{}, &Episodes{})
-		return nil, err
+	users := []interface{}{
+		&Multi2InterfaceTransaction{ID: 1, Name: "a", Alias: "A"},
+		&Multi2InterfaceTransaction{ID: 2, Name: "b", Alias: "B"},
+		&Multi2InterfaceTransaction{ID: 3, Name: "c", Alias: "C"},
+		&Multi2InterfaceTransaction{ID: 4, Name: "d", Alias: "D"},
+	}
+	_, err = session.Insert(&users)
+
+	assert.NoError(t, err)
+
+	assert.NotPanics(t, func() {
+		err = session.Commit()
+		assert.NoError(t, err)
 	})
-	assert.NoError(t, err)
 }

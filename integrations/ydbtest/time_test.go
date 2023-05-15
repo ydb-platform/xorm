@@ -1,8 +1,6 @@
 package ydb
 
 import (
-	"fmt"
-	"log"
 	"strings"
 	"testing"
 	"time"
@@ -106,8 +104,8 @@ func TestTimeUserCreated(t *testing.T) {
 	assert.NoError(t, err)
 	assert.True(t, has)
 
-	log.Println(":", tm.CreatedAt)
-	log.Println(":", ret.CreatedAt)
+	t.Log(":", tm.CreatedAt)
+	t.Log(":", ret.CreatedAt)
 
 	assert.EqualValues(t, tm.CreatedAt.UnixMicro(), ret.CreatedAt.UnixMicro())
 	assert.EqualValues(t, tm.CreatedAt.Format(time.RFC3339), ret.CreatedAt.Format(time.RFC3339))
@@ -153,8 +151,8 @@ func TestTimeUserCreatedDiffLoc(t *testing.T) {
 	assert.NoError(t, err)
 	assert.True(t, has)
 
-	log.Println(":", tm.CreatedAt)
-	log.Println(":", ret.CreatedAt)
+	t.Log(":", tm.CreatedAt)
+	t.Log(":", ret.CreatedAt)
 
 	assert.EqualValues(t, tm.CreatedAt.UnixMicro(), ret.CreatedAt.UnixMicro())
 	assert.EqualValues(t, tm.CreatedAt.Format(time.RFC3339), ret.CreatedAt.Format(time.RFC3339))
@@ -185,10 +183,10 @@ func TestTimeUserUpdated(t *testing.T) {
 	assert.NoError(t, err)
 	assert.True(t, has)
 
-	log.Println("created 1:", tm.CreatedAt)
-	log.Println("updated 1:", tm.UpdatedAt)
-	log.Println("created 2:", ret.CreatedAt)
-	log.Println("updated 2:", ret.UpdatedAt)
+	t.Log("created 1:", tm.CreatedAt)
+	t.Log("updated 1:", tm.UpdatedAt)
+	t.Log("created 2:", ret.CreatedAt)
+	t.Log("updated 2:", ret.UpdatedAt)
 
 	assert.EqualValues(t, tm.CreatedAt.UnixMicro(), ret.CreatedAt.UnixMicro())
 	assert.EqualValues(t, tm.UpdatedAt.UnixMicro(), ret.UpdatedAt.UnixMicro())
@@ -254,10 +252,10 @@ func TestTimeUserUpdatedDiffLoc(t *testing.T) {
 	assert.NoError(t, err)
 	assert.True(t, has)
 
-	log.Println("created 1:", tm.CreatedAt)
-	log.Println("updated 1:", tm.UpdatedAt)
-	log.Println("created 2:", ret.CreatedAt)
-	log.Println("updated 2:", ret.UpdatedAt)
+	t.Log("created 1:", tm.CreatedAt)
+	t.Log("updated 1:", tm.UpdatedAt)
+	t.Log("created 2:", ret.CreatedAt)
+	t.Log("updated 2:", ret.UpdatedAt)
 
 	assert.EqualValues(t, tm.CreatedAt.UnixMicro(), ret.CreatedAt.UnixMicro())
 	assert.EqualValues(t, tm.UpdatedAt.UnixMicro(), ret.UpdatedAt.UnixMicro())
@@ -322,7 +320,7 @@ func TestCustomTimeUser(t *testing.T) {
 
 	_, err = engine.Insert(&user)
 	assert.NoError(t, err)
-	fmt.Println("user", user.CreatedAt, user.UpdatedAt)
+	t.Log("user", user.CreatedAt, user.UpdatedAt)
 
 	var user2 TestTime
 	has, err := engine.Get(&user2)

@@ -69,8 +69,8 @@ func TestConversionModels(t *testing.T) {
 	assert.EqualValues(t, m.Log.LogID, ret.Log.LogID)
 	assert.EqualValues(t, m.Log.Name, ret.Log.Name)
 	assert.EqualValues(t, m.Log.Data, ret.Log.Data)
-	assert.EqualValues(t, m.Log.CreatedAt.Format(time.RFC3339Nano), ret.Log.CreatedAt.Format(time.RFC3339Nano))
-	assert.EqualValues(t, m.Log.UpdateAt.Format(time.RFC3339Nano), ret.Log.UpdateAt.Format(time.RFC3339Nano))
+	assert.EqualValues(t, m.Log.CreatedAt.Format(time.RFC3339), ret.Log.CreatedAt.Format(time.RFC3339))
+	assert.EqualValues(t, m.Log.UpdateAt.Format(time.RFC3339), ret.Log.UpdateAt.Format(time.RFC3339))
 }
 
 func TestConversionModelsCond(t *testing.T) {

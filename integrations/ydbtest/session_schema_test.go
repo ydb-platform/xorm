@@ -108,12 +108,7 @@ func TestIsColumnExist(t *testing.T) {
 }
 
 func TestGetTables(t *testing.T) {
-	assert.NoError(t, PrepareScheme(&Users{}))
-	assert.NoError(t, PrepareScheme(&Account{}))
-	assert.NoError(t, PrepareScheme(&Series{}))
-	assert.NoError(t, PrepareScheme(&Seasons{}))
-	assert.NoError(t, PrepareScheme(&Episodes{}))
-	assert.NoError(t, PrepareScheme(&TestEpisodes{}))
+	assert.NoError(t, PrepareScheme(&Users{}, &Account{}, &Series{}, &Seasons{}, &Episodes{}, &TestEpisodes{}))
 
 	engine, err := enginePool.GetDataQueryEngine()
 	assert.NoError(t, err)
@@ -142,9 +137,7 @@ func TestGetTables(t *testing.T) {
 }
 
 func TestGetIndexes(t *testing.T) {
-	assert.NoError(t, PrepareScheme(&Seasons{}))
-	assert.NoError(t, PrepareScheme(&Series{}))
-	assert.NoError(t, PrepareScheme(&Episodes{}))
+	assert.NoError(t, PrepareScheme(&Seasons{}, &Series{}, &Episodes{}))
 
 	engine, err := enginePool.GetDataQueryEngine()
 	assert.NoError(t, err)
@@ -252,12 +245,7 @@ func TestSyncOldTable(t *testing.T) {
 	session := engine.NewSession()
 	defer session.Close()
 
-	assert.NoError(t, PrepareScheme(&Users{}))
-	assert.NoError(t, PrepareScheme(&Account{}))
-	assert.NoError(t, PrepareScheme(&Series{}))
-	assert.NoError(t, PrepareScheme(&Seasons{}))
-	assert.NoError(t, PrepareScheme(&Episodes{}))
-	assert.NoError(t, PrepareScheme(&TestEpisodes{}))
+	assert.NoError(t, PrepareScheme(&Users{}, &Account{}, &Series{}, &Seasons{}, &Episodes{}, &TestEpisodes{}))
 
 	assert.NoError(t, session.Sync(
 		&Users{},
