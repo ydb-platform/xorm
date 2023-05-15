@@ -14,12 +14,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ydb-version: [22-5, 23-1]
+        ydb-version: [22.5, 23.1]
         go-version: [1.17.x, 1.18.x, 1.19.x, 1.20.x]
         os: [ubuntu-latest]
     services:
       ydb:
-        image: cr.yandex/yc/yandex-docker-local-ydb:stable-${{ matrix.ydb-version }}-slim
+        image: cr.yandex/yc/yandex-docker-local-ydb:${{ matrix.ydb-version }}-slim
         ports:
           - 2135:2135
           - 2136:2136
@@ -45,15 +45,7 @@ jobs:
           cache: true
       - name: secure connection
         run: |
-          if [ -d ./integrations/ydbtest ]; then
-            TEST_YDB_SCHEME=grpcs TEST_YDB_HOST=localhost:2135 TEST_YDB_DBNAME=local make test-ydb
-          else 
-            echo "Directory does not exists"
-          fi
+          TEST_YDB_SCHEME=grpcs TEST_YDB_HOST=localhost:2135 TEST_YDB_DBNAME=local make test-ydb
       - name: insecure connection
         run: |
-          if [ -d ./integrations/ydbtest ]; then
-            TEST_YDB_SCHEME=grpc TEST_YDB_HOST=localhost:2136 TEST_YDB_DBNAME=local make test-ydb
-          else 
-            echo "Directory does not exists"
-          fi
+          TEST_YDB_SCHEME=grpc TEST_YDB_HOST=localhost:2136 TEST_YDB_DBNAME=local make test-ydb
