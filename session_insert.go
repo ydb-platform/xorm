@@ -175,14 +175,7 @@ func (session *Session) insertMultipleStruct(rowsSlicePtr interface{}) (int64, e
 					setColumnInt(bean, col, 1)
 				})
 			} else {
-				var err error
-				var arg interface{}
-				switch session.engine.dialect.URI().DBType {
-				case schemas.YDB:
-					arg, err = session.statement.Value2Interface2(col, fieldValue)
-				default:
-					arg, err = session.statement.Value2Interface(col, fieldValue)
-				}
+				arg, err := session.statement.Value2Interface(col, fieldValue)
 				if err != nil {
 					return 0, err
 				}
@@ -331,7 +324,7 @@ func (session *Session) insertStruct(bean interface{}) (int64, error) {
 	}
 
 	// if there is auto increment column and driver don't support return it
-	if len(table.AutoIncrement) > 0 && !session.engine.driver.Features().SupportReturnInsertedID {
+	if len(table.AutoIncrement) > 0 && !session.engine.driver.Features().SupportReturnInsertedID && session.engine.dialect.URI().DBType != schemas.YDB {
 		var sql string
 		var newArgs []interface{}
 		var needCommit bool
@@ -545,14 +538,7 @@ func (session *Session) genInsertColumns(bean interface{}) ([]string, []interfac
 		} else if col.IsVersion && session.statement.CheckVersion {
 			args = append(args, 1)
 		} else {
-			var err error
-			var arg interface{}
-			switch session.engine.dialect.URI().DBType {
-			case schemas.YDB:
-				arg, err = session.statement.Value2Interface2(col, fieldValue)
-			default:
-				arg, err = session.statement.Value2Interface(col, fieldValue)
-			}
+			arg, err := session.statement.Value2Interface(col, fieldValue)
 			if err != nil {
 				return colNames, args, err
 			}

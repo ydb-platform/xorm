@@ -557,14 +557,7 @@ func (session *Session) genUpdateColumns(bean interface{}) ([]string, []interfac
 		} else if col.IsVersion && session.statement.CheckVersion {
 			args = append(args, 1)
 		} else {
-			var err error
-			var arg interface{}
-			switch session.engine.dialect.URI().DBType {
-			case schemas.YDB:
-				arg, err = session.statement.Value2Interface2(col, fieldValue)
-			default:
-				arg, err = session.statement.Value2Interface(col, fieldValue)
-			}
+			arg, err := session.statement.Value2Interface(col, fieldValue)
 			if err != nil {
 				return colNames, args, err
 			}

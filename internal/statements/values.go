@@ -79,6 +79,13 @@ func (statement *Statement) Value2Interface(col *schemas.Column, fieldValue refl
 		}
 	}
 
+	if statement.dialect.URI().DBType == schemas.YDB {
+		// !datbeohbbh! need to redirect for YDB, because ydb-go-sdk need detail
+		// information about data type in case value is `nil`
+		// or value is Uint/Int
+		return statement.Value2Interface2(col, fieldValue)
+	}
+
 	switch k {
 	case reflect.Bool:
 		return fieldValue.Bool(), nil
@@ -173,39 +180,6 @@ func (statement *Statement) Value2Interface(col *schemas.Column, fieldValue refl
 // !datbeohbbh! Convert value to interface. If value is invalid return the nil poiner of that type.
 // This method can be considered a helper method for YDB to correctly generate `DECLARE` section.
 func (statement *Statement) Value2Interface2(col *schemas.Column, fieldValue reflect.Value) (interface{}, error) {
-	if fieldValue.CanAddr() {
-		if fieldConvert, ok := fieldValue.Addr().Interface().(convert.Conversion); ok {
-			data, err := fieldConvert.ToDB()
-			if err != nil {
-				return nil, err
-			}
-			if data == nil {
-				data = []byte{}
-			}
-			if col.SQLType.IsBlob() {
-				return data, nil
-			}
-			return string(data), nil
-		}
-	}
-
-	isNil := fieldValue.Kind() == reflect.Ptr && fieldValue.IsNil()
-	if !isNil {
-		if fieldConvert, ok := fieldValue.Interface().(convert.Conversion); ok {
-			data, err := fieldConvert.ToDB()
-			if err != nil {
-				return nil, err
-			}
-			if data == nil {
-				data = []byte{}
-			}
-			if col.SQLType.IsBlob() {
-				return data, nil
-			}
-			return string(data), nil
-		}
-	}
-
 	fieldType := fieldValue.Type()
 	k := fieldType.Kind()
 	if k == reflect.Ptr {
@@ -370,7 +344,7 @@ func (statement *Statement) Value2Interface2(col *schemas.Column, fieldValue ref
 		}
 	default:
 		if fieldValue.Interface() == nil {
-			var ret *[]byte
+			var ret *string
 			return ret, nil
 		}
 		return fieldValue.Interface(), nil
