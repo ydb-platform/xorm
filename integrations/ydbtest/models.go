@@ -196,7 +196,7 @@ func getDataForSiliconValley(seriesID string) (series *Series, seasons []*Season
 		last     time.Time
 		episodes map[string]time.Time
 	}{
-		{"Season 1", date("2006-02-03"), date("2006-03-03"), map[string]time.Time{
+		{"Season 1", date("2014-04-06"), date("2014-06-01"), map[string]time.Time{
 			"Minimum Viable Product":        date("2014-04-06"),
 			"The Cap Table":                 date("2014-04-13"),
 			"Articles of Incorporation":     date("2014-04-20"),
@@ -206,7 +206,7 @@ func getDataForSiliconValley(seriesID string) (series *Series, seasons []*Season
 			"Proof of Concept":              date("2014-05-18"),
 			"Optimal Tip-to-Tip Efficiency": date("2014-06-01"),
 		}},
-		{"Season 2", date("2007-08-24"), date("2007-09-28"), map[string]time.Time{
+		{"Season 2", date("2015-04-12"), date("2015-06-14"), map[string]time.Time{
 			"Sand Hill Shuffle":      date("2015-04-12"),
 			"Runaway Devaluation":    date("2015-04-19"),
 			"Bad Money":              date("2015-04-26"),
@@ -218,7 +218,7 @@ func getDataForSiliconValley(seriesID string) (series *Series, seasons []*Season
 			"Binding Arbitration":    date("2015-06-07"),
 			"Two Days of the Condor": date("2015-06-14"),
 		}},
-		{"Season 3", date("2008-11-21"), date("2008-12-26"), map[string]time.Time{
+		{"Season 3", date("2016-04-24"), date("2016-06-26"), map[string]time.Time{
 			"Founder Friendly":               date("2016-04-24"),
 			"Two in the Box":                 date("2016-05-01"),
 			"Meinertzhagen's Haversack":      date("2016-05-08"),
@@ -230,7 +230,7 @@ func getDataForSiliconValley(seriesID string) (series *Series, seasons []*Season
 			"Daily Active Users":             date("2016-06-19"),
 			"The Uptick":                     date("2016-06-26"),
 		}},
-		{"Season 4", date("2010-06-25"), date("2010-07-30"), map[string]time.Time{
+		{"Season 4", date("2017-04-23"), date("2017-06-25"), map[string]time.Time{
 			"Success Failure":       date("2017-04-23"),
 			"Terms of Service":      date("2017-04-30"),
 			"Intellectual Property": date("2017-05-07"),

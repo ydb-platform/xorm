@@ -103,10 +103,6 @@ func TestQueryInterface(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(records))
 	assert.Equal(t, 5, len(records[0]))
-	/* 	assert.EqualValues(t, "1", string(records[0]["uuid"].([]byte)))
-	   	assert.Equal(t, "hi", string(records[0]["msg"].([]byte)))
-	   	assert.EqualValues(t, "28", string(records[0]["age"].([]byte)))
-	   	assert.EqualValues(t, "1.5", string(records[0]["money"].([]byte))) */
 	assert.EqualValues(t, 1, records[0]["uuid"].(int64))
 	assert.Equal(t, "hi", string(records[0]["msg"].(string)))
 	assert.EqualValues(t, 28, records[0]["age"].(int32))
@@ -246,16 +242,12 @@ func TestQueryInterfaceNoParam(t *testing.T) {
 	records, err := engine.Table("get_var5").Cols("uuid", "msg").Limit(1).QueryInterface()
 	assert.NoError(t, err)
 	assert.EqualValues(t, 1, len(records))
-	/* 	assert.EqualValues(t, "1", string(records[0]["uuid"].([]byte)))
-	   	assert.EqualValues(t, "false", string(records[0]["msg"].([]byte))) */
 	assert.EqualValues(t, 1, records[0]["uuid"].(int64))
 	assert.EqualValues(t, false, records[0]["msg"].(bool))
 
 	records, err = engine.Table("get_var5").Cols("uuid", "msg").Where(builder.Eq{"`uuid`": int64(1)}).QueryInterface()
 	assert.NoError(t, err)
 	assert.EqualValues(t, 1, len(records))
-	/* 	assert.EqualValues(t, "1", string(records[0]["uuid"].([]byte)))
-	   	assert.EqualValues(t, "false", string(records[0]["msg"].([]byte))) */
 	assert.EqualValues(t, 1, records[0]["uuid"].(int64))
 	assert.EqualValues(t, false, records[0]["msg"].(bool))
 }

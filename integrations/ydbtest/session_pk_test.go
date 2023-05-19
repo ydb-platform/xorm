@@ -19,8 +19,7 @@ func TestIntPK(t *testing.T) {
 		Uuid int32 `xorm:"pk"`
 	}
 
-	assert.NoError(t, PrepareScheme(&Int64PK{}))
-	assert.NoError(t, PrepareScheme(&Int32PK{}))
+	assert.NoError(t, PrepareScheme(&Int64PK{}, &Int32PK{}))
 
 	engine, err := enginePool.GetDataQueryEngine()
 	assert.NoError(t, err)
@@ -72,9 +71,7 @@ func TestUintPK(t *testing.T) {
 		Uuid uint64 `xorm:"pk"`
 	}
 
-	assert.NoError(t, PrepareScheme(&Uint8PK{}))
-	assert.NoError(t, PrepareScheme(&Uint32PK{}))
-	assert.NoError(t, PrepareScheme(&Uint64PK{}))
+	assert.NoError(t, PrepareScheme(&Uint8PK{}, &Uint32PK{}, &Uint64PK{}))
 
 	engine, err := enginePool.GetDataQueryEngine()
 	assert.NoError(t, err)

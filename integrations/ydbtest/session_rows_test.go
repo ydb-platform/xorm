@@ -117,9 +117,7 @@ func TestRowsRawYQL(t *testing.T) {
 }
 
 func TestRowsOverManyResultSet(t *testing.T) {
-	assert.NoError(t, PrepareScheme(&Series{}))
-	assert.NoError(t, PrepareScheme(&Seasons{}))
-	assert.NoError(t, PrepareScheme(&Episodes{}))
+	assert.NoError(t, PrepareScheme(&Series{}, &Seasons{}, &Episodes{}))
 
 	engine, err := enginePool.GetDataQueryEngine()
 	assert.NoError(t, err)
