@@ -7,13 +7,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"xorm.io/builder"
 	"xorm.io/xorm"
+	"xorm.io/xorm/dialects"
 	"xorm.io/xorm/retry"
 )
 
 func TestSelectView(t *testing.T) {
 	assert.NoError(t, PrepareScheme(&Series{}))
 
-	engine, err := enginePool.GetScriptQueryEngine()
+	engine, err := enginePool.GetDataQueryEngine()
 	assert.NoError(t, err)
 	assert.NotNil(t, engine)
 
@@ -38,7 +39,7 @@ func TestSelectView(t *testing.T) {
 func TestViewCond(t *testing.T) {
 	assert.NoError(t, PrepareScheme(&Seasons{}, &Episodes{}))
 
-	engine, err := enginePool.GetScriptQueryEngine()
+	engine, err := enginePool.GetDataQueryEngine()
 	assert.NoError(t, err)
 	assert.NotNil(t, engine)
 
@@ -51,10 +52,6 @@ func TestViewCond(t *testing.T) {
 		retry.WithIdempotent(true))
 
 	assert.NoError(t, err)
-
-	engine, err = enginePool.GetDataQueryEngine()
-	assert.NoError(t, err)
-	assert.NotNil(t, engine)
 
 	t.Run("query-view", func(t *testing.T) {
 		var season Seasons
@@ -133,4 +130,102 @@ func TestViewCond(t *testing.T) {
 			assert.ElementsMatch(t, episodeData, res)
 		})
 	})
+}
+
+func TestJoinView(t *testing.T) {
+	assert.NoError(t, PrepareScheme(&Series{}, &Seasons{}, &Episodes{}))
+
+	engine, err := enginePool.GetDataQueryEngine()
+	assert.NoError(t, err)
+	assert.NotNil(t, engine)
+
+	series, seasons, episodes := getData()
+	err = engine.DoTx(enginePool.ctx, func(ctx context.Context, session *xorm.Session) error {
+		_, err := session.Insert(&series, &seasons, &episodes)
+		return err
+	},
+		retry.WithID(t.Name()),
+		retry.WithIdempotent(true))
+
+	assert.NoError(t, err)
+
+	type JoinResult struct {
+		SeriesID   []byte `xorm:"'series_id'"`
+		SeasonID   []byte `xorm:"'season_id'"`
+		Title      string `xorm:"'title'"`
+		SeriesInfo string `xorm:"'series_info'"`
+	}
+
+	session := engine.NewSession()
+	defer session.Close()
+
+	session.Engine().SetQuotePolicy(dialects.QuotePolicyNone)
+	defer session.Engine().SetQuotePolicy(dialects.QuotePolicyAlways)
+
+	res := make([]JoinResult, 0)
+
+	err = session.
+		Table(&Seasons{}).
+		Alias("ss").
+		Select("ss.series_id as series_id, ss.season_id as season_id, ss.title as title, se.series_info as series_info").
+		Join("LEFT", []string{(&Series{}).TableName() + " VIEW index_series_title", "se"}, "ss.title = se.title").
+		Find(&res)
+	assert.NoError(t, err)
+
+	assert.EqualValues(t, len(seasons), len(res))
+}
+
+func TestJoinViewCond(t *testing.T) {
+	type A struct {
+		Id   int64 `xorm:"pk 'id'"`
+		ColA int64 `xorm:"'col_a' index(index_col_a)"`
+	}
+
+	type B struct {
+		Id   int64 `xorm:"pk 'id'"`
+		ColB int64 `xorm:"'col_b' index(index_col_b)"`
+	}
+
+	assert.NoError(t, PrepareScheme(&A{}, &B{}))
+
+	engine, err := enginePool.GetDataQueryEngine()
+	assert.NoError(t, err)
+	assert.NotNil(t, engine)
+
+	session := engine.NewSession()
+	defer session.Close()
+
+	for i := 1; i <= 10; i++ {
+		_, err = session.Insert(&A{Id: int64(i), ColA: int64(i)}, &B{Id: int64(i), ColB: int64(i)})
+		assert.NoError(t, err)
+	}
+
+	session.Engine().SetQuotePolicy(dialects.QuotePolicyNone)
+	defer session.Engine().SetQuotePolicy(dialects.QuotePolicyAlways)
+
+	type Result struct {
+		Id  int64 `xorm:"'id'"`
+		Col int64 `xorm:"'col'"`
+	}
+
+	res := make([]Result, 0)
+
+	err = session.
+		Table("a VIEW index_col_a").
+		Alias("table_a").
+		Select("table_a.id as id, table_a.col_a as col").
+		Join("INNER", []string{"b VIEW index_col_b", "table_b"}, "table_a.col_a = table_b.col_b").
+		Where("table_a.col_a >= ?", 5).
+		Asc("id").
+		Find(&res)
+
+	assert.NoError(t, err)
+	assert.EqualValues(t, 6, len(res))
+
+	t.Log(res)
+	t.Log(session.LastSQL())
+
+	for i := 0; i < len(res); i++ {
+		assert.EqualValues(t, Result{Id: int64(i + 5), Col: int64(i + 5)}, res[i])
+	}
 }
