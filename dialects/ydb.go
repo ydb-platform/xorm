@@ -479,8 +479,22 @@ func (db *ydb) IsReserved(name string) bool {
 	return ok
 }
 
-// always quote
-func (db *ydb) SetQuotePolicy(quotePolicy QuotePolicy) {}
+func (db *ydb) SetQuotePolicy(quotePolicy QuotePolicy) {
+	switch quotePolicy {
+	case QuotePolicyNone:
+		q := ydbQuoter
+		q.IsReserved = schemas.AlwaysNoReserve
+		db.quoter = q
+	case QuotePolicyReserved:
+		q := ydbQuoter
+		q.IsReserved = db.IsReserved
+		db.quoter = q
+	case QuotePolicyAlways:
+		fallthrough
+	default:
+		db.quoter = ydbQuoter
+	}
+}
 
 func (db *ydb) SQLType(column *schemas.Column) string {
 	return toYQLDataType(column.SQLType.Name, column.SQLType.DefaultLength, column.SQLType.DefaultLength2)
