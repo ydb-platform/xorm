@@ -36,7 +36,7 @@ func main() {
 	if dsn, exists := os.LookupEnv("POSTGRES_CONNECTION_STRING"); exists {
 		db, err = xorm.NewEngine("postgres", dsn)
 	} else if dsn, exists = os.LookupEnv("SQLITE_CONNECTION_STRING"); exists {
-		db, err = xorm.NewEngine("mysql", dsn)
+		db, err = xorm.NewEngine("sqlite", dsn)
 	} else if dsn, exists = os.LookupEnv("YDB_CONNECTION_STRING"); exists {
 		db, err = xorm.NewEngine("ydb", dsn)
 	} else {
@@ -50,7 +50,7 @@ func main() {
 	db.ShowSQL(false)
 	db.SetLogLevel(xormLog.LOG_DEBUG)
 
-	// prepare scheme 
+	// prepare scheme
 	if err = prepareScheme(ctx, db); err != nil {
 		panic(err)
 	}
