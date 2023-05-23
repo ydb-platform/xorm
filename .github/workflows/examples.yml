@@ -32,7 +32,7 @@ jobs:
     env:
       OS: ubuntu-latest
       GO: ${{ matrix.go-version }}
-      YDB_CONNECTION_STRING: grpc://ydb:2136/local?go_query_bind=table_path_prefix(/local/examples),declare,numeric&go_fake_tx=scripting&go_query_mode=scripting
+      YDB_CONNECTION_STRING: grpc://localhost:2136/local?go_query_bind=table_path_prefix(/local/examples),declare,numeric&go_fake_tx=scripting&go_query_mode=scripting
       YDB_ANONYMOUS_CREDENTIALS: 1
     steps:
       - name: Checkout code
