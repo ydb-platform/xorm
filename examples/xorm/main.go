@@ -14,6 +14,9 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 
+	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
+
 	_ "github.com/jackc/pgx/v4/stdlib"
 	_ "github.com/lib/pq"
 )
