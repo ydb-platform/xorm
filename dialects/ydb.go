@@ -289,7 +289,7 @@ const (
 
 func toYQLDataType(t string, defaultLength, defaultLength2 int64) (yqlType string) {
 	switch v := t; v {
-	case schemas.Bool:
+	case schemas.Bool, schemas.Boolean:
 		yqlType = yql_Bool
 		return
 	case schemas.TinyInt:
@@ -315,6 +315,12 @@ func toYQLDataType(t string, defaultLength, defaultLength2 int64) (yqlType strin
 		return
 	case schemas.UnsignedBigInt:
 		yqlType = yql_Uint64
+		return
+	case schemas.Int, schemas.Integer:
+		yqlType = yql_Int32
+		return
+	case schemas.UnsignedInt:
+		yqlType = yql_Uint32
 		return
 	case schemas.Float:
 		yqlType = yql_Float
