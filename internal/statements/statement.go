@@ -636,20 +636,10 @@ func (statement *Statement) convertSQLOrArgs(sqlOrArgs ...interface{}) (string, 
 		if len(sqlOrArgs) > 1 {
 			newArgs := make([]interface{}, 0, len(sqlOrArgs)-1)
 			for _, arg := range sqlOrArgs[1:] {
-				if v, ok := arg.(time.Time); ok {
-					switch statement.dialect.URI().DBType {
-					case schemas.YDB:
-						newArgs = append(newArgs, v)
-					default:
-						newArgs = append(newArgs, v.In(statement.defaultTimeZone).Format("2006-01-02 15:04:05"))
-					}
-				} else if v, ok := arg.(*time.Time); ok && v != nil {
-					switch statement.dialect.URI().DBType {
-					case schemas.YDB:
-						newArgs = append(newArgs, *v)
-					default:
-						newArgs = append(newArgs, v.In(statement.defaultTimeZone).Format("2006-01-02 15:04:05"))
-					}
+				if v, ok := arg.(time.Time); ok && statement.dialect.URI().DBType != schemas.YDB {
+					newArgs = append(newArgs, v.In(statement.defaultTimeZone).Format("2006-01-02 15:04:05"))
+				} else if v, ok := arg.(*time.Time); ok && v != nil && statement.dialect.URI().DBType != schemas.YDB {
+					newArgs = append(newArgs, v.In(statement.defaultTimeZone).Format("2006-01-02 15:04:05"))
 				} else {
 					newArgs = append(newArgs, arg)
 				}
