@@ -8,16 +8,11 @@ import (
 
 	"xorm.io/builder"
 	"xorm.io/xorm"
-	xormLog "xorm.io/xorm/log"
 
 	_ "github.com/ydb-platform/ydb-go-sdk/v3"
 
-	_ "github.com/go-sql-driver/mysql"
-
-	_ "github.com/mattn/go-sqlite3"
 	_ "modernc.org/sqlite"
 
-	_ "github.com/jackc/pgx/v4/stdlib"
 	_ "github.com/lib/pq"
 )
 
@@ -36,6 +31,7 @@ func main() {
 		db  *xorm.Engine
 		err error
 	)
+
 	if dsn, exists := os.LookupEnv("POSTGRES_CONNECTION_STRING"); exists {
 		db, err = xorm.NewEngine("postgres", dsn)
 	} else if dsn, exists = os.LookupEnv("SQLITE_CONNECTION_STRING"); exists {
@@ -49,9 +45,6 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-
-	db.ShowSQL(false)
-	db.SetLogLevel(xormLog.LOG_DEBUG)
 
 	// prepare scheme
 	if err = prepareScheme(ctx, db); err != nil {
