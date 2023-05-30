@@ -96,44 +96,29 @@ func AsTime(src interface{}, dbLoc *time.Location, uiLoc *time.Location) (*time.
 			return nil, nil
 		}
 		z, _ := t.Time.Zone()
-		if len(z) == 0 || t.Time.Year() == 0 {
+		if len(z) == 0 || t.Time.Year() == 0 || t.Time.Location().String() != dbLoc.String() {
 			tm := time.Date(t.Time.Year(), t.Time.Month(), t.Time.Day(), t.Time.Hour(),
 				t.Time.Minute(), t.Time.Second(), t.Time.Nanosecond(), dbLoc).In(uiLoc)
 			return &tm, nil
 		}
-
-		if t.Time.Location().String() != dbLoc.String() {
-			t.Time = t.Time.In(dbLoc)
-		}
-
 		tm := t.Time.In(uiLoc)
 		return &tm, nil
 	case *time.Time:
 		z, _ := t.Zone()
-		if len(z) == 0 || t.Year() == 0 {
+		if len(z) == 0 || t.Year() == 0 || t.Location().String() != dbLoc.String() {
 			tm := time.Date(t.Year(), t.Month(), t.Day(), t.Hour(),
 				t.Minute(), t.Second(), t.Nanosecond(), dbLoc).In(uiLoc)
 			return &tm, nil
 		}
-
-		if t.Location().String() != dbLoc.String() {
-			*t = t.In(dbLoc)
-		}
-
 		tm := t.In(uiLoc)
 		return &tm, nil
 	case time.Time:
 		z, _ := t.Zone()
-		if len(z) == 0 || t.Year() == 0 {
+		if len(z) == 0 || t.Year() == 0 || t.Location().String() != dbLoc.String() {
 			tm := time.Date(t.Year(), t.Month(), t.Day(), t.Hour(),
 				t.Minute(), t.Second(), t.Nanosecond(), dbLoc).In(uiLoc)
 			return &tm, nil
 		}
-
-		if t.Location().String() != dbLoc.String() {
-			t = t.In(dbLoc)
-		}
-
 		tm := t.In(uiLoc)
 		return &tm, nil
 	case int:
