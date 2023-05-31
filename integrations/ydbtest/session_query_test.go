@@ -14,7 +14,7 @@ func TestQueryString(t *testing.T) {
 	type GetVar2 struct {
 		Uuid    int64  `xorm:"pk"`
 		Msg     string `xorm:"varchar(255)"`
-		Age     int
+		Age     int32
 		Money   float64
 		Created time.Time `xorm:"created"`
 	}
@@ -113,7 +113,7 @@ func TestQueryNoParams(t *testing.T) {
 	type QueryNoParams struct {
 		Uuid    int64  `xorm:"pk"`
 		Msg     string `xorm:"varchar(255)"`
-		Age     int
+		Age     int32
 		Money   float64
 		Created time.Time `xorm:"created"`
 	}
@@ -256,7 +256,7 @@ func TestQueryWithBuilder(t *testing.T) {
 	type QueryWithBuilder struct {
 		Uuid    int64  `xorm:"pk"`
 		Msg     string `xorm:"varchar(255)"`
-		Age     int
+		Age     int32
 		Money   float64
 		Created time.Time `xorm:"created"`
 	}

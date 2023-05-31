@@ -8,7 +8,7 @@ import (
 )
 
 func TestInt(t *testing.T) {
-	type PR int
+	type PR int64
 	type TestInt struct {
 		Id   string `xorm:"pk VARCHAR"`
 		Data PR

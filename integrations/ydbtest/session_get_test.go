@@ -158,7 +158,7 @@ func TestGetNullValue(t *testing.T) {
 }
 
 func TestCustomTypes(t *testing.T) {
-	type CustomInt int
+	type CustomInt int64
 	type CustomString string
 
 	type TestCustomizeStruct struct {
