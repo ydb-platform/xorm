@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"time"
 
 	"xorm.io/xorm/convert"
 	"xorm.io/xorm/core"
@@ -1030,4 +1031,38 @@ func (ydbDrv *ydbDriver) GenScanResult(columnType string) (interface{}, error) {
 		var ret sql.RawBytes
 		return &ret, nil
 	}
+}
+
+func (ydbDrv *ydbDriver) Scan(ctx *ScanContext, rows *core.Rows, types []*sql.ColumnType, v ...interface{}) error {
+	if err := rows.Scan(v...); err != nil {
+		return err
+	}
+
+	if ctx.DBLocation == nil {
+		return nil
+	}
+
+	for i := range v {
+		// !datbeohbbh! YDB saves time in UTC. When returned value is time type, then value will be represented in local time.
+		// So value in time type must be converted to DBLocation.
+		switch des := v[i].(type) {
+		case *time.Time:
+			*des = (*des).In(ctx.DBLocation)
+		case *sql.NullTime:
+			if des.Valid {
+				(*des).Time = (*des).Time.In(ctx.DBLocation)
+			}
+		case *interface{}:
+			switch t := (*des).(type) {
+			case time.Time:
+				*des = t.In(ctx.DBLocation)
+			case sql.NullTime:
+				if t.Valid {
+					*des = t.Time.In(ctx.DBLocation)
+				}
+			}
+		}
+	}
+
+	return nil
 }
