@@ -16,7 +16,7 @@ import (
 
 func (session *Session) queryPreprocess(sqlStr *string, paramStr ...interface{}) {
 	for _, filter := range session.engine.dialect.Filters() {
-		*sqlStr = filter.Do(*sqlStr)
+		*sqlStr = filter.Do(session.ctx, *sqlStr)
 	}
 
 	if session.engine.dialect.URI().DBType == schemas.YDB {
