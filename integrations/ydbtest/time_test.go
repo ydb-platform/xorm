@@ -1,6 +1,7 @@
 package ydb
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -330,4 +331,65 @@ func TestCustomTimeUser(t *testing.T) {
 	assert.EqualValues(t, time.Time(user.CreatedAt).Format(time.RFC3339), time.Time(user2.CreatedAt).Format(time.RFC3339))
 	assert.EqualValues(t, user.UpdatedAt.Unix(), user2.UpdatedAt.Unix())
 	assert.EqualValues(t, time.Time(user.UpdatedAt).Format(time.RFC3339), time.Time(user2.UpdatedAt).Format(time.RFC3339))
+}
+
+func TestFindTimeDiffLoc(t *testing.T) {
+	type TestTime struct {
+		Uuid     string    `xorm:"pk 'uuid'"`
+		OperTime time.Time `xorm:"'oper_time'"`
+	}
+	assert.NoError(t, PrepareScheme(&TestTime{}))
+
+	engine, err := enginePool.GetDataQueryEngine()
+	assert.NoError(t, err)
+	assert.NotNil(t, engine)
+
+	newTzLoc, err := time.LoadLocation("America/New_York")
+	assert.NoError(t, err)
+
+	newDbLoc, err := time.LoadLocation("Europe/Berlin")
+	assert.NoError(t, err)
+
+	oldTzLoc := engine.GetTZLocation()
+	oldDbLoc := engine.GetTZDatabase()
+
+	defer func() {
+		engine.SetTZLocation(oldTzLoc)
+		engine.SetTZDatabase(oldDbLoc)
+	}()
+
+	engine.SetTZLocation(newTzLoc)
+	engine.SetTZDatabase(newDbLoc)
+
+	session := engine.NewSession()
+	defer session.Close()
+
+	var (
+		now      = time.Now().In(newTzLoc)
+		expected = make([]TestTime, 0)
+		actual   = make([]TestTime, 0)
+	)
+
+	for i := 0; i < 10; i++ {
+		now = now.Add(time.Minute).In(newTzLoc)
+		data := TestTime{
+			Uuid:     fmt.Sprintf("%d", i),
+			OperTime: now,
+		}
+		_, err = session.Insert(&data)
+		assert.NoError(t, err)
+		expected = append(expected, data)
+	}
+
+	err = session.Table(&TestTime{}).Asc("oper_time").Find(&actual)
+	assert.NoError(t, err)
+	assert.EqualValues(t, len(expected), len(actual))
+
+	for i, e := range expected {
+		assert.EqualValues(t, e.OperTime.Unix(), actual[i].OperTime.Unix())
+		assert.EqualValues(t, e.OperTime.Format(time.RFC3339), actual[i].OperTime.Format(time.RFC3339))
+	}
+
+	t.Log(expected)
+	t.Log(actual)
 }

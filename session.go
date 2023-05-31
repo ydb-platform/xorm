@@ -17,7 +17,6 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
-	"time"
 
 	"xorm.io/xorm/contexts"
 	"xorm.io/xorm/convert"
@@ -656,18 +655,7 @@ func (session *Session) convertBeanField(col *schemas.Column, fieldValue *reflec
 				dbTZ = col.TimeZone
 			}
 
-			var (
-				t   *time.Time
-				err error
-			)
-			// !datbeohbbh! need to handle time in YDB differently
-			// because YDB server saves timestamp as Unsigned 64-bit integer so SetTZDatabase() is not matter.
-			switch session.engine.dialect.URI().DBType {
-			case schemas.YDB:
-				t, err = convert.AsYDBTime(scanResult, dbTZ, session.engine.TZLocation)
-			default:
-				t, err = convert.AsTime(scanResult, dbTZ, session.engine.TZLocation)
-			}
+			t, err := convert.AsTime(scanResult, dbTZ, session.engine.TZLocation)
 			if err != nil {
 				return err
 			}
