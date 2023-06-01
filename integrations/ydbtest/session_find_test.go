@@ -564,6 +564,17 @@ func TestFindSqlNullable(t *testing.T) {
 	engine, err := enginePool.GetDataQueryEngine()
 	assert.NoError(t, err)
 
+	oldTzLoc := engine.GetTZLocation()
+	oldDbLoc := engine.GetTZDatabase()
+
+	defer func() {
+		engine.SetTZLocation(oldTzLoc)
+		engine.SetTZDatabase(oldDbLoc)
+	}()
+
+	engine.SetTZLocation(time.UTC)
+	engine.SetTZDatabase(time.UTC)
+
 	data := make([]*SqlNullable, 0)
 	for i := 0; i < 10; i++ {
 		data = append(data, &SqlNullable{
@@ -571,7 +582,7 @@ func TestFindSqlNullable(t *testing.T) {
 			Bool:   &sql.NullBool{},
 			Int32:  &sql.NullInt32{Int32: int32(i), Valid: true},
 			String: sql.NullString{String: fmt.Sprintf("data#%d", i), Valid: true},
-			Time:   &sql.NullTime{Time: time.Now(), Valid: true},
+			Time:   &sql.NullTime{Time: time.Now().In(time.UTC), Valid: true},
 		})
 	}
 
