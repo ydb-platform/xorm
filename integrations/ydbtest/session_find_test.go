@@ -2,8 +2,11 @@ package ydb
 
 import (
 	"database/sql"
+	"fmt"
 	"testing"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"xorm.io/builder"
 )
@@ -453,4 +456,151 @@ func TestFindTime(t *testing.T) {
 	err = engine.Table(&Users{}).Cols("created_at").Find(&createdAt)
 	assert.NoError(t, err)
 	assert.EqualValues(t, len(usersData), len(createdAt))
+}
+
+func TestFindStringArray(t *testing.T) {
+	type TestString struct {
+		Id   string    `xorm:"pk VARCHAR"`
+		Data *[]string `xorm:"TEXT"`
+	}
+
+	assert.NoError(t, PrepareScheme(&TestString{}))
+
+	engine, err := enginePool.GetDataQueryEngine()
+	assert.NoError(t, err)
+
+	_, err = engine.Insert(&TestString{
+		Id:   uuid.NewString(),
+		Data: &[]string{"a", "b", "c"},
+	})
+	assert.NoError(t, err)
+
+	var ret TestString
+	has, err := engine.Get(&ret)
+	assert.NoError(t, err)
+	assert.True(t, has)
+
+	assert.EqualValues(t, []string{"a", "b", "c"}, *(ret.Data))
+
+	for i := 0; i < 10; i++ {
+		_, err = engine.Insert(&TestString{
+			Id:   uuid.NewString(),
+			Data: &[]string{"a", "b", "c"},
+		})
+		assert.NoError(t, err)
+	}
+
+	var arr []TestString
+	err = engine.Asc("id").Find(&arr)
+	assert.NoError(t, err)
+
+	for _, v := range arr {
+		res := *(v.Data)
+		assert.EqualValues(t, []string{"a", "b", "c"}, res)
+	}
+}
+
+func TestFindCustomTypeAllField(t *testing.T) {
+	type RowID = uint64
+	type Str = *string
+	type Double = *float64
+	type Timestamp = *time.Time
+
+	type Row struct {
+		ID               RowID     `xorm:"pk 'id'"`
+		PayloadStr       Str       `xorm:"'payload_str'"`
+		PayloadDouble    Double    `xorm:"'payload_double'"`
+		PayloadTimestamp Timestamp `xorm:"'payload_timestamp'"`
+	}
+
+	rows := make([]Row, 0)
+	for i := 0; i < 10; i++ {
+		rows = append(rows, Row{
+			ID:               RowID(i),
+			PayloadStr:       func(s string) *string { return &s }(fmt.Sprintf("payload#%d", i)),
+			PayloadDouble:    func(f float64) *float64 { return &f }((float64)(i)),
+			PayloadTimestamp: func(t time.Time) *time.Time { return &t }(time.Now()),
+		})
+	}
+
+	assert.NoError(t, PrepareScheme(&Row{}))
+	engine, err := enginePool.GetScriptQueryEngine()
+	assert.NoError(t, err)
+
+	session := engine.NewSession()
+	defer session.Close()
+
+	_, err = session.Insert(&rows)
+	assert.NoError(t, err)
+
+	cnt, err := session.Count(&Row{})
+	assert.NoError(t, err)
+	assert.EqualValues(t, 10, cnt)
+
+	res := make([]Row, 0)
+	err = session.Asc("id").Find(&res)
+	assert.NoError(t, err)
+	assert.EqualValues(t, len(rows), len(res))
+
+	for i, v := range rows {
+		assert.EqualValues(t, v.ID, res[i].ID)
+		assert.EqualValues(t, v.PayloadStr, res[i].PayloadStr)
+		assert.EqualValues(t, v.PayloadDouble, res[i].PayloadDouble)
+		assert.EqualValues(t, v.PayloadTimestamp.Unix(), res[i].PayloadTimestamp.Unix())
+	}
+}
+
+func TestFindSqlNullable(t *testing.T) {
+	type SqlNullable struct {
+		ID     sql.NullInt64  `xorm:"pk 'id'"`
+		Bool   *sql.NullBool  `xorm:"'bool'"`
+		Int32  *sql.NullInt32 `xorm:"'int32'"`
+		String sql.NullString `xorm:"'string'"`
+		Time   *sql.NullTime  `xorm:"'time'"`
+	}
+
+	assert.NoError(t, PrepareScheme(&SqlNullable{}))
+
+	engine, err := enginePool.GetDataQueryEngine()
+	assert.NoError(t, err)
+
+	oldTzLoc := engine.GetTZLocation()
+	oldDbLoc := engine.GetTZDatabase()
+
+	defer func() {
+		engine.SetTZLocation(oldTzLoc)
+		engine.SetTZDatabase(oldDbLoc)
+	}()
+
+	engine.SetTZLocation(time.UTC)
+	engine.SetTZDatabase(time.UTC)
+
+	data := make([]*SqlNullable, 0)
+	for i := 0; i < 10; i++ {
+		data = append(data, &SqlNullable{
+			ID:     sql.NullInt64{Int64: int64(i), Valid: true},
+			Bool:   &sql.NullBool{},
+			Int32:  &sql.NullInt32{Int32: int32(i), Valid: true},
+			String: sql.NullString{String: fmt.Sprintf("data#%d", i), Valid: true},
+			Time:   &sql.NullTime{Time: time.Now().In(time.UTC), Valid: true},
+		})
+	}
+
+	session := engine.NewSession()
+	defer session.Close()
+
+	_, err = session.Insert(&data)
+	assert.NoError(t, err)
+
+	res := make([]*SqlNullable, 0)
+	err = session.Table(&SqlNullable{}).OrderBy("id").Find(&res)
+	assert.NoError(t, err)
+
+	for i, v := range data {
+		assert.EqualValues(t, v.ID, res[i].ID)
+		assert.Nil(t, res[i].Bool)
+		assert.EqualValues(t, v.Int32, res[i].Int32)
+		assert.EqualValues(t, v.String, res[i].String)
+		assert.EqualValues(t, v.Time.Time.Format(time.RFC3339), res[i].Time.Time.Format(time.RFC3339))
+	}
 }
