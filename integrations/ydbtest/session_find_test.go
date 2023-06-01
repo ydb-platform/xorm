@@ -549,3 +549,47 @@ func TestFindCustomTypeAllField(t *testing.T) {
 		assert.EqualValues(t, v.PayloadTimestamp.Unix(), res[i].PayloadTimestamp.Unix())
 	}
 }
+
+func TestFindSqlNullable(t *testing.T) {
+	type SqlNullable struct {
+		ID     sql.NullInt64  `xorm:"pk 'id'"`
+		Bool   *sql.NullBool  `xorm:"'bool'"`
+		Int32  *sql.NullInt32 `xorm:"'int32'"`
+		String sql.NullString `xorm:"'string'"`
+		Time   *sql.NullTime  `xorm:"'time'"`
+	}
+
+	assert.NoError(t, PrepareScheme(&SqlNullable{}))
+
+	engine, err := enginePool.GetDataQueryEngine()
+	assert.NoError(t, err)
+
+	data := make([]*SqlNullable, 0)
+	for i := 0; i < 10; i++ {
+		data = append(data, &SqlNullable{
+			ID:     sql.NullInt64{Int64: int64(i), Valid: true},
+			Bool:   &sql.NullBool{},
+			Int32:  &sql.NullInt32{Int32: int32(i), Valid: true},
+			String: sql.NullString{String: fmt.Sprintf("data#%d", i), Valid: true},
+			Time:   &sql.NullTime{Time: time.Now(), Valid: true},
+		})
+	}
+
+	session := engine.NewSession()
+	defer session.Close()
+
+	_, err = session.Insert(&data)
+	assert.NoError(t, err)
+
+	res := make([]*SqlNullable, 0)
+	err = session.Table(&SqlNullable{}).OrderBy("id").Find(&res)
+	assert.NoError(t, err)
+
+	for i, v := range data {
+		assert.EqualValues(t, v.ID, res[i].ID)
+		assert.Nil(t, res[i].Bool)
+		assert.EqualValues(t, v.Int32, res[i].Int32)
+		assert.EqualValues(t, v.String, res[i].String)
+		assert.EqualValues(t, v.Time.Time.Format(time.RFC3339), res[i].Time.Time.Format(time.RFC3339))
+	}
+}
