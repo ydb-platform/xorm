@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"reflect"
 	"strings"
 	"time"
 
@@ -1065,4 +1066,99 @@ func (ydbDrv *ydbDriver) Scan(ctx *ScanContext, rows *core.Rows, types []*sql.Co
 	}
 
 	return nil
+}
+
+// !datbeohbbh! this is a 'helper' function for YDB to bypass the custom type.
+// Example:
+// --
+// type CustomInt int64
+// engine.Where("ID > ?", CustomInt(10)).Get(...)
+// --
+// ydb-go-sdk does not know about `CustomInt` type and will cause error.
+func (ydbDrv *ydbDriver) Cast(paramStr ...interface{}) {
+	for i := range paramStr {
+		var (
+			val = reflect.ValueOf(paramStr[i])
+			res interface{}
+		)
+
+		fieldType := val.Type()
+		k := fieldType.Kind()
+		if k == reflect.Ptr {
+			if val.IsNil() || !val.IsValid() {
+				paramStr[i] = val.Interface()
+				continue
+			} else {
+				val = val.Elem()
+				fieldType = val.Type()
+				k = fieldType.Kind()
+			}
+		}
+
+		switch k {
+		case reflect.Bool:
+			res = val.Bool()
+		case reflect.String:
+			res = val.String()
+		case reflect.Struct:
+			if fieldType.ConvertibleTo(schemas.TimeType) {
+				res = val.Convert(schemas.TimeType).Interface().(time.Time)
+			} else if fieldType.ConvertibleTo(schemas.IntervalType) {
+				res = val.Convert(schemas.IntervalType).Interface().(time.Duration)
+			} else if fieldType.ConvertibleTo(schemas.NullBoolType) {
+				res = val.Convert(schemas.NullBoolType).Interface().(sql.NullBool)
+			} else if fieldType.ConvertibleTo(schemas.NullFloat64Type) {
+				res = val.Convert(schemas.NullFloat64Type).Interface().(sql.NullFloat64)
+			} else if fieldType.ConvertibleTo(schemas.NullInt16Type) {
+				res = val.Convert(schemas.NullInt16Type).Interface().(sql.NullInt16)
+			} else if fieldType.ConvertibleTo(schemas.NullInt32Type) {
+				res = val.Convert(schemas.NullInt32Type).Interface().(sql.NullInt32)
+			} else if fieldType.ConvertibleTo(schemas.NullInt64Type) {
+				res = val.Convert(schemas.NullInt64Type).Interface().(sql.NullInt64)
+			} else if fieldType.ConvertibleTo(schemas.NullStringType) {
+				res = val.Convert(schemas.NullStringType).Interface().(sql.NullString)
+			} else if fieldType.ConvertibleTo(schemas.NullTimeType) {
+				res = val.Convert(schemas.NullTimeType).Interface().(sql.NullTime)
+			} else {
+				res = val.Interface()
+			}
+		case reflect.Array, reflect.Slice, reflect.Map:
+			res = val.Interface()
+		case reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uint:
+			val := val.Uint()
+			switch k {
+			case reflect.Uint8:
+				res = uint8(val)
+			case reflect.Uint16:
+				res = uint16(val)
+			case reflect.Uint32:
+				res = uint32(val)
+			case reflect.Uint64:
+				res = uint64(val)
+			default:
+				res = val
+			}
+		case reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Int:
+			val := val.Int()
+			switch k {
+			case reflect.Int8:
+				res = int8(val)
+			case reflect.Int16:
+				res = int16(val)
+			case reflect.Int32:
+				res = int32(val)
+			case reflect.Int64:
+				res = int64(val)
+			default:
+				res = val
+			}
+		default:
+			if val.Interface() == nil {
+				res = (*[]byte)(nil)
+			} else {
+				res = val.Interface()
+			}
+		}
+		paramStr[i] = res
+	}
 }

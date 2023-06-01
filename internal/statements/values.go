@@ -228,7 +228,7 @@ func (statement *Statement) Value2Interface(col *schemas.Column, fieldValue refl
 		case reflect.Uint64:
 			return uint64(val), nil
 		default:
-			return uint32(val), nil
+			return val, nil
 		}
 	case reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Int:
 		val := fieldValue.Int()
@@ -242,7 +242,7 @@ func (statement *Statement) Value2Interface(col *schemas.Column, fieldValue refl
 		case reflect.Int64:
 			return int64(val), nil
 		default:
-			return int32(val), nil
+			return val, nil
 		}
 	default:
 		if fieldValue.Interface() == nil && statement.dialect.URI().DBType == schemas.YDB {

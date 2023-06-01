@@ -116,7 +116,7 @@ func TestE2E(t *testing.T) {
 								Where("series_id = ?", epData.SeriesID).
 								And("season_id = ?", epData.SeasonID).
 								And("episode_id = ?", epData.EpisodeID).
-								Incr("views").
+								Incr("views", uint64(1)).
 								Update(&Episodes{})
 
 							if err != nil {
