@@ -2,6 +2,7 @@ package ydb
 
 import (
 	"database/sql"
+	"fmt"
 	"testing"
 	"time"
 
@@ -232,4 +233,113 @@ func TestGetTime(t *testing.T) {
 	assert.NoError(t, err)
 	assert.True(t, has)
 	assert.EqualValues(t, gts.CreateTime.Format(time.RFC3339), gn.Format(time.RFC3339))
+}
+
+func TestGetMapField(t *testing.T) {
+	type TestMap struct {
+		Id   string                 `xorm:"pk VARCHAR"`
+		Data map[string]interface{} `xorm:"TEXT"`
+	}
+
+	assert.NoError(t, PrepareScheme(&TestMap{}))
+
+	engine, err := enginePool.GetDataQueryEngine()
+	assert.NoError(t, err)
+
+	m := map[string]interface{}{
+		"abc": "1",
+		"xyz": "abc",
+		"uvc": map[string]interface{}{
+			"1": "abc",
+			"2": "xyz",
+		},
+	}
+
+	_, err = engine.Insert(&TestMap{
+		Id:   uuid.NewString(),
+		Data: m,
+	})
+	assert.NoError(t, err)
+
+	var ret TestMap
+	has, err := engine.Get(&ret)
+	assert.NoError(t, err)
+	assert.True(t, has)
+
+	assert.EqualValues(t, m, ret.Data)
+}
+
+func TestGetInt(t *testing.T) {
+	type PR int64
+	type TestInt struct {
+		Id   string `xorm:"pk VARCHAR"`
+		Data *PR
+	}
+
+	assert.NoError(t, PrepareScheme(&TestInt{}))
+
+	engine, err := enginePool.GetDataQueryEngine()
+	assert.NoError(t, err)
+
+	data := PR(1)
+	_, err = engine.Insert(&TestInt{
+		Id:   uuid.NewString(),
+		Data: &data,
+	})
+	assert.NoError(t, err)
+
+	var ret TestInt
+	has, err := engine.Where("data = ?", PR(1)).Get(&ret)
+	assert.NoError(t, err)
+	assert.True(t, has)
+}
+
+func TestGetCustomTypeAllField(t *testing.T) {
+	type RowID = uint32
+	type Str = *string
+	type Double = *float32
+	type Timestamp = *uint64
+
+	type Row struct {
+		ID               RowID     `xorm:"pk 'id'"`
+		PayloadStr       Str       `xorm:"'payload_str'"`
+		PayloadDouble    Double    `xorm:"'payload_double'"`
+		PayloadTimestamp Timestamp `xorm:"'payload_timestamp'"`
+	}
+
+	rows := make([]Row, 0)
+	for i := 0; i < 10; i++ {
+		rows = append(rows, Row{
+			ID:            RowID(i),
+			PayloadStr:    func(s string) *string { return &s }(fmt.Sprintf("payload#%d", i)),
+			PayloadDouble: func(f float32) *float32 { return &f }((float32)(i)),
+			PayloadTimestamp: func(t time.Time) *uint64 {
+				unix := uint64(t.Unix())
+				return &unix
+			}(time.Now()),
+		})
+	}
+
+	assert.NoError(t, PrepareScheme(&Row{}))
+	engine, err := enginePool.GetScriptQueryEngine()
+	assert.NoError(t, err)
+
+	session := engine.NewSession()
+	defer session.Close()
+
+	_, err = session.Insert(&rows)
+	assert.NoError(t, err)
+
+	cnt, err := session.Count(&Row{})
+	assert.NoError(t, err)
+	assert.EqualValues(t, 10, cnt)
+
+	for i := RowID(0); i < 10; i++ {
+		res := Row{ID: i}
+		has, err := session.Get(&res)
+
+		assert.NoError(t, err)
+		assert.True(t, has)
+		assert.EqualValues(t, rows[i], res)
+	}
 }

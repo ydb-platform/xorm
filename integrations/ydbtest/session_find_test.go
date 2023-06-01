@@ -2,8 +2,11 @@ package ydb
 
 import (
 	"database/sql"
+	"fmt"
 	"testing"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"xorm.io/builder"
 )
@@ -453,4 +456,96 @@ func TestFindTime(t *testing.T) {
 	err = engine.Table(&Users{}).Cols("created_at").Find(&createdAt)
 	assert.NoError(t, err)
 	assert.EqualValues(t, len(usersData), len(createdAt))
+}
+
+func TestFindStringArray(t *testing.T) {
+	type TestString struct {
+		Id   string    `xorm:"pk VARCHAR"`
+		Data *[]string `xorm:"TEXT"`
+	}
+
+	assert.NoError(t, PrepareScheme(&TestString{}))
+
+	engine, err := enginePool.GetDataQueryEngine()
+	assert.NoError(t, err)
+
+	_, err = engine.Insert(&TestString{
+		Id:   uuid.NewString(),
+		Data: &[]string{"a", "b", "c"},
+	})
+	assert.NoError(t, err)
+
+	var ret TestString
+	has, err := engine.Get(&ret)
+	assert.NoError(t, err)
+	assert.True(t, has)
+
+	assert.EqualValues(t, []string{"a", "b", "c"}, *(ret.Data))
+
+	for i := 0; i < 10; i++ {
+		_, err = engine.Insert(&TestString{
+			Id:   uuid.NewString(),
+			Data: &[]string{"a", "b", "c"},
+		})
+		assert.NoError(t, err)
+	}
+
+	var arr []TestString
+	err = engine.Asc("id").Find(&arr)
+	assert.NoError(t, err)
+
+	for _, v := range arr {
+		res := *(v.Data)
+		assert.EqualValues(t, []string{"a", "b", "c"}, res)
+	}
+}
+
+func TestFindCustomTypeAllField(t *testing.T) {
+	type RowID = uint64
+	type Str = *string
+	type Double = *float64
+	type Timestamp = *time.Time
+
+	type Row struct {
+		ID               RowID     `xorm:"pk 'id'"`
+		PayloadStr       Str       `xorm:"'payload_str'"`
+		PayloadDouble    Double    `xorm:"'payload_double'"`
+		PayloadTimestamp Timestamp `xorm:"'payload_timestamp'"`
+	}
+
+	rows := make([]Row, 0)
+	for i := 0; i < 10; i++ {
+		rows = append(rows, Row{
+			ID:               RowID(i),
+			PayloadStr:       func(s string) *string { return &s }(fmt.Sprintf("payload#%d", i)),
+			PayloadDouble:    func(f float64) *float64 { return &f }((float64)(i)),
+			PayloadTimestamp: func(t time.Time) *time.Time { return &t }(time.Now()),
+		})
+	}
+
+	assert.NoError(t, PrepareScheme(&Row{}))
+	engine, err := enginePool.GetScriptQueryEngine()
+	assert.NoError(t, err)
+
+	session := engine.NewSession()
+	defer session.Close()
+
+	_, err = session.Insert(&rows)
+	assert.NoError(t, err)
+
+	cnt, err := session.Count(&Row{})
+	assert.NoError(t, err)
+	assert.EqualValues(t, 10, cnt)
+
+	res := make([]Row, 0)
+	err = session.Asc("id").Find(&res)
+	assert.NoError(t, err)
+	assert.EqualValues(t, len(rows), len(res))
+
+	for i, v := range rows {
+		assert.EqualValues(t, v.ID, res[i].ID)
+		assert.EqualValues(t, v.PayloadStr, res[i].PayloadStr)
+		assert.EqualValues(t, v.PayloadDouble, res[i].PayloadDouble)
+		assert.EqualValues(t, v.PayloadTimestamp.Unix(), res[i].PayloadTimestamp.Unix())
+	}
 }

@@ -130,3 +130,38 @@ func TestInsertMultiMapInterface(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, int64(len(users)), cnt)
 }
+
+func TestInsertCustomType(t *testing.T) {
+	type RowID = uint64
+
+	type Row struct {
+		ID               RowID      `xorm:"pk 'id'"`
+		PayloadStr       *string    `xorm:"'payload_str'"`
+		PayloadDouble    *float64   `xorm:"'payload_double'"`
+		PayloadTimestamp *time.Time `xorm:"'payload_timestamp'"`
+	}
+
+	rows := make([]Row, 0)
+	for i := 0; i < 10; i++ {
+		rows = append(rows, Row{
+			ID:               RowID(i),
+			PayloadStr:       func(s string) *string { return &s }(fmt.Sprintf("payload#%d", i)),
+			PayloadDouble:    func(f float64) *float64 { return &f }((float64)(i)),
+			PayloadTimestamp: func(t time.Time) *time.Time { return &t }(time.Now()),
+		})
+	}
+
+	assert.NoError(t, PrepareScheme(&Row{}))
+	engine, err := enginePool.GetScriptQueryEngine()
+	assert.NoError(t, err)
+
+	session := engine.NewSession()
+	defer session.Close()
+
+	_, err = session.Insert(&rows)
+	assert.NoError(t, err)
+
+	cnt, err := session.Count(&Row{})
+	assert.NoError(t, err)
+	assert.EqualValues(t, 10, cnt)
+}
