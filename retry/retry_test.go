@@ -163,4 +163,5 @@ func TestRetry(t *testing.T) {
 		WithBackoff(NewBackoff(1*time.Millisecond, 2*time.Millisecond, true)))
 
 	assert.NoError(t, err)
+	assert.Greater(t, c, mxRetries)
 }

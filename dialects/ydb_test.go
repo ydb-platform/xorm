@@ -89,6 +89,18 @@ func TestParseYDBConnString(t *testing.T) {
 			},
 			valid: true,
 		},
+		{
+			connString: "grpcs://lb.etn03r9df42nb631unbv.ydb.mdb.yandexcloud.net:2135/ru-central1/b1g8skpblkos03malf3s/etn03r9df42nb631unbv",
+			expected: result{
+				dbType:   "ydb",
+				host:     "lb.etn03r9df42nb631unbv.ydb.mdb.yandexcloud.net",
+				port:     "2135",
+				dbName:   "/ru-central1/b1g8skpblkos03malf3s/etn03r9df42nb631unbv",
+				userName: "",
+				password: "",
+			},
+			valid: true,
+		},
 	}
 
 	driver := QueryDriver("ydb")
@@ -163,112 +175,112 @@ func TestIsRetryableYDB(t *testing.T) {
 		{
 			retryable: false,
 			err: mockError{
-				code: int32(grpc_Unknown),
+				code: int32(ydb_grpc_Unknown),
 				name: "grpc unknown",
 			},
 		},
 		{
 			retryable: false,
 			err: mockError{
-				code: int32(grpc_InvalidArgument),
+				code: int32(ydb_grpc_InvalidArgument),
 				name: "grpc invalid argument",
 			},
 		},
 		{
 			retryable: false,
 			err: mockError{
-				code: int32(grpc_DeadlineExceeded),
+				code: int32(ydb_grpc_DeadlineExceeded),
 				name: "grpc deadline exceeded",
 			},
 		},
 		{
 			retryable: false,
 			err: mockError{
-				code: int32(grpc_NotFound),
+				code: int32(ydb_grpc_NotFound),
 				name: "grpc not found",
 			},
 		},
 		{
 			retryable: false,
 			err: mockError{
-				code: int32(grpc_AlreadyExists),
+				code: int32(ydb_grpc_AlreadyExists),
 				name: "grpc already exists",
 			},
 		},
 		{
 			retryable: false,
 			err: mockError{
-				code: int32(grpc_PermissionDenied),
+				code: int32(ydb_grpc_PermissionDenied),
 				name: "grpc permission denied",
 			},
 		},
 		{
 			retryable: false,
 			err: mockError{
-				code: int32(grpc_FailedPrecondition),
+				code: int32(ydb_grpc_FailedPrecondition),
 				name: "grpc failed precondition",
 			},
 		},
 		{
 			retryable: false,
 			err: mockError{
-				code: int32(grpc_OutOfRange),
+				code: int32(ydb_grpc_OutOfRange),
 				name: "grpc out of range",
 			},
 		},
 		{
 			retryable: false,
 			err: mockError{
-				code: int32(grpc_Unimplemented),
+				code: int32(ydb_grpc_Unimplemented),
 				name: "grpc unimplemented",
 			},
 		},
 		{
 			retryable: false,
 			err: mockError{
-				code: int32(grpc_DataLoss),
+				code: int32(ydb_grpc_DataLoss),
 				name: "grpc data loss",
 			},
 		},
 		{
 			retryable: false,
 			err: mockError{
-				code: int32(grpc_Unauthenticated),
+				code: int32(ydb_grpc_Unauthenticated),
 				name: "grpc unauthenticated",
 			},
 		},
 		{
 			retryable: true,
 			err: mockError{
-				code: int32(grpc_Canceled),
+				code: int32(ydb_grpc_Canceled),
 				name: "grpc canceled",
 			},
 		},
 		{
 			retryable: true,
 			err: mockError{
-				code: int32(grpc_ResourceExhausted),
+				code: int32(ydb_grpc_ResourceExhausted),
 				name: "grpc resource exhauseed",
 			},
 		},
 		{
 			retryable: true,
 			err: mockError{
-				code: int32(grpc_Aborted),
+				code: int32(ydb_grpc_Aborted),
 				name: "grpc aborted",
 			},
 		},
 		{
 			retryable: true,
 			err: mockError{
-				code: int32(grpc_Internal),
+				code: int32(ydb_grpc_Internal),
 				name: "grpc internal",
 			},
 		},
 		{
 			retryable: true,
 			err: mockError{
-				code: int32(grpc_Unavailable),
+				code: int32(ydb_grpc_Unavailable),
 				name: "grpc unavailable",
 			},
 		},
@@ -407,7 +419,7 @@ func TestIsRetryableYDB(t *testing.T) {
 		},
 		{
 			retryable: false,
-			err:       fmt.Errorf("wrap error: %w", mockError{code: int32(grpc_Unknown), name: "wrap grpc unknown"}),
+			err:       fmt.Errorf("wrap error: %w", mockError{code: int32(ydb_grpc_Unknown), name: "wrap grpc unknown"}),
 		},
 		{
 			retryable: true,
@@ -420,7 +432,7 @@ func TestIsRetryableYDB(t *testing.T) {
 	} {
 		t.Run(curErr.err.Error(), func(t *testing.T) {
 			retryable := ydbDialect.IsRetryable(curErr.err)
-			assert.EqualValues(t, curErr.retryable, retryable, fmt.Errorf("expected: %s - retryable: %v", curErr.err.Error(), curErr.retryable))
+			assert.EqualValues(t, curErr.retryable, retryable)
 		})
 	}
 }
