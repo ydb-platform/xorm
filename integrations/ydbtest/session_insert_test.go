@@ -165,3 +165,43 @@ func TestInsertCustomType(t *testing.T) {
 	assert.NoError(t, err)
 	assert.EqualValues(t, 10, cnt)
 }
+
+func TestInsertEmptyField(t *testing.T) {
+	type EmptyField struct {
+		ID uint64 `xorm:"pk 'id'"`
+
+		Bool bool
+
+		Int64  int64
+		Uint64 uint64
+
+		Int32  int32
+		Uint32 uint32
+
+		Uint8 uint8
+
+		Float  float32
+		Double float64
+
+		Utf8 string
+
+		Timestamp time.Time
+
+		Interval time.Duration
+
+		String []byte
+	}
+
+	PrepareScheme(&EmptyField{})
+
+	engine, err := enginePool.GetDataQueryEngine()
+	assert.NoError(t, err)
+	assert.NotNil(t, engine)
+
+	for i := 0; i < 10; i++ {
+		_, err = engine.Insert(&EmptyField{
+			ID: uint64(i),
+		})
+		assert.NoError(t, err)
+	}
+}

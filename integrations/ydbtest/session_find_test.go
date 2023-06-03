@@ -604,3 +604,53 @@ func TestFindSqlNullable(t *testing.T) {
 		assert.EqualValues(t, v.Time.Time.Format(time.RFC3339), res[i].Time.Time.Format(time.RFC3339))
 	}
 }
+
+func TestFindEmptyField(t *testing.T) {
+	type EmptyField struct {
+		ID uint64 `xorm:"pk 'id'"`
+
+		Bool bool
+
+		Int64  int64
+		Uint64 uint64
+
+		Int32  int32
+		Uint32 uint32
+
+		Uint8 uint8
+
+		Float  float32
+		Double float64
+
+		Utf8 string
+
+		Timestamp time.Time
+
+		Interval time.Duration
+
+		String []byte
+	}
+
+	PrepareScheme(&EmptyField{})
+
+	engine, err := enginePool.GetDataQueryEngine()
+	assert.NoError(t, err)
+	assert.NotNil(t, engine)
+
+	data := make([]EmptyField, 0)
+	for i := 0; i < 10; i++ {
+		data = append(data, EmptyField{
+			ID: uint64(i),
+		})
+		data[i].String = []uint8{}
+	}
+
+	_, err = engine.Insert(&data)
+	assert.NoError(t, err)
+
+	res := make([]EmptyField, 0)
+	err = engine.Asc("id").Find(&res)
+	assert.NoError(t, err)
+
+	assert.Equal(t, data, res)
+}
