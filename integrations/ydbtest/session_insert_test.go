@@ -176,14 +176,16 @@ func TestInsertWithTableParams(t *testing.T) {
 		Series *Series `xorm:"extends"`
 	}
 
-	engine.Dialect().SetParams(map[string]string{
+	tableParams := map[string]string{
 		"AUTO_PARTITIONING_BY_SIZE":              "ENABLED",
 		"AUTO_PARTITIONING_BY_LOAD":              "ENABLED",
 		"AUTO_PARTITIONING_PARTITION_SIZE_MB":    "1",
 		"AUTO_PARTITIONING_MIN_PARTITIONS_COUNT": "6",
 		"AUTO_PARTITIONING_MAX_PARTITIONS_COUNT": "1000",
 		"UNIFORM_PARTITIONS":                     "6",
-	})
+	}
+
+	engine.Dialect().SetParams(tableParams)
 
 	session := engine.NewSession()
 	defer session.Close()
@@ -194,6 +196,14 @@ func TestInsertWithTableParams(t *testing.T) {
 
 	err = session.CreateTable(&SeriesTableWithParams{})
 	assert.NoError(t, err)
+
+	t.Run("check-YQL-script", func(t *testing.T) {
+		createTableYQL, _ := session.LastSQL()
+		for params, value := range tableParams {
+			pattern := params + `\s*=\s*` + value
+			assert.Regexp(t, pattern, createTableYQL)
+		}
+	})
 
 	computeHash := func(bean interface{}) {
 		data := bean.(*SeriesTableWithParams)
@@ -220,23 +230,37 @@ func TestInsertWithTableParams(t *testing.T) {
 }
 
 func TestInsertWithTableParams2(t *testing.T) {
-	engine, err := enginePool.GetDataQueryEngine()
+	engine, err := enginePool.GetScriptQueryEngine()
 	assert.NoError(t, err)
 	assert.NotNil(t, engine)
 
-	engine.Dialect().SetParams(map[string]string{
+	tableParams := map[string]string{
 		"AUTO_PARTITIONING_BY_SIZE":              "ENABLED",
 		"AUTO_PARTITIONING_BY_LOAD":              "ENABLED",
 		"AUTO_PARTITIONING_PARTITION_SIZE_MB":    "1",
 		"AUTO_PARTITIONING_MIN_PARTITIONS_COUNT": "3",
 		"AUTO_PARTITIONING_MAX_PARTITIONS_COUNT": "5",
-	})
+	}
 
-	assert.NoError(t, PrepareScheme(&Series{}))
+	engine.Dialect().SetParams(tableParams)
 
 	session := engine.NewSession()
 	defer session.Close()
 	defer session.Engine().Dialect().SetParams(nil)
+
+	err = session.DropTable(&Series{})
+	assert.NoError(t, err)
+
+	err = session.CreateTable(&Series{})
+	assert.NoError(t, err)
+
+	t.Run("check-YQL-script", func(t *testing.T) {
+		createTableYQL, _ := session.LastSQL()
+		for params, value := range tableParams {
+			pattern := params + `\s*=\s*` + value
+			assert.Regexp(t, pattern, createTableYQL)
+		}
+	})
 
 	for i := uint64(1); i < 100; i++ {
 		s := &Series{

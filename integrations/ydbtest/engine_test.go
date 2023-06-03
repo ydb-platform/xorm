@@ -226,14 +226,16 @@ func TestCreateTableWithTableParameters(t *testing.T) {
 		*Series `xorm:"extends"`
 	}
 
-	engine.Dialect().SetParams(map[string]string{
+	tableParams := map[string]string{
 		"AUTO_PARTITIONING_BY_SIZE":              "ENABLED",
 		"AUTO_PARTITIONING_BY_LOAD":              "ENABLED",
 		"AUTO_PARTITIONING_PARTITION_SIZE_MB":    "1",
 		"AUTO_PARTITIONING_MIN_PARTITIONS_COUNT": "6",
 		"AUTO_PARTITIONING_MAX_PARTITIONS_COUNT": "1000",
 		"UNIFORM_PARTITIONS":                     "6",
-	})
+	}
+
+	engine.Dialect().SetParams(tableParams)
 
 	session := engine.NewSession()
 	defer session.Close()
@@ -245,5 +247,11 @@ func TestCreateTableWithTableParameters(t *testing.T) {
 	err = session.CreateTable(&SeriesTableWithParams{})
 	assert.NoError(t, err)
 
-	t.Log(session.LastSQL())
+	t.Run("check-YQL-script", func(t *testing.T) {
+		createTableYQL, _ := session.LastSQL()
+		for params, value := range tableParams {
+			pattern := params + `\s*=\s*` + value
+			assert.Regexp(t, pattern, createTableYQL)
+		}
+	})
 }
