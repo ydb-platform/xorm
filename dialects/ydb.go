@@ -838,22 +838,22 @@ func (db *ydb) Filters() []Filter {
 }
 
 const (
-	grpc_Canceled           uint32 = 1
-	grpc_Unknown            uint32 = 2
-	grpc_InvalidArgument    uint32 = 3
-	grpc_DeadlineExceeded   uint32 = 4
-	grpc_NotFound           uint32 = 5
-	grpc_AlreadyExists      uint32 = 6
-	grpc_PermissionDenied   uint32 = 7
-	grpc_ResourceExhausted  uint32 = 8
-	grpc_FailedPrecondition uint32 = 9
-	grpc_Aborted            uint32 = 10
-	grpc_OutOfRange         uint32 = 11
-	grpc_Unimplemented      uint32 = 12
-	grpc_Internal           uint32 = 13
-	grpc_Unavailable        uint32 = 14
-	grpc_DataLoss           uint32 = 15
-	grpc_Unauthenticated    uint32 = 16
+	ydb_grpc_Canceled           uint32 = 1
+	ydb_grpc_Unknown            uint32 = 2
+	ydb_grpc_InvalidArgument    uint32 = 3
+	ydb_grpc_DeadlineExceeded   uint32 = 4
+	ydb_grpc_NotFound           uint32 = 5
+	ydb_grpc_AlreadyExists      uint32 = 6
+	ydb_grpc_PermissionDenied   uint32 = 7
+	ydb_grpc_ResourceExhausted  uint32 = 8
+	ydb_grpc_FailedPrecondition uint32 = 9
+	ydb_grpc_Aborted            uint32 = 10
+	ydb_grpc_OutOfRange         uint32 = 11
+	ydb_grpc_Unimplemented      uint32 = 12
+	ydb_grpc_Internal           uint32 = 13
+	ydb_grpc_Unavailable        uint32 = 14
+	ydb_grpc_DataLoss           uint32 = 15
+	ydb_grpc_Unauthenticated    uint32 = 16
 )
 
 const (
@@ -897,24 +897,24 @@ func (db *ydb) IsRetryable(err error) bool {
 
 	switch target.Code() {
 	case
-		int32(grpc_Unknown),
-		int32(grpc_InvalidArgument),
-		int32(grpc_DeadlineExceeded),
-		int32(grpc_NotFound),
-		int32(grpc_AlreadyExists),
-		int32(grpc_PermissionDenied),
-		int32(grpc_FailedPrecondition),
-		int32(grpc_OutOfRange),
-		int32(grpc_Unimplemented),
-		int32(grpc_DataLoss),
-		int32(grpc_Unauthenticated):
+		int32(ydb_grpc_Unknown),
+		int32(ydb_grpc_InvalidArgument),
+		int32(ydb_grpc_DeadlineExceeded),
+		int32(ydb_grpc_NotFound),
+		int32(ydb_grpc_AlreadyExists),
+		int32(ydb_grpc_PermissionDenied),
+		int32(ydb_grpc_FailedPrecondition),
+		int32(ydb_grpc_OutOfRange),
+		int32(ydb_grpc_Unimplemented),
+		int32(ydb_grpc_DataLoss),
+		int32(ydb_grpc_Unauthenticated):
 		return false
 	case
-		int32(grpc_Canceled),
-		int32(grpc_ResourceExhausted),
-		int32(grpc_Aborted),
-		int32(grpc_Internal),
-		int32(grpc_Unavailable):
+		int32(ydb_grpc_Canceled),
+		int32(ydb_grpc_ResourceExhausted),
+		int32(ydb_grpc_Aborted),
+		int32(ydb_grpc_Internal),
+		int32(ydb_grpc_Unavailable):
 		return true
 	case
 		ydb_STATUS_CODE_UNSPECIFIED,
@@ -1077,6 +1077,10 @@ func (ydbDrv *ydbDriver) Scan(ctx *ScanContext, rows *core.Rows, types []*sql.Co
 // ydb-go-sdk does not know about `CustomInt` type and will cause error.
 func (ydbDrv *ydbDriver) Cast(paramStr ...interface{}) {
 	for i := range paramStr {
+		if paramStr[i] == nil {
+			continue
+		}
+
 		var (
 			val = reflect.ValueOf(paramStr[i])
 			res interface{}
