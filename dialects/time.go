@@ -13,6 +13,10 @@ import (
 
 // FormatColumnTime format column time
 func FormatColumnTime(dialect Dialect, dbLocation *time.Location, col *schemas.Column, t time.Time) (interface{}, error) {
+	if dialect.URI().DBType == schemas.YDB && t.IsZero() {
+		return (*time.Time)(nil), nil
+	}
+
 	if t.IsZero() {
 		if col.Nullable {
 			return nil, nil

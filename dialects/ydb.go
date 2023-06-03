@@ -1077,6 +1077,10 @@ func (ydbDrv *ydbDriver) Scan(ctx *ScanContext, rows *core.Rows, types []*sql.Co
 // ydb-go-sdk does not know about `CustomInt` type and will cause error.
 func (ydbDrv *ydbDriver) Cast(paramStr ...interface{}) {
 	for i := range paramStr {
+		if paramStr[i] == nil {
+			continue
+		}
+
 		var (
 			val = reflect.ValueOf(paramStr[i])
 			res interface{}

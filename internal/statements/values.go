@@ -92,8 +92,7 @@ func (statement *Statement) Value2Interface(col *schemas.Column, fieldValue refl
 		} else if fieldType.ConvertibleTo(nullFloatType) {
 			t := fieldValue.Convert(nullFloatType).Interface().(sql.NullFloat64)
 			if !t.Valid {
-				var ret *float64
-				return ret, nil
+				return (*float64)(nil), nil
 			}
 			return t.Float64, nil
 		} else if fieldType.ConvertibleTo(bigFloatType) {
@@ -105,50 +104,43 @@ func (statement *Statement) Value2Interface(col *schemas.Column, fieldValue refl
 		} else if fieldType.ConvertibleTo(schemas.NullBoolType) {
 			t := fieldValue.Convert(schemas.NullBoolType).Interface().(sql.NullBool)
 			if !t.Valid {
-				var ret *bool
-				return ret, nil
+				return (*bool)(nil), nil
 			}
 			return t.Bool, nil
 		} else if fieldType.ConvertibleTo(schemas.NullFloat64Type) {
 			t := fieldValue.Convert(schemas.NullFloat64Type).Interface().(sql.NullFloat64)
 			if !t.Valid {
-				var ret *float64
-				return ret, nil
+				return (*float64)(nil), nil
 			}
 			return t.Float64, nil
 		} else if fieldType.ConvertibleTo(schemas.NullInt16Type) {
 			t := fieldValue.Convert(schemas.NullInt16Type).Interface().(sql.NullInt16)
 			if !t.Valid {
-				var ret *int64
-				return ret, nil
+				return (*int16)(nil), nil
 			}
 			return t.Int16, nil
 		} else if fieldType.ConvertibleTo(schemas.NullInt32Type) {
 			t := fieldValue.Convert(schemas.NullInt32Type).Interface().(sql.NullInt32)
 			if !t.Valid {
-				var ret *int32
-				return ret, nil
+				return (*int32)(nil), nil
 			}
 			return t.Int32, nil
 		} else if fieldType.ConvertibleTo(schemas.NullInt64Type) {
 			t := fieldValue.Convert(schemas.NullInt64Type).Interface().(sql.NullInt64)
 			if !t.Valid {
-				var ret *int64
-				return ret, nil
+				return (*int64)(nil), nil
 			}
 			return t.Int64, nil
 		} else if fieldType.ConvertibleTo(schemas.NullStringType) {
 			t := fieldValue.Convert(schemas.NullStringType).Interface().(sql.NullString)
 			if !t.Valid {
-				var ret *string
-				return ret, nil
+				return (*string)(nil), nil
 			}
 			return t.String, nil
 		} else if fieldType.ConvertibleTo(schemas.NullTimeType) {
 			t := fieldValue.Convert(schemas.NullTimeType).Interface().(sql.NullTime)
 			if !t.Valid {
-				var ret *time.Time
-				return ret, nil
+				return (*time.Time)(nil), nil
 			}
 			return t.Time, nil
 		}
@@ -246,8 +238,7 @@ func (statement *Statement) Value2Interface(col *schemas.Column, fieldValue refl
 		}
 	default:
 		if fieldValue.Interface() == nil && statement.dialect.URI().DBType == schemas.YDB {
-			var ret *string
-			return ret, nil
+			return (*string)(nil), nil
 		}
 		return fieldValue.Interface(), nil
 	}
