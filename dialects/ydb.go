@@ -424,6 +424,8 @@ func removeOptional(s string) string {
 type ydb struct {
 	Base
 	ydb *core.DB
+
+	tableParams map[string]string
 }
 
 func (db *ydb) Init(uri *URI) error {
@@ -459,6 +461,10 @@ func (db *ydb) WithConnRaw(ctx context.Context, f func(d interface{}) error) (er
 		return err
 	})
 	return err
+}
+
+func (db *ydb) SetParams(tableParams map[string]string) {
+	db.tableParams = tableParams
 }
 
 func (db *ydb) Features() *DialectFeatures {
@@ -814,7 +820,20 @@ func (db *ydb) CreateTableSQL(
 		buf.WriteString(strings.Join([]string{joinColumns, primaryKey}, ", "))
 	}
 
-	buf.WriteString(" );")
+	buf.WriteString(" ) ")
+
+	if db.tableParams != nil && len(db.tableParams) > 0 {
+		params := make([]string, 0)
+		for param, value := range db.tableParams {
+			if param == "" || value == "" {
+				continue
+			}
+			params = append(params, fmt.Sprintf("%s = %s", param, value))
+		}
+		buf.WriteString(fmt.Sprintf("WITH ( %s ) ", strings.Join(params, ", ")))
+	}
+
+	buf.WriteString("; ")
 
 	return buf.String(), true, nil
 }
@@ -1077,6 +1096,10 @@ func (ydbDrv *ydbDriver) Scan(ctx *ScanContext, rows *core.Rows, types []*sql.Co
 // ydb-go-sdk does not know about `CustomInt` type and will cause error.
 func (ydbDrv *ydbDriver) Cast(paramStr ...interface{}) {
 	for i := range paramStr {
+		if paramStr[i] == nil {
+			continue
+		}
+
 		var (
 			val = reflect.ValueOf(paramStr[i])
 			res interface{}

@@ -215,3 +215,35 @@ func TestRetryTx(t *testing.T) {
 	assert.EqualValues(t, seriesCnt, len(series))
 	assert.EqualValues(t, episodesCnt, len(episodes))
 }
+
+func TestCreateTableWithTableParameters(t *testing.T) {
+	engine, err := enginePool.GetScriptQueryEngine()
+	assert.NoError(t, err)
+	assert.NotNil(t, engine)
+
+	type SeriesTableWithParams struct {
+		Hash    uint64 `xorm:"pk"`
+		*Series `xorm:"extends"`
+	}
+
+	engine.Dialect().SetParams(map[string]string{
+		"AUTO_PARTITIONING_BY_SIZE":              "ENABLED",
+		"AUTO_PARTITIONING_BY_LOAD":              "ENABLED",
+		"AUTO_PARTITIONING_PARTITION_SIZE_MB":    "1",
+		"AUTO_PARTITIONING_MIN_PARTITIONS_COUNT": "6",
+		"AUTO_PARTITIONING_MAX_PARTITIONS_COUNT": "1000",
+		"UNIFORM_PARTITIONS":                     "6",
+	})
+
+	session := engine.NewSession()
+	defer session.Close()
+	defer session.Engine().Dialect().SetParams(nil)
+
+	err = session.DropTable(&SeriesTableWithParams{})
+	assert.NoError(t, err)
+
+	err = session.CreateTable(&SeriesTableWithParams{})
+	assert.NoError(t, err)
+
+	t.Log(session.LastSQL())
+}
