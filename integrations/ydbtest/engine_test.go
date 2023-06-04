@@ -255,3 +255,34 @@ func TestCreateTableWithTableParameters(t *testing.T) {
 		}
 	})
 }
+
+func TestCreateTableWithNilTableParameters(t *testing.T) {
+	engine, err := enginePool.GetScriptQueryEngine()
+	assert.NoError(t, err)
+	assert.NotNil(t, engine)
+
+	type SeriesTableWithParams struct {
+		Hash    uint64 `xorm:"pk"`
+		*Series `xorm:"extends"`
+	}
+
+	tableParams := make(map[string]string)
+	engine.Dialect().SetParams(tableParams)
+
+	session := engine.NewSession()
+	defer session.Close()
+
+	err = session.DropTable(&SeriesTableWithParams{})
+	assert.NoError(t, err)
+
+	err = session.CreateTable(&SeriesTableWithParams{})
+	assert.NoError(t, err)
+
+	t.Run("check-YQL-script", func(t *testing.T) {
+		createTableYQL, _ := session.LastSQL()
+		for param, value := range tableParams {
+			pattern := "WITH" + `\s*\(\s*` + param + `\s*=\s*` + value + `\s*,?\s*\)\s*`
+			assert.NotRegexp(t, pattern, createTableYQL)
+		}
+	})
+}

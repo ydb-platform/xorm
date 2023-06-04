@@ -830,7 +830,9 @@ func (db *ydb) CreateTableSQL(
 			}
 			params = append(params, fmt.Sprintf("%s = %s", param, value))
 		}
-		buf.WriteString(fmt.Sprintf("WITH ( %s ) ", strings.Join(params, ", ")))
+		if len(params) > 0 {
+			buf.WriteString(fmt.Sprintf("WITH ( %s ) ", strings.Join(params, ", ")))
+		}
 	}
 
 	buf.WriteString("; ")
