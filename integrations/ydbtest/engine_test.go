@@ -280,9 +280,7 @@ func TestCreateTableWithNilTableParameters(t *testing.T) {
 
 	t.Run("check-YQL-script", func(t *testing.T) {
 		createTableYQL, _ := session.LastSQL()
-		for param, value := range tableParams {
-			pattern := "WITH" + `\s*\(\s*` + param + `\s*=\s*` + value + `\s*,?\s*\)\s*`
-			assert.NotRegexp(t, pattern, createTableYQL)
-		}
+		pattern := "WITH" + `\s*\(\s*.*\s*\)\s*`
+		assert.NotRegexp(t, pattern, createTableYQL)
 	})
 }
