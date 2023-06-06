@@ -166,6 +166,114 @@ func TestInsertCustomType(t *testing.T) {
 	assert.EqualValues(t, 10, cnt)
 }
 
+func TestInsertWithTableParams(t *testing.T) {
+	engine, err := enginePool.GetScriptQueryEngine()
+	assert.NoError(t, err)
+	assert.NotNil(t, engine)
+
+	type SeriesTableWithParams struct {
+		Hash   uint64  `xorm:"pk hash"`
+		Series *Series `xorm:"extends"`
+	}
+
+	tableParams := map[string]string{
+		"AUTO_PARTITIONING_BY_SIZE":              "ENABLED",
+		"AUTO_PARTITIONING_BY_LOAD":              "ENABLED",
+		"AUTO_PARTITIONING_PARTITION_SIZE_MB":    "1",
+		"AUTO_PARTITIONING_MIN_PARTITIONS_COUNT": "6",
+		"AUTO_PARTITIONING_MAX_PARTITIONS_COUNT": "1000",
+		"UNIFORM_PARTITIONS":                     "6",
+	}
+
+	engine.Dialect().SetParams(tableParams)
+
+	session := engine.NewSession()
+	defer session.Close()
+	defer session.Engine().Dialect().SetParams(nil)
+
+	err = session.DropTable(&SeriesTableWithParams{})
+	assert.NoError(t, err)
+
+	err = session.CreateTable(&SeriesTableWithParams{})
+	assert.NoError(t, err)
+
+	t.Run("check-YQL-script", func(t *testing.T) {
+		createTableYQL, _ := session.LastSQL()
+		for params, value := range tableParams {
+			pattern := params + `\s*=\s*` + value
+			assert.Regexp(t, pattern, createTableYQL)
+		}
+	})
+
+	computeHash := func(bean interface{}) {
+		data := bean.(*SeriesTableWithParams)
+		err := session.
+			DB().
+			QueryRow(fmt.Sprintf("SELECT Digest::IntHash64(%d)", data.Hash)).
+			Scan(&data.Hash)
+		assert.NoError(t, err)
+		t.Log(data.Hash)
+	}
+
+	for i := uint64(1); i < 100; i++ {
+		_, err = session.
+			Before(computeHash).
+			Insert(&SeriesTableWithParams{
+				Hash: i,
+				Series: &Series{
+					SeriesID:    []byte(uuid.New().String()),
+					ReleaseDate: time.Now(),
+				},
+			})
+		assert.NoError(t, err)
+	}
+}
+
+func TestInsertWithTableParams2(t *testing.T) {
+	engine, err := enginePool.GetScriptQueryEngine()
+	assert.NoError(t, err)
+	assert.NotNil(t, engine)
+
+	tableParams := map[string]string{
+		"AUTO_PARTITIONING_BY_SIZE":              "ENABLED",
+		"AUTO_PARTITIONING_BY_LOAD":              "ENABLED",
+		"AUTO_PARTITIONING_PARTITION_SIZE_MB":    "1",
+		"AUTO_PARTITIONING_MIN_PARTITIONS_COUNT": "3",
+		"AUTO_PARTITIONING_MAX_PARTITIONS_COUNT": "5",
+	}
+
+	engine.Dialect().SetParams(tableParams)
+
+	session := engine.NewSession()
+	defer session.Close()
+	defer session.Engine().Dialect().SetParams(nil)
+
+	err = session.DropTable(&Series{})
+	assert.NoError(t, err)
+
+	err = session.CreateTable(&Series{})
+	assert.NoError(t, err)
+
+	t.Run("check-YQL-script", func(t *testing.T) {
+		createTableYQL, _ := session.LastSQL()
+		for params, value := range tableParams {
+			pattern := params + `\s*=\s*` + value
+			assert.Regexp(t, pattern, createTableYQL)
+		}
+	})
+
+	for i := uint64(1); i < 100; i++ {
+		s := &Series{
+			SeriesID:   []byte(uuid.New().String()),
+			Title:      fmt.Sprintf("series#%d", i),
+			SeriesInfo: fmt.Sprintf("series_info#%d", i),
+			Comment:    fmt.Sprintf("comment#%d", i),
+		}
+		_, err = session.Insert(s)
+		assert.NoError(t, err)
+	}
+}
+
 func TestInsertEmptyField(t *testing.T) {
 	type EmptyField struct {
 		ID uint64 `xorm:"pk 'id'"`
