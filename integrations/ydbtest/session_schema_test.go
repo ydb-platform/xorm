@@ -458,14 +458,14 @@ func TestDBMetas(t *testing.T) {
 	_, err = engine.Transaction(func(session *xorm.Session) (interface{}, error) {
 		assert.NoError(t, session.Sync(&Users{}))
 
-		exist, err := dialect.IsTableExist(session.Tx(), enginePool.ctx, (&Users{}).TableName())
+		exist, err := dialect.IsTableExist(session.DB(), enginePool.ctx, (&Users{}).TableName())
 		assert.NoError(t, err)
 		if err != nil {
 			return nil, err
 		}
 		assert.True(t, exist)
 
-		tables, err := dialect.GetTables(session.Tx(), enginePool.ctx)
+		tables, err := dialect.GetTables(session.DB(), enginePool.ctx)
 		assert.NoError(t, err)
 		assert.NotNil(t, tables)
 		ok := false

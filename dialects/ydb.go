@@ -256,37 +256,37 @@ var (
 
 const (
 	// numeric types
-	yql_Bool = "Bool"
+	yql_Bool = "BOOL"
 
-	yql_Int8  = "Int8"
-	yql_Int16 = "Int16"
-	yql_Int32 = "Int32"
-	yql_Int64 = "Int64"
+	yql_Int8  = "INT8"
+	yql_Int16 = "INT16"
+	yql_Int32 = "INT32"
+	yql_Int64 = "INT64"
 
-	yql_Uint8  = "Uint8"
-	yql_Uint16 = "Uint16"
-	yql_Uint32 = "Uint32"
-	yql_Uint64 = "Uint64"
+	yql_Uint8  = "UINT8"
+	yql_Uint16 = "UINT16"
+	yql_Uint32 = "UINT32"
+	yql_Uint64 = "UINT64"
 
-	yql_Float   = "Float"
-	yql_Double  = "Double"
-	yql_Decimal = "Decimal"
+	yql_Float   = "FLOAT"
+	yql_Double  = "DOUBLE"
+	yql_Decimal = "DECIMAL"
 
 	// string types
-	yql_String       = "String"
-	yql_Utf8         = "Utf8"
-	yql_Json         = "Json"
-	yql_JsonDocument = "JsonDocument"
-	yql_Yson         = "Yson"
+	yql_String       = "STRING"
+	yql_Utf8         = "UTF8"
+	yql_Json         = "JSON"
+	yql_JsonDocument = "JSONDOCUMENT"
+	yql_Yson         = "YSON"
 
 	// Data and Time
-	yql_Date      = "Date"
-	yql_DateTime  = "DateTime"
-	yql_Timestamp = "Timestamp"
-	yql_Interval  = "Interval"
+	yql_Date      = "DATE"
+	yql_DateTime  = "DATETIME"
+	yql_Timestamp = "TIMESTAMP"
+	yql_Interval  = "INTERVAL"
 
 	// Containers
-	yql_List = "List"
+	yql_List = "LIST"
 )
 
 func toYQLDataType(t string, defaultLength, defaultLength2 int64) (yqlType string) {
@@ -414,8 +414,8 @@ func yqlToSQLType(yqlType string) (sqlType schemas.SQLType) {
 }
 
 func removeOptional(s string) string {
-	if strings.HasPrefix(s, "Optional") {
-		s = strings.TrimPrefix(s, "Optional<")
+	if s = strings.ToUpper(s); strings.HasPrefix(s, "OPTIONAL") {
+		s = strings.TrimPrefix(s, "OPTIONAL<")
 		s = strings.TrimSuffix(s, ">")
 	}
 	return s
@@ -423,7 +423,6 @@ func removeOptional(s string) string {
 
 type ydb struct {
 	Base
-	ydb *core.DB
 
 	tableParams map[string]string
 }
@@ -433,18 +432,20 @@ func (db *ydb) Init(uri *URI) error {
 	return db.Base.Init(db, uri)
 }
 
-// !datbeohbbh! set the internal *core.DB, this function is necessary for YDB
-// because to query the metadata in YDB, need to provide *sql.Conn
-func (db *ydb) WithInternalDB(initDB *core.DB) {
-	db.ydb = initDB
+func (db *ydb) getDB(queryer interface{}) *core.DB {
+	if internalDB, ok := queryer.(*core.DB); ok {
+		return internalDB
+	}
+	return nil
 }
 
-func (db *ydb) getDB() *core.DB {
-	return db.ydb
-}
+func (db *ydb) WithConn(queryer core.Queryer, ctx context.Context, f func(context.Context, *sql.Conn) error) error {
+	coreDB := db.getDB(queryer)
+	if coreDB == nil {
+		return fmt.Errorf("`*core.DB` not found")
+	}
 
-func (db *ydb) WithConn(ctx context.Context, f func(context.Context, *sql.Conn) error) error {
-	cc, err := db.getDB().Conn(ctx)
+	cc, err := coreDB.Conn(ctx)
 	if err != nil {
 		return err
 	}
@@ -455,8 +456,8 @@ func (db *ydb) WithConn(ctx context.Context, f func(context.Context, *sql.Conn) 
 	return err
 }
 
-func (db *ydb) WithConnRaw(ctx context.Context, f func(d interface{}) error) (err error) {
-	err = db.WithConn(ctx, func(ctx context.Context, cc *sql.Conn) error {
+func (db *ydb) WithConnRaw(queryer core.Queryer, ctx context.Context, f func(d interface{}) error) (err error) {
+	err = db.WithConn(queryer, ctx, func(ctx context.Context, cc *sql.Conn) error {
 		err = cc.Raw(f)
 		return err
 	})
@@ -524,9 +525,9 @@ func (db *ydb) ColumnTypeKind(t string) int {
 	}
 }
 
-func (db *ydb) Version(ctx context.Context, _ core.Queryer) (_ *schemas.Version, err error) {
+func (db *ydb) Version(ctx context.Context, queryer core.Queryer) (_ *schemas.Version, err error) {
 	var version string
-	err = db.WithConnRaw(ctx, func(dc interface{}) error {
+	err = db.WithConnRaw(queryer, ctx, func(dc interface{}) error {
 		q, ok := dc.(interface {
 			Version(ctx context.Context) (string, error)
 		})
@@ -553,11 +554,11 @@ func (db *ydb) IndexCheckSQL(tableName, indexName string) (string, []interface{}
 }
 
 func (db *ydb) IsTableExist(
-	_ core.Queryer,
+	queryer core.Queryer,
 	ctx context.Context,
 	tableName string) (_ bool, err error) {
 	var exists bool
-	err = db.WithConnRaw(ctx, func(dc interface{}) error {
+	err = db.WithConnRaw(queryer, ctx, func(dc interface{}) error {
 		q, ok := dc.(interface {
 			IsTableExists(context.Context, string) (bool, error)
 		})
@@ -625,12 +626,12 @@ func (db *ydb) DropIndexSQL(tableName string, index *schemas.Index) string {
 }
 
 func (db *ydb) IsColumnExist(
-	_ core.Queryer,
+	queryer core.Queryer,
 	ctx context.Context,
 	tableName,
 	columnName string) (_ bool, err error) {
 	var exists bool
-	err = db.WithConnRaw(ctx, func(dc interface{}) error {
+	err = db.WithConnRaw(queryer, ctx, func(dc interface{}) error {
 		q, ok := dc.(interface {
 			IsColumnExists(context.Context, string, string) (bool, error)
 		})
@@ -650,14 +651,14 @@ func (db *ydb) IsColumnExist(
 	return exists, nil
 }
 
-func (db *ydb) GetColumns(_ core.Queryer, ctx context.Context, tableName string) (
+func (db *ydb) GetColumns(queryer core.Queryer, ctx context.Context, tableName string) (
 	_ []string,
 	_ map[string]*schemas.Column,
 	err error) {
 	colNames := make([]string, 0)
 	colMaps := make(map[string]*schemas.Column)
 
-	err = db.WithConnRaw(ctx, func(dc interface{}) error {
+	err = db.WithConnRaw(queryer, ctx, func(dc interface{}) error {
 		q, ok := dc.(interface {
 			GetColumns(context.Context, string) ([]string, error)
 			GetColumnType(context.Context, string, string) (string, error)
@@ -700,9 +701,9 @@ func (db *ydb) GetColumns(_ core.Queryer, ctx context.Context, tableName string)
 	return colNames, colMaps, nil
 }
 
-func (db *ydb) GetTables(_ core.Queryer, ctx context.Context) (_ []*schemas.Table, err error) {
+func (db *ydb) GetTables(queryer core.Queryer, ctx context.Context) (_ []*schemas.Table, err error) {
 	tables := make([]*schemas.Table, 0)
-	err = db.WithConnRaw(ctx, func(dc interface{}) error {
+	err = db.WithConnRaw(queryer, ctx, func(dc interface{}) error {
 		q, ok := dc.(interface {
 			GetAllTables(context.Context, string) ([]string, error)
 		})
@@ -727,11 +728,11 @@ func (db *ydb) GetTables(_ core.Queryer, ctx context.Context) (_ []*schemas.Tabl
 }
 
 func (db *ydb) GetIndexes(
-	_ core.Queryer,
+	queryer core.Queryer,
 	ctx context.Context,
 	tableName string) (_ map[string]*schemas.Index, err error) {
 	indexes := make(map[string]*schemas.Index, 0)
-	err = db.WithConnRaw(ctx, func(dc interface{}) error {
+	err = db.WithConnRaw(queryer, ctx, func(dc interface{}) error {
 		q, ok := dc.(interface {
 			GetIndexes(context.Context, string) ([]string, error)
 			GetIndexColumns(context.Context, string, string) ([]string, error)
@@ -1014,39 +1015,38 @@ func (ydbDrv *ydbDriver) Parse(driverName, dataSourceName string) (*URI, error) 
 
 // https://pkg.go.dev/database/sql#ColumnType.DatabaseTypeName
 func (ydbDrv *ydbDriver) GenScanResult(columnType string) (interface{}, error) {
-	columnType = strings.ToUpper(removeOptional(columnType))
-	switch columnType {
-	case "BOOL":
+	switch columnType = removeOptional(columnType); columnType {
+	case yql_Bool:
 		var ret sql.NullBool
 		return &ret, nil
-	case "INT16":
+	case yql_Int16:
 		var ret sql.NullInt16
 		return &ret, nil
-	case "INT32":
+	case yql_Int32:
 		var ret sql.NullInt32
 		return &ret, nil
-	case "INT64":
+	case yql_Int64:
 		var ret sql.NullInt64
 		return &ret, nil
-	case "UINT8":
+	case yql_Uint8:
 		var ret sql.NullByte
 		return &ret, nil
-	case "UINT32":
+	case yql_Uint32:
 		var ret convert.NullUint32
 		return &ret, nil
-	case "UINT64":
+	case yql_Uint64:
 		var ret convert.NullUint64
 		return &ret, nil
-	case "DOUBLE":
+	case yql_Double:
 		var ret sql.NullFloat64
 		return &ret, nil
-	case "UTF8":
+	case yql_Utf8:
 		var ret sql.NullString
 		return &ret, nil
-	case "TIMESTAMP":
+	case yql_Timestamp:
 		var ret sql.NullTime
 		return &ret, nil
-	case "INTERVAL":
+	case yql_Interval:
 		var ret convert.NullDuration
 		return &ret, nil
 	default:

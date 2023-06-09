@@ -85,15 +85,6 @@ func newEngine(driverName, dataSourceName string, dialect dialects.Dialect, db *
 		logSessionID:   false,
 	}
 
-	if dialect.URI().DBType == schemas.YDB {
-		// internal configuration for YDB
-		if confInternal, ok := dialect.(interface {
-			WithInternalDB(*core.DB)
-		}); ok {
-			confInternal.WithInternalDB(db)
-		}
-	}
-
 	if dialect.URI().DBType == schemas.SQLITE {
 		engine.DatabaseTZ = time.UTC
 	} else {
