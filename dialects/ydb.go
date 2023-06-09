@@ -256,37 +256,37 @@ var (
 
 const (
 	// numeric types
-	yql_Bool = "Bool"
+	yql_Bool = "BOOL"
 
-	yql_Int8  = "Int8"
-	yql_Int16 = "Int16"
-	yql_Int32 = "Int32"
-	yql_Int64 = "Int64"
+	yql_Int8  = "INT8"
+	yql_Int16 = "INT16"
+	yql_Int32 = "INT32"
+	yql_Int64 = "INT64"
 
-	yql_Uint8  = "Uint8"
-	yql_Uint16 = "Uint16"
-	yql_Uint32 = "Uint32"
-	yql_Uint64 = "Uint64"
+	yql_Uint8  = "UINT8"
+	yql_Uint16 = "UINT16"
+	yql_Uint32 = "UINT32"
+	yql_Uint64 = "UINT64"
 
-	yql_Float   = "Float"
-	yql_Double  = "Double"
-	yql_Decimal = "Decimal"
+	yql_Float   = "FLOAT"
+	yql_Double  = "DOUBLE"
+	yql_Decimal = "DECIMAL"
 
 	// string types
-	yql_String       = "String"
-	yql_Utf8         = "Utf8"
-	yql_Json         = "Json"
-	yql_JsonDocument = "JsonDocument"
-	yql_Yson         = "Yson"
+	yql_String       = "STRING"
+	yql_Utf8         = "UTF8"
+	yql_Json         = "JSON"
+	yql_JsonDocument = "JSONDOCUMENT"
+	yql_Yson         = "YSON"
 
 	// Data and Time
-	yql_Date      = "Date"
-	yql_DateTime  = "DateTime"
-	yql_Timestamp = "Timestamp"
-	yql_Interval  = "Interval"
+	yql_Date      = "DATE"
+	yql_DateTime  = "DATETIME"
+	yql_Timestamp = "TIMESTAMP"
+	yql_Interval  = "INTERVAL"
 
 	// Containers
-	yql_List = "List"
+	yql_List = "LIST"
 )
 
 func toYQLDataType(t string, defaultLength, defaultLength2 int64) (yqlType string) {
@@ -414,8 +414,8 @@ func yqlToSQLType(yqlType string) (sqlType schemas.SQLType) {
 }
 
 func removeOptional(s string) string {
-	if strings.HasPrefix(s, "Optional") {
-		s = strings.TrimPrefix(s, "Optional<")
+	if s = strings.ToUpper(s); strings.HasPrefix(s, "OPTIONAL") {
+		s = strings.TrimPrefix(s, "OPTIONAL<")
 		s = strings.TrimSuffix(s, ">")
 	}
 	return s
@@ -440,7 +440,12 @@ func (db *ydb) getDB(queryer interface{}) *core.DB {
 }
 
 func (db *ydb) WithConn(queryer core.Queryer, ctx context.Context, f func(context.Context, *sql.Conn) error) error {
-	cc, err := db.getDB(queryer).Conn(ctx)
+	coreDB := db.getDB(queryer)
+	if coreDB == nil {
+		return fmt.Errorf("`*core.DB` not found")
+	}
+
+	cc, err := coreDB.Conn(ctx)
 	if err != nil {
 		return err
 	}
@@ -1010,39 +1015,38 @@ func (ydbDrv *ydbDriver) Parse(driverName, dataSourceName string) (*URI, error) 
 
 // https://pkg.go.dev/database/sql#ColumnType.DatabaseTypeName
 func (ydbDrv *ydbDriver) GenScanResult(columnType string) (interface{}, error) {
-	columnType = strings.ToUpper(removeOptional(columnType))
-	switch columnType {
-	case "BOOL":
+	switch columnType = removeOptional(columnType); columnType {
+	case yql_Bool:
 		var ret sql.NullBool
 		return &ret, nil
-	case "INT16":
+	case yql_Int16:
 		var ret sql.NullInt16
 		return &ret, nil
-	case "INT32":
+	case yql_Int32:
 		var ret sql.NullInt32
 		return &ret, nil
-	case "INT64":
+	case yql_Int64:
 		var ret sql.NullInt64
 		return &ret, nil
-	case "UINT8":
+	case yql_Uint8:
 		var ret sql.NullByte
 		return &ret, nil
-	case "UINT32":
+	case yql_Uint32:
 		var ret convert.NullUint32
 		return &ret, nil
-	case "UINT64":
+	case yql_Uint64:
 		var ret convert.NullUint64
 		return &ret, nil
-	case "DOUBLE":
+	case yql_Double:
 		var ret sql.NullFloat64
 		return &ret, nil
-	case "UTF8":
+	case yql_Utf8:
 		var ret sql.NullString
 		return &ret, nil
-	case "TIMESTAMP":
+	case yql_Timestamp:
 		var ret sql.NullTime
 		return &ret, nil
-	case "INTERVAL":
+	case yql_Interval:
 		var ret convert.NullDuration
 		return &ret, nil
 	default:
