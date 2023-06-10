@@ -57,19 +57,28 @@ func TestE2E(t *testing.T) {
 				engine, err := scope.engines.GetExplainQueryEngine()
 				require.NoError(t, err)
 
-				results, err := engine.
+				var (
+					ast  string
+					plan string
+				)
+
+				r, err := engine.
 					Table(&Episodes{}).
 					Cols("views").
 					Where("series_id = ?", uuid.New()).
 					And("season_id = ?", uuid.New()).
 					And("episode_id = ?", uuid.New()).
-					QueryString()
-				require.NoError(t, err)
-				require.Greater(t, len(results), 0)
+					Rows(&struct {
+						Ast  string
+						Plan string
+					}{})
 
-				explain := results[0]
-				ast := explain["AST"]
-				plan := explain["Plan"]
+				require.NoError(t, err)
+
+				require.True(t, r.Next())
+
+				err = r.Scan(&ast, &plan)
+				require.NoError(t, err)
 
 				t.Logf("ast = %v\n", ast)
 				t.Logf("plan = %v\n", plan)
