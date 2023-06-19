@@ -802,11 +802,11 @@ func (engine *Engine) dumpTables(ctx context.Context, tables []*schemas.Table, w
 						castTmpl := "CAST(%v AS Optional<%v>)"
 						yqlType := dstDialect.SQLType(dstTable.Columns()[i])
 						if dstTable.Columns()[i].IsPrimaryKey {
-							if strings.HasPrefix(yqlType, "Uint") || strings.HasPrefix(yqlType, "Int") {
+							if strings.HasPrefix(yqlType, "UINT") || strings.HasPrefix(yqlType, "INT") {
 								if _, err = io.WriteString(w, s.String); err != nil {
 									return err
 								}
-							} else if yqlType == "Timestamp" {
+							} else if yqlType == "TIMESTAMP" {
 								fromLoc := engine.GetTZLocation()
 								toLoc := engine.GetTZDatabase()
 								t, err := convert.String2Time(s.String, fromLoc, toLoc)
@@ -822,7 +822,7 @@ func (engine *Engine) dumpTables(ctx context.Context, tables []*schemas.Table, w
 								}
 							}
 						} else {
-							if yqlType == "Timestamp" {
+							if yqlType == "TIMESTAMP" {
 								fromLoc := engine.GetTZLocation()
 								toLoc := engine.GetTZDatabase()
 								t, err := convert.String2Time(s.String, fromLoc, toLoc)
@@ -832,7 +832,7 @@ func (engine *Engine) dumpTables(ctx context.Context, tables []*schemas.Table, w
 								if _, err = io.WriteString(w, fmt.Sprintf(castTmpl, t.UnixMicro(), yqlType)); err != nil {
 									return err
 								}
-							} else if yqlType == "Interval" {
+							} else if yqlType == "INTERVAL" {
 								// !datbeohbbh! TODO: only work if database represent interval time in microsecond.
 								d, err := strconv.ParseInt(s.String, 10, 64)
 								if err != nil {
@@ -1523,7 +1523,7 @@ func (engine *Engine) Do(ctx context.Context, f func(context.Context, *Session) 
 		return nil
 	}, opts...)
 	if err != nil {
-		return fmt.Errorf("operation failed after %d attempts: %v", attempts, err)
+		return fmt.Errorf("operation failed after %d attempts: %w", attempts, err)
 	}
 	return nil
 }
@@ -1555,7 +1555,7 @@ func (engine *Engine) DoTx(ctx context.Context, f func(context.Context, *Session
 		return nil
 	}, opts...)
 	if err != nil {
-		return fmt.Errorf("tx failed after %d attempts: %v", attempts, err)
+		return fmt.Errorf("tx failed after %d attempts: %w", attempts, err)
 	}
 	return nil
 }

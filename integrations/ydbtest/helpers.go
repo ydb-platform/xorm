@@ -105,6 +105,7 @@ func (em *EngineWithMode) getEngine(queryMode QueryMode) (*xorm.Engine, error) {
 	engine.SetMaxOpenConns(50)
 	engine.SetMaxIdleConns(50)
 	engine.SetConnMaxIdleTime(time.Second)
+	engine.EnableSessionID(true)
 
 	em.engineCached[queryMode] = engine
 	return em.engineCached[queryMode], nil
