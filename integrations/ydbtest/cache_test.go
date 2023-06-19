@@ -24,7 +24,7 @@ func TestCacheFind(t *testing.T) {
 	cacher := caches.NewLRUCacher2(caches.NewMemoryStore(), time.Hour, 10000)
 	engine.SetDefaultCacher(cacher)
 
-	assert.NoError(t, engine.Sync(new(MailBox)))
+	assert.NoError(t, PrepareScheme(new(MailBox)))
 	defer func() {
 		assert.NoError(t, engine.DropTables(new(MailBox)))
 	}()
@@ -105,7 +105,7 @@ func TestCacheFind2(t *testing.T) {
 	cacher := caches.NewLRUCacher2(caches.NewMemoryStore(), time.Hour, 10000)
 	engine.SetDefaultCacher(cacher)
 
-	assert.NoError(t, engine.Sync(new(MailBox2)))
+	assert.NoError(t, PrepareScheme(new(MailBox2)))
 	defer func() {
 		assert.NoError(t, engine.DropTables(new(MailBox2)))
 	}()
@@ -160,7 +160,7 @@ func TestCacheGet(t *testing.T) {
 	cacher := caches.NewLRUCacher2(caches.NewMemoryStore(), time.Hour, 10000)
 	engine.SetDefaultCacher(cacher)
 
-	assert.NoError(t, engine.Sync(new(MailBox3)))
+	assert.NoError(t, PrepareScheme(new(MailBox3)))
 	defer func() {
 		assert.NoError(t, engine.DropTables(new(MailBox3)))
 	}()
