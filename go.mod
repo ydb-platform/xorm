@@ -17,7 +17,7 @@ require (
 	github.com/shopspring/decimal v1.2.0
 	github.com/stretchr/testify v1.8.1
 	github.com/syndtr/goleveldb v1.0.0
-	github.com/ydb-platform/ydb-go-sdk/v3 v3.48.0
+	github.com/ydb-platform/ydb-go-sdk/v3 v3.48.2
 	github.com/ziutek/mymysql v1.5.4
 	google.golang.org/genproto v0.0.0-20230131230820-1c016267d619 // indirect
 	google.golang.org/grpc v1.52.3 // indirect
