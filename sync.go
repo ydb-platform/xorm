@@ -122,7 +122,7 @@ func (session *Session) SyncWithOptions(opts SyncOptions, beans ...interface{}) 
 		}
 
 		// this will modify an old table
-		if err = engine.loadTableInfo(oriTable); err != nil {
+		if err = engine.loadTableInfo(session.ctx, oriTable); err != nil {
 			return nil, err
 		}
 
@@ -192,7 +192,10 @@ func (session *Session) SyncWithOptions(opts SyncOptions, beans ...interface{}) 
 					}
 				}
 			} else if col.Comment != oriCol.Comment {
-				_, err = session.exec(engine.dialect.ModifyColumnSQL(tbNameWithSchema, col))
+				if engine.dialect.URI().DBType == schemas.POSTGRES ||
+					engine.dialect.URI().DBType == schemas.MYSQL {
+					_, err = session.exec(engine.dialect.ModifyColumnSQL(tbNameWithSchema, col))
+				}
 			}
 
 			if col.Default != oriCol.Default {
