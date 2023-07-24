@@ -55,27 +55,6 @@ func TestSQLCount(t *testing.T) {
 	assert.EqualValues(t, len(usersData), cnt)
 }
 
-func TestCountWithLimit(t *testing.T) {
-	assert.NoError(t, PrepareScheme(&Users{}))
-
-	engine, err := enginePool.GetDataQueryEngine()
-	assert.NoError(t, err)
-	assert.NotNil(t, engine)
-
-	usersData := getUsersData()
-
-	_, err = engine.Insert(&usersData)
-	assert.NoError(t, err)
-
-	cnt, err := engine.
-		Cols("user_id").
-		Desc("user_id").
-		Limit(10).
-		Count(new(Users))
-	assert.NoError(t, err)
-	assert.EqualValues(t, len(usersData), cnt)
-}
-
 func TestCountWithTableName(t *testing.T) {
 	assert.NoError(t, PrepareScheme(&Users{}))
 

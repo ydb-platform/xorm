@@ -24,7 +24,11 @@ func (session *Session) genAutoCond(condiBean interface{}) (builder.Cond, error)
 		return builder.NewCond(), nil
 	}
 
-	if c, ok := condiBean.(map[string]interface{}); ok {
+	if c, ok := condiBean.(builder.Cond); ok {
+		// !datbeohbbh! check if condiBean.(builder.Cond) help to expand the condition to other like Gte, Neq, ... .
+		// but it makes the part check condiBean.(map[string]interface{}) may become unreachable.
+		return c, nil
+	} else if c, ok := condiBean.(map[string]interface{}); ok {
 		eq := make(builder.Eq)
 		for k, v := range c {
 			eq[session.engine.Quote(k)] = v
