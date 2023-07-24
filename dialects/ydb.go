@@ -853,7 +853,7 @@ func (db *ydb) DropTableSQL(tableName string) (string, bool) {
 
 // https://github.com/ydb-platform/ydb-go-sdk/blob/master/SQL.md#specifying-query-parameters-
 func (db *ydb) Filters() []Filter {
-	return []Filter{&SeqFilter{
+	return []Filter{&ydbSeqFilter{
 		Prefix: "$",
 		Start:  1,
 	}}

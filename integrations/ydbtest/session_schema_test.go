@@ -305,7 +305,8 @@ func TestIndexSync(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, engine)
 
-	assert.NoError(t, engine.Sync(&oriIndexSync{}, &newIndexSync{}))
+	assert.NoError(t, engine.Sync(&oriIndexSync{}))
+	assert.NoError(t, engine.Sync(&newIndexSync{}))
 
 	dialect := engine.Dialect()
 	index, err := dialect.GetIndexes(engine.DB(), enginePool.ctx, "test_sync_index")
@@ -323,7 +324,8 @@ func TestIndexSync(t *testing.T) {
 	assert.NotNil(t, index["idx_d"])
 	assert.ElementsMatch(t, []string{"i"}, index["idx_d"].Cols)
 
-	assert.NoError(t, engine.Sync(&newIndexSync{}, &oriIndexSync{}))
+	assert.NoError(t, engine.Sync(&newIndexSync{}))
+	assert.NoError(t, engine.Sync(&oriIndexSync{}))
 	index, err = dialect.GetIndexes(engine.DB(), enginePool.ctx, "test_sync_index")
 	assert.NoError(t, err)
 
@@ -373,7 +375,8 @@ func TestSyncCols(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, engine)
 
-	assert.NoError(t, engine.Sync(&oriCols{}, &newCols{}))
+	assert.NoError(t, engine.Sync(&oriCols{}))
+	assert.NoError(t, engine.Sync(&newCols{}))
 
 	dialect := engine.Dialect()
 	cols, colMaps, err := dialect.GetColumns(engine.DB(), enginePool.ctx, "test_sync_cols")
@@ -417,7 +420,8 @@ func TestSyncOverall(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, engine)
 
-	assert.NoError(t, engine.Sync(&syncA{}, &syncB{}))
+	assert.NoError(t, engine.Sync(&syncA{}))
+	assert.NoError(t, engine.Sync(&syncB{}))
 
 	dialect := engine.Dialect()
 	cols, colMaps, err := dialect.GetColumns(engine.DB(), enginePool.ctx, (&syncA{}).TableName())

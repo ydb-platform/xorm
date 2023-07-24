@@ -362,15 +362,15 @@ func (engine *Engine) NoAutoCondition(no ...bool) *Session {
 	return session.NoAutoCondition(no...)
 }
 
-func (engine *Engine) loadTableInfo(table *schemas.Table) error {
-	colSeq, cols, err := engine.dialect.GetColumns(engine.db, engine.defaultContext, table.Name)
+func (engine *Engine) loadTableInfo(ctx context.Context, table *schemas.Table) error {
+	colSeq, cols, err := engine.dialect.GetColumns(engine.db, ctx, table.Name)
 	if err != nil {
 		return err
 	}
 	for _, name := range colSeq {
 		table.AddColumn(cols[name])
 	}
-	indexes, err := engine.dialect.GetIndexes(engine.db, engine.defaultContext, table.Name)
+	indexes, err := engine.dialect.GetIndexes(engine.db, ctx, table.Name)
 	if err != nil {
 		return err
 	}
@@ -406,7 +406,7 @@ func (engine *Engine) DBMetas() ([]*schemas.Table, error) {
 	}
 
 	for _, table := range tables {
-		if err = engine.loadTableInfo(table); err != nil {
+		if err = engine.loadTableInfo(engine.defaultContext, table); err != nil {
 			return nil, err
 		}
 	}
@@ -1174,21 +1174,6 @@ func (engine *Engine) ClearCache(beans ...interface{}) error {
 // UnMapType remove table from tables cache
 func (engine *Engine) UnMapType(t reflect.Type) {
 	engine.tagParser.ClearCacheTable(t)
-}
-
-// Sync the new struct changes to database, this method will automatically add
-// table, column, index, unique. but will not delete or change anything.
-// If you change some field, you should change the database manually.
-func (engine *Engine) Sync(beans ...interface{}) error {
-	session := engine.NewSession()
-	defer session.Close()
-	return session.Sync(beans...)
-}
-
-// Sync2 synchronize structs to database tables
-// Depricated
-func (engine *Engine) Sync2(beans ...interface{}) error {
-	return engine.Sync(beans...)
 }
 
 // CreateTables create tabls according bean

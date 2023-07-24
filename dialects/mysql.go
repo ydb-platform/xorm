@@ -38,6 +38,7 @@ var (
 		"CALL":              true,
 		"CASCADE":           true,
 		"CASE":              true,
+		"CHAIN":             true,
 		"CHANGE":            true,
 		"CHAR":              true,
 		"CHARACTER":         true,
@@ -128,6 +129,7 @@ var (
 		"OUT": true, "OUTER": true, "OUTFILE": true,
 		"PRECISION": true, "PRIMARY": true, "PROCEDURE": true,
 		"PURGE": true, "RAID0": true, "RANGE": true,
+		"RANK": true,
 		"READ": true, "READS": true, "REAL": true,
 		"REFERENCES": true, "REGEXP": true, "RELEASE": true,
 		"RENAME": true, "REPEAT": true, "REPLACE": true,
@@ -380,7 +382,7 @@ func (db *mysql) IsTableExist(queryer core.Queryer, ctx context.Context, tableNa
 
 func (db *mysql) AddColumnSQL(tableName string, col *schemas.Column) string {
 	quoter := db.dialect.Quoter()
-	s, _ := ColumnString(db, col, true)
+	s, _ := ColumnString(db, col, true, true)
 	var b strings.Builder
 	b.WriteString("ALTER TABLE ")
 	quoter.QuoteTo(&b, tableName)
@@ -394,6 +396,15 @@ func (db *mysql) AddColumnSQL(tableName string, col *schemas.Column) string {
 	return b.String()
 }
 
+// ModifyColumnSQL returns a SQL to modify SQL
+func (db *mysql) ModifyColumnSQL(tableName string, col *schemas.Column) string {
+	s, _ := ColumnString(db.dialect, col, false, true)
+	if col.Comment != "" {
+		s += fmt.Sprintf(" COMMENT '%s'", col.Comment)
+	}
+	return fmt.Sprintf("ALTER TABLE %s MODIFY COLUMN %s", db.quoter.Quote(tableName), s)
+}
+
 func (db *mysql) GetColumns(queryer core.Queryer, ctx context.Context, tableName string) ([]string, map[string]*schemas.Column, error) {
 	args := []interface{}{db.uri.DBName, tableName}
 	alreadyQuoted := "(INSTR(VERSION(), 'maria') > 0 && " +
@@ -404,7 +415,7 @@ func (db *mysql) GetColumns(queryer core.Queryer, ctx context.Context, tableName
 		"SUBSTRING_INDEX(SUBSTRING(VERSION(), 6), '-', 1) >= 7)))))"
 	s := "SELECT `COLUMN_NAME`, `IS_NULLABLE`, `COLUMN_DEFAULT`, `COLUMN_TYPE`," +
 		" `COLUMN_KEY`, `EXTRA`, `COLUMN_COMMENT`, `CHARACTER_MAXIMUM_LENGTH`, " +
-		alreadyQuoted + " AS NEEDS_QUOTE " +
+		alreadyQuoted + " AS NEEDS_QUOTE, `COLLATION_NAME` " +
 		"FROM `INFORMATION_SCHEMA`.`COLUMNS` WHERE `TABLE_SCHEMA` = ? AND `TABLE_NAME` = ?" +
 		" ORDER BY `COLUMNS`.ORDINAL_POSITION ASC"
 
@@ -422,8 +433,8 @@ func (db *mysql) GetColumns(queryer core.Queryer, ctx context.Context, tableName
 
 		var columnName, nullableStr, colType, colKey, extra, comment string
 		var alreadyQuoted, isUnsigned bool
-		var colDefault, maxLength *string
-		err = rows.Scan(&columnName, &nullableStr, &colDefault, &colType, &colKey, &extra, &comment, &maxLength, &alreadyQuoted)
+		var colDefault, maxLength, collation *string
+		err = rows.Scan(&columnName, &nullableStr, &colDefault, &colType, &colKey, &extra, &comment, &maxLength, &alreadyQuoted, &collation)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -438,6 +449,9 @@ func (db *mysql) GetColumns(queryer core.Queryer, ctx context.Context, tableName
 			col.DefaultIsEmpty = false
 		} else {
 			col.DefaultIsEmpty = true
+		}
+		if collation != nil {
+			col.Collation = *collation
 		}
 
 		fields := strings.Fields(colType)
@@ -531,7 +545,7 @@ func (db *mysql) GetColumns(queryer core.Queryer, ctx context.Context, tableName
 
 func (db *mysql) GetTables(queryer core.Queryer, ctx context.Context) ([]*schemas.Table, error) {
 	args := []interface{}{db.uri.DBName}
-	s := "SELECT `TABLE_NAME`, `ENGINE`, `AUTO_INCREMENT`, `TABLE_COMMENT` from " +
+	s := "SELECT `TABLE_NAME`, `ENGINE`, `AUTO_INCREMENT`, `TABLE_COMMENT`, `TABLE_COLLATION` from " +
 		"`INFORMATION_SCHEMA`.`TABLES` WHERE `TABLE_SCHEMA`=? AND (`ENGINE`='MyISAM' OR `ENGINE` = 'InnoDB' OR `ENGINE` = 'TokuDB')"
 
 	rows, err := queryer.QueryContext(ctx, s, args...)
@@ -543,9 +557,9 @@ func (db *mysql) GetTables(queryer core.Queryer, ctx context.Context) ([]*schema
 	tables := make([]*schemas.Table, 0)
 	for rows.Next() {
 		table := schemas.NewEmptyTable()
-		var name, engine string
+		var name, engine, collation string
 		var autoIncr, comment *string
-		err = rows.Scan(&name, &engine, &autoIncr, &comment)
+		err = rows.Scan(&name, &engine, &autoIncr, &comment, &collation)
 		if err != nil {
 			return nil, err
 		}
@@ -555,6 +569,7 @@ func (db *mysql) GetTables(queryer core.Queryer, ctx context.Context) ([]*schema
 			table.Comment = *comment
 		}
 		table.StoreEngine = engine
+		table.Collation = collation
 		tables = append(tables, table)
 	}
 	if rows.Err() != nil {
@@ -646,7 +661,7 @@ func (db *mysql) CreateTableSQL(ctx context.Context, queryer core.Queryer, table
 
 	for i, colName := range table.ColumnsSeq() {
 		col := table.GetColumn(colName)
-		s, _ := ColumnString(db.dialect, col, col.IsPrimaryKey && len(table.PrimaryKeys) == 1)
+		s, _ := ColumnString(db.dialect, col, col.IsPrimaryKey && len(table.PrimaryKeys) == 1, true)
 		b.WriteString(s)
 
 		if len(col.Comment) > 0 {
