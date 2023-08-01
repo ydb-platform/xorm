@@ -10,13 +10,14 @@ import (
 	"reflect"
 
 	"xorm.io/builder"
+	"xorm.io/xorm/internal/statements"
 	"xorm.io/xorm/internal/utils"
 	"xorm.io/xorm/schemas"
 )
 
 // enumerated all errors
 var (
-	ErrNoColumnsTobeUpdated = errors.New("no columns found to be updated")
+	ErrNoColumnsTobeUpdated = statements.ErrNoColumnsTobeUpdated
 )
 
 func (session *Session) genAutoCond(condiBean interface{}) (builder.Cond, error) {
@@ -79,9 +80,6 @@ func (session *Session) Update(bean interface{}, condiBean ...interface{}) (int6
 	v := utils.ReflectValue(bean)
 	t := v.Type()
 
-	var colNames []string
-	var args []interface{}
-
 	// handle before update processors
 	for _, closure := range session.beforeClosures {
 		closure(bean)
@@ -92,6 +90,8 @@ func (session *Session) Update(bean interface{}, condiBean ...interface{}) (int6
 	}
 	// --
 
+	var colNames []string
+	var args []interface{}
 	var err error
 	isMap := t.Kind() == reflect.Map
 	isStruct := t.Kind() == reflect.Struct
@@ -153,41 +153,6 @@ func (session *Session) Update(bean interface{}, condiBean ...interface{}) (int6
 		}
 	}
 
-	// for update action to like "column = column + ?"
-	incColumns := session.statement.IncrColumns
-	for _, expr := range incColumns {
-		colNames = append(colNames, session.engine.Quote(expr.ColName)+" = "+session.engine.Quote(expr.ColName)+" + ?")
-		args = append(args, expr.Arg)
-	}
-	// for update action to like "column = column - ?"
-	decColumns := session.statement.DecrColumns
-	for _, expr := range decColumns {
-		colNames = append(colNames, session.engine.Quote(expr.ColName)+" = "+session.engine.Quote(expr.ColName)+" - ?")
-		args = append(args, expr.Arg)
-	}
-	// for update action to like "column = expression"
-	exprColumns := session.statement.ExprColumns
-	for _, expr := range exprColumns {
-		switch tp := expr.Arg.(type) {
-		case string:
-			if len(tp) == 0 {
-				tp = "''"
-			}
-			colNames = append(colNames, session.engine.Quote(expr.ColName)+"="+tp)
-		case *builder.Builder:
-			subQuery, subArgs, err := builder.ToSQL(tp)
-			if err != nil {
-				return 0, err
-			}
-			subQuery = session.statement.ReplaceQuote(subQuery)
-			colNames = append(colNames, session.engine.Quote(expr.ColName)+"=("+subQuery+")")
-			args = append(args, subArgs...)
-		default:
-			colNames = append(colNames, session.engine.Quote(expr.ColName)+"=?")
-			args = append(args, expr.Arg)
-		}
-	}
-
 	if err = session.statement.ProcessIDParam(); err != nil {
 		return 0, err
 	}
@@ -216,23 +181,18 @@ func (session *Session) Update(bean interface{}, condiBean ...interface{}) (int6
 		verValue *reflect.Value
 	)
 	if doIncVer {
-		verValue, err = table.VersionColumn().ValueOf(bean)
+		verValue, err = table.VersionColumn().ValueOfV(&v)
 		if err != nil {
 			return 0, err
 		}
 
 		if verValue != nil {
 			cond = cond.And(builder.Eq{session.engine.Quote(table.Version): verValue.Interface()})
-			colNames = append(colNames, session.engine.Quote(table.Version)+" = "+session.engine.Quote(table.Version)+" + 1")
 		}
 	}
 
-	if len(colNames) == 0 {
-		return 0, ErrNoColumnsTobeUpdated
-	}
-
 	updateWriter := builder.NewWriter()
-	if err := session.statement.WriteUpdate(updateWriter, cond, colNames, args); err != nil {
+	if err := session.statement.WriteUpdate(updateWriter, cond, v, colNames, args); err != nil {
 		return 0, err
 	}
 
