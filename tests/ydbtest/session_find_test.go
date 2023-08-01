@@ -226,7 +226,7 @@ func TestFindInt(t *testing.T) {
 	assert.NoError(t, err)
 
 	age := []uint32{}
-	err = engine.Table(&Users{}).Cols("age").Asc().Find(&age)
+	err = engine.Table(&Users{}).Cols("age").Asc("age").Find(&age)
 	assert.NoError(t, err)
 	assert.Equal(t, len(usersData), len(age))
 
