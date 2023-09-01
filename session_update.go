@@ -247,9 +247,6 @@ func (session *Session) Update(bean interface{}, condiBean ...interface{}) (int6
 	if errors.Is(err, driver.ErrSkip) {
 		err = nil
 	}
-	if err != nil {
-		return affected, err
-	}
 	return affected, err
 }
 

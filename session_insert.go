@@ -440,9 +440,6 @@ func (session *Session) InsertOne(bean interface{}) (int64, error) {
 	if errors.Is(err, driver.ErrSkip) {
 		err = nil
 	}
-	if err != nil {
-		return affected, err
-	}
 	return affected, err
 }
 
