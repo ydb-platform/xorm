@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"xorm.io/builder"
 )
 
 func TestTime(t *testing.T) {
@@ -197,7 +196,7 @@ func TestTimeUserUpdated(t *testing.T) {
 	tm2 := TestTime{
 		CreatedAt: tm.CreatedAt,
 	}
-	_, err = engine.Incr("count", int64(1)).Update(&tm2, builder.Eq{"uuid": "datbeohbbh"})
+	_, err = engine.Incr("count", int64(1)).Update(&tm2, map[string]interface{}{"uuid": "datbeohbbh"})
 	assert.NoError(t, err)
 
 	ret = TestTime{}
@@ -266,7 +265,7 @@ func TestTimeUserUpdatedDiffLoc(t *testing.T) {
 	tm2 := TestTime{
 		CreatedAt: tm.CreatedAt,
 	}
-	_, err = engine.Incr("count", int64(1)).Update(&tm2, builder.Eq{"uuid": "datbeohbbh"})
+	_, err = engine.Incr("count", int64(1)).Update(&tm2, map[string]interface{}{"uuid": "datbeohbbh"})
 	assert.NoError(t, err)
 
 	ret = TestTime{}
