@@ -6,6 +6,7 @@ package convert
 
 import (
 	"database/sql"
+	"database/sql/driver"
 	"fmt"
 	"strconv"
 	"strings"
@@ -179,4 +180,59 @@ func AsTime(src interface{}, dbLoc *time.Location, uiLoc *time.Location) (*time.
 		return &tm, nil
 	}
 	return nil, fmt.Errorf("unsupported value %#v as time", src)
+}
+
+func AsDuration(src interface{}) (*time.Duration, error) {
+	switch t := src.(type) {
+	case string:
+		d, err := time.ParseDuration(t)
+		if err != nil {
+			return nil, err
+		}
+		return &d, nil
+	case *sql.NullString:
+		if !t.Valid {
+			return nil, nil
+		}
+		d, err := time.ParseDuration(t.String)
+		if err != nil {
+			return nil, err
+		}
+		return &d, nil
+	case int64:
+		d := time.Duration(t)
+		return &d, nil
+	case *int64:
+		d := time.Duration(*t)
+		return &d, nil
+	}
+	return nil, fmt.Errorf("unsupported value %#v as duration", src)
+}
+
+var _ sql.Scanner = &NullDuration{}
+
+type NullDuration struct {
+	Duration time.Duration
+	Valid    bool
+}
+
+func (n *NullDuration) Scan(value interface{}) error {
+	if value == nil {
+		n.Duration, n.Valid = time.Duration(0), false
+		return nil
+	}
+	n.Valid = true
+	d, err := AsDuration(value)
+	if err != nil {
+		return err
+	}
+	n.Duration = *d
+	return nil
+}
+
+func (n *NullDuration) Value() (driver.Value, error) {
+	if !n.Valid {
+		return nil, nil
+	}
+	return n.Duration, nil
 }

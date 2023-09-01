@@ -23,6 +23,7 @@ const (
 	MSSQL    DBType = "mssql"
 	ORACLE   DBType = "oracle"
 	DAMENG   DBType = "dameng"
+	YDB      DBType = "ydb"
 )
 
 // SQLType represents SQL types
@@ -131,6 +132,7 @@ var (
 	SmallDateTime = "SMALLDATETIME"
 	Time          = "TIME"
 	TimeStamp     = "TIMESTAMP"
+	Interval      = "INTERVAL"
 	TimeStampz    = "TIMESTAMPZ"
 	Year          = "YEAR"
 
@@ -266,12 +268,15 @@ var (
 	BytesType  = reflect.SliceOf(ByteType)
 
 	TimeType        = reflect.TypeOf((*time.Time)(nil)).Elem()
+	IntervalType    = reflect.TypeOf((*time.Duration)(nil)).Elem()
 	BigFloatType    = reflect.TypeOf((*big.Float)(nil)).Elem()
 	NullFloat64Type = reflect.TypeOf((*sql.NullFloat64)(nil)).Elem()
 	NullStringType  = reflect.TypeOf((*sql.NullString)(nil)).Elem()
+	NullInt16Type   = reflect.TypeOf((*sql.NullInt16)(nil)).Elem()
 	NullInt32Type   = reflect.TypeOf((*sql.NullInt32)(nil)).Elem()
 	NullInt64Type   = reflect.TypeOf((*sql.NullInt64)(nil)).Elem()
 	NullBoolType    = reflect.TypeOf((*sql.NullBool)(nil)).Elem()
+	NullTimeType    = reflect.TypeOf((*sql.NullTime)(nil)).Elem()
 )
 
 // Type2SQLType generate SQLType acorrding Go's type
@@ -314,6 +319,10 @@ func Type2SQLType(t reflect.Type) (st SQLType) {
 			st = SQLType{BigInt, 0, 0}
 		} else if t.ConvertibleTo(NullBoolType) {
 			st = SQLType{Boolean, 0, 0}
+		} else if t.ConvertibleTo(NullTimeType) {
+			st = SQLType{TimeStamp, 0, 0}
+		} else if t.ConvertibleTo(IntervalType) {
+			st = SQLType{Interval, 0, 0}
 		} else {
 			// TODO need to handle association struct
 			st = SQLType{Text, 0, 0}

@@ -5,6 +5,7 @@
 package xorm
 
 import (
+	"database/sql/driver"
 	"errors"
 	"strconv"
 
@@ -197,5 +198,9 @@ func (session *Session) delete(beans []interface{}, mustHaveConditions bool) (in
 	cleanupProcessorsClosures(&session.afterClosures)
 	// --
 
-	return res.RowsAffected()
+	affected, err := res.RowsAffected()
+	if errors.Is(err, driver.ErrSkip) {
+		err = nil
+	}
+	return affected, err
 }
