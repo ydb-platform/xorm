@@ -44,7 +44,7 @@ jobs:
 
     services:
       ydb:
-        image: cr.yandex/yc/yandex-docker-local-ydb:23.2-slim
+        image: cr.yandex/yc/yandex-docker-local-ydb:23.2
         ports:
           - 2135:2135
           - 2136:2136
