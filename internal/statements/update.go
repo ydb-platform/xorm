@@ -427,7 +427,158 @@ func (statement *Statement) writeUpdateLimit(updateWriter *builder.BytesWriter, 
 	}
 }
 
-func (statement *Statement) WriteUpdate(updateWriter *builder.BytesWriter, cond builder.Cond, colNames []string, args []interface{}) error {
+func (statement *Statement) GenConditionsFromMap(m interface{}) ([]builder.Cond, error) {
+	switch t := m.(type) {
+	case map[string]interface{}:
+		conds := []builder.Cond{}
+		for k, v := range t {
+			conds = append(conds, builder.Eq{k: v})
+		}
+		return conds, nil
+	case map[string]string:
+		conds := []builder.Cond{}
+		for k, v := range t {
+			conds = append(conds, builder.Eq{k: v})
+		}
+		return conds, nil
+	default:
+		return nil, fmt.Errorf("unsupported condition map type %v", t)
+	}
+}
+
+func (statement *Statement) writeVersionIncrSet(w builder.Writer, v reflect.Value, hasPreviousSet bool) error {
+	if v.Type().Kind() != reflect.Struct {
+		return nil
+	}
+
+	table := statement.RefTable
+	if !(statement.RefTable != nil && table.Version != "" && statement.CheckVersion) {
+		return nil
+	}
+
+	verValue, err := table.VersionColumn().ValueOfV(&v)
+	if err != nil {
+		return err
+	}
+
+	if verValue == nil {
+		return nil
+	}
+
+	if hasPreviousSet {
+		if _, err := fmt.Fprint(w, ", "); err != nil {
+			return err
+		}
+	}
+
+	if _, err := fmt.Fprint(w, statement.quote(table.Version), " = ", statement.quote(table.Version), " + 1"); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (statement *Statement) writeIncrSets(w builder.Writer, hasPreviousSet bool) error {
+	for i, expr := range statement.IncrColumns {
+		if i > 0 || hasPreviousSet {
+			if _, err := fmt.Fprint(w, ", "); err != nil {
+				return err
+			}
+		}
+		if _, err := fmt.Fprint(w, statement.quote(expr.ColName), " = ", statement.quote(expr.ColName), " + ?"); err != nil {
+			return err
+		}
+		w.Append(expr.Arg)
+	}
+	return nil
+}
+
+func (statement *Statement) writeDecrSets(w builder.Writer, hasPreviousSet bool) error {
+	// for update action to like "column = column - ?"
+	for i, expr := range statement.DecrColumns {
+		if i > 0 || hasPreviousSet {
+			if _, err := fmt.Fprint(w, ", "); err != nil {
+				return err
+			}
+		}
+		if _, err := fmt.Fprint(w, statement.quote(expr.ColName), " = ", statement.quote(expr.ColName), " - ?"); err != nil {
+			return err
+		}
+		w.Append(expr.Arg)
+	}
+	return nil
+}
+
+func (statement *Statement) writeExprSets(w *builder.BytesWriter, hasPreviousSet bool) error {
+	// for update action to like "column = expression"
+	for i, expr := range statement.ExprColumns {
+		if i > 0 || hasPreviousSet {
+			if _, err := fmt.Fprint(w, ", "); err != nil {
+				return err
+			}
+		}
+		switch tp := expr.Arg.(type) {
+		case string:
+			if len(tp) == 0 {
+				tp = "''"
+			}
+			if _, err := fmt.Fprint(w, statement.quote(expr.ColName), " = ", tp); err != nil {
+				return err
+			}
+		case *builder.Builder:
+			if _, err := fmt.Fprint(w, statement.quote(expr.ColName), " = ("); err != nil {
+				return err
+			}
+			if err := tp.WriteTo(statement.QuoteReplacer(w)); err != nil {
+				return err
+			}
+			if _, err := fmt.Fprint(w, ")"); err != nil {
+				return err
+			}
+		default:
+			if _, err := fmt.Fprint(w, statement.quote(expr.ColName), " = ?"); err != nil {
+				return err
+			}
+			w.Append(expr.Arg)
+		}
+	}
+	return nil
+}
+
+func (statement *Statement) writeUpdateSets(w *builder.BytesWriter, v reflect.Value, colNames []string, args []interface{}) error {
+	previousLen := w.Len()
+	for i, colName := range colNames {
+		if i > 0 {
+			if _, err := fmt.Fprint(w, ", "); err != nil {
+				return err
+			}
+		}
+		if _, err := fmt.Fprint(w, colName); err != nil {
+			return err
+		}
+	}
+	w.Append(args...)
+
+	if err := statement.writeIncrSets(w, w.Len() > previousLen); err != nil {
+		return err
+	}
+
+	if err := statement.writeDecrSets(w, w.Len() > previousLen); err != nil {
+		return err
+	}
+
+	if err := statement.writeExprSets(w, w.Len() > previousLen); err != nil {
+		return err
+	}
+
+	if err := statement.writeVersionIncrSet(w, v, w.Len() > previousLen); err != nil {
+		return err
+	}
+	return nil
+}
+
+var ErrNoColumnsTobeUpdated = errors.New("no columns found to be updated")
+
+func (statement *Statement) WriteUpdate(updateWriter *builder.BytesWriter, cond builder.Cond, v reflect.Value, colNames []string, args []interface{}) error {
 	if _, err := fmt.Fprintf(updateWriter, "UPDATE"); err != nil {
 		return err
 	}
@@ -444,17 +595,16 @@ func (statement *Statement) WriteUpdate(updateWriter *builder.BytesWriter, cond 
 	if _, err := fmt.Fprint(updateWriter, " SET "); err != nil {
 		return err
 	}
-	for i, colName := range colNames {
-		if i > 0 {
-			if _, err := fmt.Fprint(updateWriter, ", "); err != nil {
-				return err
-			}
-		}
-		if _, err := fmt.Fprint(updateWriter, colName); err != nil {
-			return err
-		}
+	previousLen := updateWriter.Len()
+
+	if err := statement.writeUpdateSets(updateWriter, v, colNames, args); err != nil {
+		return err
 	}
-	updateWriter.Append(args...)
+
+	// if no columns to be updated, return error
+	if previousLen == updateWriter.Len() {
+		return ErrNoColumnsTobeUpdated
+	}
 
 	// write from
 	if err := statement.writeUpdateFrom(updateWriter); err != nil {

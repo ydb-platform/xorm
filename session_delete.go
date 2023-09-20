@@ -202,8 +202,5 @@ func (session *Session) delete(beans []interface{}, mustHaveConditions bool) (in
 	if errors.Is(err, driver.ErrSkip) {
 		err = nil
 	}
-	if err != nil {
-		return affected, err
-	}
 	return affected, err
 }

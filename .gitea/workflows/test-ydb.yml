@@ -1,4 +1,4 @@
-name: test cockroach
+name: test ydb
 on: 
   push:
     branches:
@@ -11,8 +11,8 @@ env:
   GOCACHE: /go_cache
 
 jobs:
-  test-cockroach:
-    name: test cockroach
+  lint:
+    name: test ydb
     runs-on: ubuntu-latest
     steps:
       # - name: cache go path
@@ -32,25 +32,31 @@ jobs:
       #     key: go_cache-${{ github.repository }}-${{ github.ref_name }}
       #     restore-keys: |
       #       go_cache-${{ github.repository }}-
-      #       go_cache-
+      #       go_cache-                            
       - uses: actions/setup-go@v3
         with:
           go-version: 1.20
       - uses: https://github.com/actions/checkout@v3
-      - name: test cockroach
-        env:
-          TEST_COCKROACH_HOST: "cockroach:26257"
-          TEST_COCKROACH_DBNAME: xorm_test
-          TEST_COCKROACH_USERNAME: root
-          TEST_COCKROACH_PASSWORD:
-          IGNORE_TEST_DELETE_LIMIT: true
-        run: sleep 20 && make test-cockroach
+      - name: test ydb (secure connection)
+        run: TEST_YDB_SCHEME=grpcs TEST_YDB_HOST=localhost:2135 TEST_YDB_DBNAME=local make test-ydb
+      - name: test ydb (insecure connection)
+        run: TEST_YDB_SCHEME=grpc TEST_YDB_HOST=localhost:2136 TEST_YDB_DBNAME=local make test-ydb
 
     services:
-      cockroach:
-        image: cockroachdb/cockroach:v19.2.4
+      ydb:
+        image: cr.yandex/yc/yandex-docker-local-ydb:23.2
         ports:
-          - 26257:26257
-        cmd:
-          - 'start'
-          - '--insecure'
+          - 2135:2135
+          - 2136:2136
+          - 8765:8765
+        volumes:
+          - /tmp/ydb_certs:/ydb_certs
+        env:
+          YDB_LOCAL_SURVIVE_RESTART: true
+          YDB_USE_IN_MEMORY_PDISKS: true
+        options: '-h localhost'
+
+    env:
+      YDB_SSL_ROOT_CERTIFICATES_FILE: /tmp/ydb_certs/ca.pem
+      YDB_SESSIONS_SHUTDOWN_URLS: http://localhost:8765/actors/kqp_proxy?force_shutdown=all
+      HIDE_APPLICATION_OUTPUT: 1
