@@ -5,25 +5,27 @@
 package xorm
 
 import (
-	"bufio"
-	"bytes"
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
 	"io"
 	"os"
 	"reflect"
+	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
 
 	"xorm.io/xorm/caches"
+	"xorm.io/xorm/contexts"
+	"xorm.io/xorm/convert"
 	"xorm.io/xorm/core"
 	"xorm.io/xorm/dialects"
 	"xorm.io/xorm/internal/utils"
 	"xorm.io/xorm/log"
 	"xorm.io/xorm/names"
+	"xorm.io/xorm/retry"
 	"xorm.io/xorm/schemas"
 	"xorm.io/xorm/tags"
 )
@@ -32,23 +34,116 @@ import (
 // Commonly, an application only need one engine
 type Engine struct {
 	cacherMgr      *caches.Manager
-	db             *core.DB
 	defaultContext context.Context
 	dialect        dialects.Dialect
+	driver         dialects.Driver
 	engineGroup    *EngineGroup
 	logger         log.ContextLogger
 	tagParser      *tags.Parser
+	db             *core.DB
+
+	driverName     string
+	dataSourceName string
 
 	TZLocation *time.Location // The timezone of the application
 	DatabaseTZ *time.Location // The timezone of the database
+
+	logSessionID bool // create session id
 }
 
+// NewEngine new a db manager according to the parameter. Currently support four
+// drivers
+func NewEngine(driverName string, dataSourceName string) (*Engine, error) {
+	dialect, err := dialects.OpenDialect(driverName, dataSourceName)
+	if err != nil {
+		return nil, err
+	}
+
+	db, err := core.Open(driverName, dataSourceName)
+	if err != nil {
+		return nil, err
+	}
+
+	return newEngine(driverName, dataSourceName, dialect, db)
+}
+
+func newEngine(driverName, dataSourceName string, dialect dialects.Dialect, db *core.DB) (*Engine, error) {
+	cacherMgr := caches.NewManager()
+	mapper := names.NewCacheMapper(new(names.SnakeMapper))
+	tagParser := tags.NewParser("xorm", dialect, mapper, mapper, cacherMgr)
+
+	engine := &Engine{
+		dialect:        dialect,
+		driver:         dialects.QueryDriver(driverName),
+		TZLocation:     time.Local,
+		defaultContext: context.Background(),
+		cacherMgr:      cacherMgr,
+		tagParser:      tagParser,
+		driverName:     driverName,
+		dataSourceName: dataSourceName,
+		db:             db,
+		logSessionID:   false,
+	}
+
+	if dialect.URI().DBType == schemas.SQLITE {
+		engine.DatabaseTZ = time.UTC
+	} else {
+		engine.DatabaseTZ = time.Local
+	}
+
+	logger := log.NewSimpleLogger(os.Stdout)
+	logger.SetLevel(log.LOG_INFO)
+	engine.SetLogger(log.NewLoggerAdapter(logger))
+
+	runtime.SetFinalizer(engine, func(engine *Engine) {
+		_ = engine.Close()
+	})
+
+	return engine, nil
+}
+
+// NewEngineWithParams new a db manager with params. The params will be passed to dialects.
+func NewEngineWithParams(driverName string, dataSourceName string, params map[string]string) (*Engine, error) {
+	engine, err := NewEngine(driverName, dataSourceName)
+	engine.dialect.SetParams(params)
+	return engine, err
+}
+
+// NewEngineWithDB new a db manager with db. The params will be passed to db.
+func NewEngineWithDB(driverName string, dataSourceName string, db *core.DB) (*Engine, error) {
+	dialect, err := dialects.OpenDialect(driverName, dataSourceName)
+	if err != nil {
+		return nil, err
+	}
+	return newEngine(driverName, dataSourceName, dialect, db)
+}
+
+// NewEngineWithDialectAndDB new a db manager according to the parameter.
+// If you do not want to use your own dialect or db, please use NewEngine.
+// For creating dialect, you can call dialects.OpenDialect. And, for creating db,
+// you can call core.Open or core.FromDB.
+func NewEngineWithDialectAndDB(driverName, dataSourceName string, dialect dialects.Dialect, db *core.DB) (*Engine, error) {
+	return newEngine(driverName, dataSourceName, dialect, db)
+}
+
+// EnableSessionID if enable session id
+func (engine *Engine) EnableSessionID(enable bool) {
+	engine.logSessionID = enable
+}
+
+// SetCacher sets cacher for the table
 func (engine *Engine) SetCacher(tableName string, cacher caches.Cacher) {
 	engine.cacherMgr.SetCacher(tableName, cacher)
 }
 
+// GetCacher returns the cachher of the special table
 func (engine *Engine) GetCacher(tableName string) caches.Cacher {
 	return engine.cacherMgr.GetCacher(tableName)
+}
+
+// SetQuotePolicy sets the special quote policy
+func (engine *Engine) SetQuotePolicy(quotePolicy dialects.QuotePolicy) {
+	engine.dialect.SetQuotePolicy(quotePolicy)
 }
 
 // BufferSize sets buffer size for iterate
@@ -61,11 +156,7 @@ func (engine *Engine) BufferSize(size int) *Session {
 // ShowSQL show SQL statement or not on logger if log level is great than INFO
 func (engine *Engine) ShowSQL(show ...bool) {
 	engine.logger.ShowSQL(show...)
-	if engine.logger.IsShowSQL() {
-		engine.db.Logger = engine.logger
-	} else {
-		engine.db.Logger = &log.DiscardSQLLogger{}
-	}
+	engine.DB().Logger = engine.logger
 }
 
 // Logger return the logger interface
@@ -77,17 +168,15 @@ func (engine *Engine) Logger() log.ContextLogger {
 func (engine *Engine) SetLogger(logger interface{}) {
 	var realLogger log.ContextLogger
 	switch t := logger.(type) {
-	case log.Logger:
-		realLogger = log.NewLoggerAdapter(t)
 	case log.ContextLogger:
 		realLogger = t
+	case log.Logger:
+		realLogger = log.NewLoggerAdapter(t)
+	default:
+		panic("logger should implement either log.ContextLogger or log.Logger")
 	}
 	engine.logger = realLogger
-	if realLogger.IsShowSQL() {
-		engine.db.Logger = realLogger
-	} else {
-		engine.db.Logger = &log.DiscardSQLLogger{}
-	}
+	engine.DB().Logger = realLogger
 }
 
 // SetLogLevel sets the logger level
@@ -102,12 +191,12 @@ func (engine *Engine) SetDisableGlobalCache(disable bool) {
 
 // DriverName return the current sql driver's name
 func (engine *Engine) DriverName() string {
-	return engine.dialect.DriverName()
+	return engine.driverName
 }
 
 // DataSourceName return the current connection string
 func (engine *Engine) DataSourceName() string {
-	return engine.dialect.DataSourceName()
+	return engine.dataSourceName
 }
 
 // SetMapper set the name mapping rules
@@ -126,12 +215,9 @@ func (engine *Engine) SetColumnMapper(mapper names.Mapper) {
 	engine.tagParser.SetColumnMapper(mapper)
 }
 
-// SupportInsertMany If engine's database support batch insert records like
-// "insert into user values (name, age), (name, age)".
-// When the return is ture, then engine.Insert(&users) will
-// generate batch sql and exeute.
-func (engine *Engine) SupportInsertMany() bool {
-	return engine.dialect.SupportInsertMany()
+// SetTagIdentifier set the tag identifier
+func (engine *Engine) SetTagIdentifier(tagIdentifier string) {
+	engine.tagParser.SetIdentifier(tagIdentifier)
 }
 
 // Quote Use QuoteStr quote the string sql
@@ -165,24 +251,24 @@ func (engine *Engine) SQLType(c *schemas.Column) string {
 	return engine.dialect.SQLType(c)
 }
 
-// AutoIncrStr Database's autoincrement statement
-func (engine *Engine) AutoIncrStr() string {
-	return engine.dialect.AutoIncrStr()
-}
-
 // SetConnMaxLifetime sets the maximum amount of time a connection may be reused.
 func (engine *Engine) SetConnMaxLifetime(d time.Duration) {
-	engine.db.SetConnMaxLifetime(d)
+	engine.DB().SetConnMaxLifetime(d)
+}
+
+// SetConnMaxIdleTime sets the maximum amount of time a connection may be idle.
+func (engine *Engine) SetConnMaxIdleTime(d time.Duration) {
+	engine.DB().SetConnMaxIdleTime(d)
 }
 
 // SetMaxOpenConns is only available for go 1.2+
 func (engine *Engine) SetMaxOpenConns(conns int) {
-	engine.db.SetMaxOpenConns(conns)
+	engine.DB().SetMaxOpenConns(conns)
 }
 
 // SetMaxIdleConns set the max idle connections on pool, default is 2
 func (engine *Engine) SetMaxIdleConns(conns int) {
-	engine.db.SetMaxIdleConns(conns)
+	engine.DB().SetMaxIdleConns(conns)
 }
 
 // SetDefaultCacher set the default cacher. Xorm's default not enable cacher.
@@ -218,7 +304,7 @@ func (engine *Engine) MapCacher(bean interface{}, cacher caches.Cacher) error {
 
 // NewDB provides an interface to operate database directly
 func (engine *Engine) NewDB() (*core.DB, error) {
-	return dialects.OpenDialect(engine.dialect)
+	return core.Open(engine.driverName, engine.dataSourceName)
 }
 
 // DB return the wrapper of sql.DB
@@ -233,14 +319,12 @@ func (engine *Engine) Dialect() dialects.Dialect {
 
 // NewSession New a session
 func (engine *Engine) NewSession() *Session {
-	session := &Session{engine: engine}
-	session.Init()
-	return session
+	return newSession(engine)
 }
 
 // Close the engine
 func (engine *Engine) Close() error {
-	return engine.db.Close()
+	return engine.DB().Close()
 }
 
 // Ping tests if database is alive
@@ -253,7 +337,7 @@ func (engine *Engine) Ping() error {
 // SQL method let's you manually write raw SQL and operate
 // For example:
 //
-//         engine.SQL("select * from user").Find(&users)
+//	engine.SQL("select * from user").Find(&users)
 //
 // This    code will execute "select * from user" and set the records to users
 func (engine *Engine) SQL(query interface{}, args ...interface{}) *Session {
@@ -278,26 +362,36 @@ func (engine *Engine) NoAutoCondition(no ...bool) *Session {
 	return session.NoAutoCondition(no...)
 }
 
-func (engine *Engine) loadTableInfo(table *schemas.Table) error {
-	colSeq, cols, err := engine.dialect.GetColumns(engine.defaultContext, table.Name)
+func (engine *Engine) loadTableInfo(ctx context.Context, table *schemas.Table) error {
+	colSeq, cols, err := engine.dialect.GetColumns(engine.db, ctx, table.Name)
 	if err != nil {
 		return err
 	}
 	for _, name := range colSeq {
 		table.AddColumn(cols[name])
 	}
-	indexes, err := engine.dialect.GetIndexes(engine.defaultContext, table.Name)
+	indexes, err := engine.dialect.GetIndexes(engine.db, ctx, table.Name)
 	if err != nil {
 		return err
 	}
 	table.Indexes = indexes
 
+	var seq int
 	for _, index := range indexes {
 		for _, name := range index.Cols {
-			if col := table.GetColumn(name); col != nil {
+			parts := strings.Split(strings.TrimSpace(name), " ")
+			if len(parts) > 1 {
+				if parts[1] == "DESC" {
+					seq = 1
+				} else if parts[1] == "ASC" {
+					seq = 0
+				}
+			}
+			colName := strings.Trim(parts[0], `"`)
+			if col := table.GetColumn(colName); col != nil {
 				col.Indexes[index.Name] = index.Type
 			} else {
-				return fmt.Errorf("Unknown col %s in index %v of table %v, columns %v", name, index.Name, table.Name, table.ColumnsSeq())
+				return fmt.Errorf("Unknown col %s seq %d, in index %v of table %v, columns %v", name, seq, index.Name, table.Name, table.ColumnsSeq())
 			}
 		}
 	}
@@ -306,13 +400,13 @@ func (engine *Engine) loadTableInfo(table *schemas.Table) error {
 
 // DBMetas Retrieve all tables, columns, indexes' informations from database.
 func (engine *Engine) DBMetas() ([]*schemas.Table, error) {
-	tables, err := engine.dialect.GetTables(engine.defaultContext)
+	tables, err := engine.dialect.GetTables(engine.db, engine.defaultContext)
 	if err != nil {
 		return nil, err
 	}
 
 	for _, table := range tables {
-		if err = engine.loadTableInfo(table); err != nil {
+		if err = engine.loadTableInfo(engine.defaultContext, table); err != nil {
 			return nil, err
 		}
 	}
@@ -350,142 +444,441 @@ func (engine *Engine) DumpTablesToFile(tables []*schemas.Table, fp string, tp ..
 
 // DumpTables dump specify tables to io.Writer
 func (engine *Engine) DumpTables(tables []*schemas.Table, w io.Writer, tp ...schemas.DBType) error {
-	return engine.dumpTables(tables, w, tp...)
+	return engine.dumpTables(context.Background(), tables, w, tp...)
 }
 
-// dumpTables dump database all table structs and data to w with specify db type
-func (engine *Engine) dumpTables(tables []*schemas.Table, w io.Writer, tp ...schemas.DBType) error {
-	var dialect dialects.Dialect
-	var distDBName string
-	if len(tp) == 0 {
-		dialect = engine.dialect
-		distDBName = string(engine.dialect.DBType())
-	} else {
-		dialect = dialects.QueryDialect(tp[0])
-		if dialect == nil {
-			return errors.New("Unsupported database type")
+func formatBool(s bool, dstDialect dialects.Dialect) string {
+	if dstDialect.URI().DBType != schemas.POSTGRES {
+		if s {
+			return "1"
 		}
-		dialect.Init(nil, engine.dialect.URI(), "", "")
-		distDBName = string(tp[0])
+		return "0"
 	}
+	return strconv.FormatBool(s)
+}
 
-	_, err := io.WriteString(w, fmt.Sprintf("/*Generated by xorm v%s %s, from %s to %s*/\n\n",
-		Version, time.Now().In(engine.TZLocation).Format("2006-01-02 15:04:05"), engine.dialect.DBType(), strings.ToUpper(distDBName)))
+var controlCharactersRe = regexp.MustCompile(`[\x00-\x1f\x7f]+`)
+
+// dumpTables dump database all table structs and data to w with specify db type
+func (engine *Engine) dumpTables(ctx context.Context, tables []*schemas.Table, w io.Writer, tp ...schemas.DBType) error {
+	var dstDialect dialects.Dialect
+	if len(tp) == 0 {
+		dstDialect = engine.dialect
+	} else {
+		dstDialect = dialects.QueryDialect(tp[0])
+		if dstDialect == nil {
+			return fmt.Errorf("unsupported database type %v", tp[0])
+		}
+
+		uri := engine.dialect.URI()
+		destURI := dialects.URI{
+			DBType: tp[0],
+			DBName: uri.DBName,
+			// DO NOT SET SCHEMA HERE
+		}
+		if tp[0] == schemas.POSTGRES {
+			destURI.Schema = engine.dialect.URI().Schema
+		}
+		if err := dstDialect.Init(&destURI); err != nil {
+			return err
+		}
+	}
+	cacherMgr := caches.NewManager()
+	dstTableCache := tags.NewParser("xorm", dstDialect, engine.GetTableMapper(), engine.GetColumnMapper(), cacherMgr)
+
+	_, err := io.WriteString(w, fmt.Sprintf("/*Generated by xorm %s, from %s to %s*/\n\n",
+		time.Now().In(engine.TZLocation).Format("2006-01-02 15:04:05"), engine.dialect.URI().DBType, dstDialect.URI().DBType))
 	if err != nil {
 		return err
 	}
 
+	if dstDialect.URI().DBType == schemas.MYSQL {
+		// For MySQL set NO_BACKLASH_ESCAPES so that strings work properly
+		if _, err := io.WriteString(w, "SET sql_mode='NO_BACKSLASH_ESCAPES';\n"); err != nil {
+			return err
+		}
+	}
+
 	for i, table := range tables {
+		dstTable := table
+		if table.Type != nil {
+			dstTable, err = dstTableCache.Parse(reflect.New(table.Type).Elem())
+			if err != nil {
+				engine.logger.Errorf("Unable to infer table for %s in new dialect. Error: %v", table.Name)
+				dstTable = table
+			}
+		}
+
+		dstTableName := dstTable.Name
+		quoter := dstDialect.Quoter().Quote
+		quotedDstTableName := quoter(dstTable.Name)
+		if dstDialect.URI().Schema != "" {
+			dstTableName = fmt.Sprintf("%s.%s", dstDialect.URI().Schema, dstTable.Name)
+			quotedDstTableName = fmt.Sprintf("%s.%s", quoter(dstDialect.URI().Schema), quoter(dstTable.Name))
+		}
+		originalTableName := table.Name
+		if engine.dialect.URI().Schema != "" {
+			originalTableName = fmt.Sprintf("%s.%s", engine.dialect.URI().Schema, table.Name)
+		}
 		if i > 0 {
 			_, err = io.WriteString(w, "\n")
 			if err != nil {
 				return err
 			}
 		}
-		_, err = io.WriteString(w, dialect.CreateTableSQL(table, "", table.StoreEngine, "")+";\n")
+
+		if dstTable.AutoIncrement != "" && dstDialect.Features().AutoincrMode == dialects.SequenceAutoincrMode {
+			sqlstr, err := dstDialect.CreateSequenceSQL(ctx, engine.db, utils.SeqName(dstTableName))
+			if err != nil {
+				return err
+			}
+			_, err = io.WriteString(w, sqlstr+";\n")
+			if err != nil {
+				return err
+			}
+		}
+
+		sqlstr, _, err := dstDialect.CreateTableSQL(ctx, engine.db, dstTable, dstTableName)
 		if err != nil {
 			return err
 		}
-		for _, index := range table.Indexes {
-			_, err = io.WriteString(w, dialect.CreateIndexSQL(table.Name, index)+";\n")
+		_, err = io.WriteString(w, sqlstr+";\n")
+		if err != nil {
+			return err
+		}
+
+		if len(dstTable.PKColumns()) > 0 && dstDialect.URI().DBType == schemas.MSSQL {
+			fmt.Fprintf(w, "SET IDENTITY_INSERT [%s] ON;\n", dstTable.Name)
+		}
+
+		for _, index := range dstTable.Indexes {
+			// !datbeohbbh! with YDB, if there are indexes in table, these indexes have already been created in CREATE TABLE script.
+			if dstDialect.URI().DBType == schemas.YDB {
+				continue
+			}
+			_, err = io.WriteString(w, dstDialect.CreateIndexSQL(dstTable.Name, index)+";\n")
 			if err != nil {
 				return err
 			}
 		}
 
 		cols := table.ColumnsSeq()
-		colNames := engine.dialect.Quoter().Join(cols, ", ")
-		destColNames := dialect.Quoter().Join(cols, ", ")
+		dstCols := dstTable.ColumnsSeq()
 
-		rows, err := engine.DB().QueryContext(engine.defaultContext, "SELECT "+colNames+" FROM "+engine.Quote(table.Name))
+		colNames := engine.dialect.Quoter().Join(cols, ", ")
+		destColNames := dstDialect.Quoter().Join(dstCols, ", ")
+
+		rows, err := engine.DB().QueryContext(engine.defaultContext, "SELECT "+colNames+" FROM "+engine.Quote(originalTableName))
 		if err != nil {
 			return err
 		}
 		defer rows.Close()
 
+		types, err := rows.ColumnTypes()
+		if err != nil {
+			return err
+		}
+
+		fields, err := rows.Columns()
+		if err != nil {
+			return err
+		}
+
+		sess := engine.NewSession()
+		defer sess.Close()
 		for rows.Next() {
-			dest := make([]interface{}, len(cols))
-			err = rows.ScanSlice(&dest)
+			_, err = io.WriteString(w, "INSERT INTO "+quotedDstTableName+" ("+destColNames+") VALUES (")
 			if err != nil {
 				return err
 			}
 
-			_, err = io.WriteString(w, "INSERT INTO "+dialect.Quoter().Quote(table.Name)+" ("+destColNames+") VALUES (")
+			scanResults, err := sess.engine.scanStringInterface(rows, fields, types)
 			if err != nil {
 				return err
 			}
-
-			var temp string
-			for i, d := range dest {
-				col := table.GetColumn(cols[i])
-				if col == nil {
-					return errors.New("unknow column error")
-				}
-
-				if d == nil {
-					temp += ", NULL"
-				} else if col.SQLType.IsText() || col.SQLType.IsTime() {
-					var v = fmt.Sprintf("%s", d)
-					if strings.HasSuffix(v, " +0000 UTC") {
-						temp += fmt.Sprintf(", '%s'", v[0:len(v)-len(" +0000 UTC")])
-					} else {
-						temp += ", '" + strings.Replace(v, "'", "''", -1) + "'"
-					}
-				} else if col.SQLType.IsBlob() {
-					if reflect.TypeOf(d).Kind() == reflect.Slice {
-						temp += fmt.Sprintf(", %s", dialect.FormatBytes(d.([]byte)))
-					} else if reflect.TypeOf(d).Kind() == reflect.String {
-						temp += fmt.Sprintf(", '%s'", d.(string))
-					}
-				} else if col.SQLType.IsNumeric() {
-					switch reflect.TypeOf(d).Kind() {
-					case reflect.Slice:
-						if col.SQLType.Name == schemas.Bool {
-							temp += fmt.Sprintf(", %v", strconv.FormatBool(d.([]byte)[0] != byte('0')))
-						} else {
-							temp += fmt.Sprintf(", %s", string(d.([]byte)))
-						}
-					case reflect.Int16, reflect.Int8, reflect.Int32, reflect.Int64, reflect.Int:
-						if col.SQLType.Name == schemas.Bool {
-							temp += fmt.Sprintf(", %v", strconv.FormatBool(reflect.ValueOf(d).Int() > 0))
-						} else {
-							temp += fmt.Sprintf(", %v", d)
-						}
-					case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-						if col.SQLType.Name == schemas.Bool {
-							temp += fmt.Sprintf(", %v", strconv.FormatBool(reflect.ValueOf(d).Uint() > 0))
-						} else {
-							temp += fmt.Sprintf(", %v", d)
-						}
-					default:
-						temp += fmt.Sprintf(", %v", d)
+			for i, scanResult := range scanResults {
+				stp := schemas.SQLType{Name: types[i].DatabaseTypeName()}
+				s := scanResult.(*sql.NullString)
+				if !s.Valid {
+					if _, err = io.WriteString(w, "NULL"); err != nil {
+						return err
 					}
 				} else {
-					s := fmt.Sprintf("%v", d)
-					if strings.Contains(s, ":") || strings.Contains(s, "-") {
-						if strings.HasSuffix(s, " +0000 UTC") {
-							temp += fmt.Sprintf(", '%s'", s[0:len(s)-len(" +0000 UTC")])
+					if table.Columns()[i].SQLType.IsBool() || stp.IsBool() || (dstDialect.URI().DBType == schemas.MSSQL && strings.EqualFold(stp.Name, schemas.Bit)) {
+						val, err := strconv.ParseBool(s.String)
+						if err != nil {
+							return err
+						}
+
+						if _, err = io.WriteString(w, formatBool(val, dstDialect)); err != nil {
+							return err
+						}
+					} else if stp.IsNumeric() {
+						if _, err = io.WriteString(w, s.String); err != nil {
+							return err
+						}
+					} else if sess.engine.dialect.URI().DBType == schemas.DAMENG && stp.IsTime() && len(s.String) == 25 {
+						r := strings.ReplaceAll(s.String[:19], "T", " ")
+						if _, err = io.WriteString(w, "'"+r+"'"); err != nil {
+							return err
+						}
+					} else if len(s.String) == 0 {
+						if _, err := io.WriteString(w, "''"); err != nil {
+							return err
+						}
+					} else if dstDialect.URI().DBType == schemas.POSTGRES {
+						if dstTable.Columns()[i].SQLType.IsBlob() {
+							// Postgres has the escape format and we should use that for bytea data
+							if _, err := fmt.Fprintf(w, "'\\x%x'", s.String); err != nil {
+								return err
+							}
 						} else {
-							temp += fmt.Sprintf(", '%s'", s)
+							// Postgres concatentates strings using || (NOTE: a NUL byte in a text segment will fail)
+							toCheck := strings.ReplaceAll(s.String, "'", "''")
+							for len(toCheck) > 0 {
+								loc := controlCharactersRe.FindStringIndex(toCheck)
+								if loc == nil {
+									if _, err := io.WriteString(w, "'"+toCheck+"'"); err != nil {
+										return err
+									}
+									break
+								}
+								if loc[0] > 0 {
+									if _, err := io.WriteString(w, "'"+toCheck[:loc[0]]+"' || "); err != nil {
+										return err
+									}
+								}
+								if _, err := io.WriteString(w, "e'"); err != nil {
+									return err
+								}
+								for i := loc[0]; i < loc[1]; i++ {
+									if _, err := fmt.Fprintf(w, "\\x%02x", toCheck[i]); err != nil {
+										return err
+									}
+								}
+								toCheck = toCheck[loc[1]:]
+								if len(toCheck) > 0 {
+									if _, err := io.WriteString(w, "' || "); err != nil {
+										return err
+									}
+								} else {
+									if _, err := io.WriteString(w, "'"); err != nil {
+										return err
+									}
+								}
+							}
+						}
+					} else if dstDialect.URI().DBType == schemas.MYSQL {
+						loc := controlCharactersRe.FindStringIndex(s.String)
+						if loc == nil {
+							if _, err := io.WriteString(w, "'"+strings.ReplaceAll(s.String, "'", "''")+"'"); err != nil {
+								return err
+							}
+						} else {
+							if _, err := io.WriteString(w, "CONCAT("); err != nil {
+								return err
+							}
+							toCheck := strings.ReplaceAll(s.String, "'", "''")
+							for len(toCheck) > 0 {
+								loc := controlCharactersRe.FindStringIndex(toCheck)
+								if loc == nil {
+									if _, err := io.WriteString(w, "'"+toCheck+"')"); err != nil {
+										return err
+									}
+									break
+								}
+								if loc[0] > 0 {
+									if _, err := io.WriteString(w, "'"+toCheck[:loc[0]]+"', "); err != nil {
+										return err
+									}
+								}
+								for i := loc[0]; i < loc[1]-1; i++ {
+									if _, err := io.WriteString(w, "CHAR("+strconv.Itoa(int(toCheck[i]))+"), "); err != nil {
+										return err
+									}
+								}
+								char := toCheck[loc[1]-1]
+								toCheck = toCheck[loc[1]:]
+								if len(toCheck) > 0 {
+									if _, err := io.WriteString(w, "CHAR("+strconv.Itoa(int(char))+"), "); err != nil {
+										return err
+									}
+								} else {
+									if _, err = io.WriteString(w, "CHAR("+strconv.Itoa(int(char))+"))"); err != nil {
+										return err
+									}
+								}
+							}
+						}
+					} else if dstDialect.URI().DBType == schemas.SQLITE {
+						if dstTable.Columns()[i].SQLType.IsBlob() {
+							// SQLite has its escape format
+							if _, err := fmt.Fprintf(w, "X'%x'", s.String); err != nil {
+								return err
+							}
+						} else {
+							// SQLite concatentates strings using || (NOTE: a NUL byte in a text segment will fail)
+							toCheck := strings.ReplaceAll(s.String, "'", "''")
+							for len(toCheck) > 0 {
+								loc := controlCharactersRe.FindStringIndex(toCheck)
+								if loc == nil {
+									if _, err := io.WriteString(w, "'"+toCheck+"'"); err != nil {
+										return err
+									}
+									break
+								}
+								if loc[0] > 0 {
+									if _, err := io.WriteString(w, "'"+toCheck[:loc[0]]+"' || "); err != nil {
+										return err
+									}
+								}
+								if _, err := fmt.Fprintf(w, "X'%x'", toCheck[loc[0]:loc[1]]); err != nil {
+									return err
+								}
+								toCheck = toCheck[loc[1]:]
+								if len(toCheck) > 0 {
+									if _, err := io.WriteString(w, " || "); err != nil {
+										return err
+									}
+								}
+							}
+						}
+					} else if dstDialect.URI().DBType == schemas.DAMENG || dstDialect.URI().DBType == schemas.ORACLE {
+						if dstTable.Columns()[i].SQLType.IsBlob() {
+							// ORACLE/DAMENG uses HEXTORAW
+							if _, err := fmt.Fprintf(w, "HEXTORAW('%x')", s.String); err != nil {
+								return err
+							}
+						} else {
+							// ORACLE/DAMENG concatentates strings in multiple ways but uses CHAR and has CONCAT
+							// (NOTE: a NUL byte in a text segment will fail)
+							if _, err := io.WriteString(w, "CONCAT("); err != nil {
+								return err
+							}
+							toCheck := strings.ReplaceAll(s.String, "'", "''")
+							for len(toCheck) > 0 {
+								loc := controlCharactersRe.FindStringIndex(toCheck)
+								if loc == nil {
+									if _, err := io.WriteString(w, "'"+toCheck+"')"); err != nil {
+										return err
+									}
+									break
+								}
+								if loc[0] > 0 {
+									if _, err := io.WriteString(w, "'"+toCheck[:loc[0]]+"', "); err != nil {
+										return err
+									}
+								}
+								for i := loc[0]; i < loc[1]-1; i++ {
+									if _, err := io.WriteString(w, "CHAR("+strconv.Itoa(int(toCheck[i]))+"), "); err != nil {
+										return err
+									}
+								}
+								char := toCheck[loc[1]-1]
+								toCheck = toCheck[loc[1]:]
+								if len(toCheck) > 0 {
+									if _, err := io.WriteString(w, "CHAR("+strconv.Itoa(int(char))+"), "); err != nil {
+										return err
+									}
+								} else {
+									if _, err = io.WriteString(w, "CHAR("+strconv.Itoa(int(char))+"))"); err != nil {
+										return err
+									}
+								}
+							}
+						}
+					} else if dstDialect.URI().DBType == schemas.MSSQL {
+						if dstTable.Columns()[i].SQLType.IsBlob() {
+							// MSSQL uses CONVERT(VARBINARY(MAX), '0xDEADBEEF', 1)
+							if _, err := fmt.Fprintf(w, "CONVERT(VARBINARY(MAX), '0x%x', 1)", s.String); err != nil {
+								return err
+							}
+						} else {
+							if _, err = io.WriteString(w, "N'"+strings.ReplaceAll(s.String, "'", "''")+"'"); err != nil {
+								return err
+							}
+						}
+					} else if dstDialect.URI().DBType == schemas.YDB {
+						castTmpl := "CAST(%v AS Optional<%v>)"
+						yqlType := dstDialect.SQLType(dstTable.Columns()[i])
+						if dstTable.Columns()[i].IsPrimaryKey {
+							if strings.HasPrefix(yqlType, "UINT") || strings.HasPrefix(yqlType, "INT") {
+								if _, err = io.WriteString(w, s.String); err != nil {
+									return err
+								}
+							} else if yqlType == "TIMESTAMP" {
+								fromLoc := engine.GetTZLocation()
+								toLoc := engine.GetTZDatabase()
+								t, err := convert.String2Time(s.String, fromLoc, toLoc)
+								if err != nil {
+									return err
+								}
+								if _, err = io.WriteString(w, fmt.Sprintf("%v", t.UnixMicro())); err != nil {
+									return err
+								}
+							} else {
+								if _, err = io.WriteString(w, "'"+strings.ReplaceAll(s.String, "'", "\\'")+"'"); err != nil {
+									return err
+								}
+							}
+						} else {
+							if yqlType == "TIMESTAMP" {
+								fromLoc := engine.GetTZLocation()
+								toLoc := engine.GetTZDatabase()
+								t, err := convert.String2Time(s.String, fromLoc, toLoc)
+								if err != nil {
+									return err
+								}
+								if _, err = io.WriteString(w, fmt.Sprintf(castTmpl, t.UnixMicro(), yqlType)); err != nil {
+									return err
+								}
+							} else if yqlType == "INTERVAL" {
+								// !datbeohbbh! TODO: only work if database represent interval time in microsecond.
+								d, err := strconv.ParseInt(s.String, 10, 64)
+								if err != nil {
+									return err
+								}
+								sec := float64(d) / float64(time.Microsecond)
+								if _, err = io.WriteString(w, fmt.Sprintf(castTmpl, sec, yqlType)); err != nil {
+									return err
+								}
+							} else {
+								if _, err = io.WriteString(w, fmt.Sprintf(castTmpl, "'"+strings.ReplaceAll(s.String, "'", "\\'")+"'", yqlType)); err != nil {
+									return err
+								}
+							}
 						}
 					} else {
-						temp += fmt.Sprintf(", %s", s)
+						if _, err = io.WriteString(w, "'"+strings.ReplaceAll(s.String, "'", "''")+"'"); err != nil {
+							return err
+						}
+					}
+				}
+				if i < len(scanResults)-1 {
+					if _, err = io.WriteString(w, ","); err != nil {
+						return err
 					}
 				}
 			}
-			_, err = io.WriteString(w, temp[2:]+");\n")
+			_, err = io.WriteString(w, ");\n")
 			if err != nil {
 				return err
 			}
+		}
+		if rows.Err() != nil {
+			return rows.Err()
 		}
 
 		// FIXME: Hack for postgres
-		if dialect.DBType() == schemas.POSTGRES && table.AutoIncrColumn() != nil {
-			_, err = io.WriteString(w, "SELECT setval('"+table.Name+"_id_seq', COALESCE((SELECT MAX("+table.AutoIncrColumn().Name+") + 1 FROM "+dialect.Quoter().Quote(table.Name)+"), 1), false);\n")
+		if dstDialect.URI().DBType == schemas.POSTGRES && table.AutoIncrColumn() != nil {
+			_, err = io.WriteString(w, "SELECT setval('"+dstTableName+"_id_seq', COALESCE((SELECT MAX("+table.AutoIncrColumn().Name+") + 1 FROM "+dstDialect.Quoter().Quote(dstTableName)+"), 1), false);\n")
 			if err != nil {
 				return err
 			}
 		}
+		// !datbeohbbh! if no error, manually close
+		rows.Close()
+		sess.Close()
 	}
 	return nil
 }
@@ -667,9 +1060,8 @@ func (engine *Engine) Desc(colNames ...string) *Session {
 // Asc will generate "ORDER BY column1,column2 Asc"
 // This method can chainable use.
 //
-//        engine.Desc("name").Asc("age").Find(&users)
-//        // SELECT * FROM user ORDER BY name DESC, age ASC
-//
+//	engine.Desc("name").Asc("age").Find(&users)
+//	// SELECT * FROM user ORDER BY name DESC, age ASC
 func (engine *Engine) Asc(colNames ...string) *Session {
 	session := engine.NewSession()
 	session.isAutoClose = true
@@ -677,10 +1069,10 @@ func (engine *Engine) Asc(colNames ...string) *Session {
 }
 
 // OrderBy will generate "ORDER BY order"
-func (engine *Engine) OrderBy(order string) *Session {
+func (engine *Engine) OrderBy(order interface{}, args ...interface{}) *Session {
 	session := engine.NewSession()
 	session.isAutoClose = true
-	return session.OrderBy(order)
+	return session.OrderBy(order, args...)
 }
 
 // Prepare enables prepare statement
@@ -691,7 +1083,7 @@ func (engine *Engine) Prepare() *Session {
 }
 
 // Join the join_operator should be one of INNER, LEFT OUTER, CROSS etc - this will be prepended to JOIN
-func (engine *Engine) Join(joinOperator string, tablename interface{}, condition string, args ...interface{}) *Session {
+func (engine *Engine) Join(joinOperator string, tablename interface{}, condition interface{}, args ...interface{}) *Session {
 	session := engine.NewSession()
 	session.isAutoClose = true
 	return session.Join(joinOperator, tablename, condition, args...)
@@ -711,15 +1103,9 @@ func (engine *Engine) Having(conditions string) *Session {
 	return session.Having(conditions)
 }
 
-// Table table struct
-type Table struct {
-	*schemas.Table
-	Name string
-}
-
-// IsValid if table is valid
-func (t *Table) IsValid() bool {
-	return t.Table != nil && len(t.Name) > 0
+// DBVersion returns the database version
+func (engine *Engine) DBVersion() (*schemas.Version, error) {
+	return engine.dialect.Version(engine.defaultContext, engine.db)
 }
 
 // TableInfo get table info according to bean's content
@@ -742,79 +1128,9 @@ func (engine *Engine) IsTableExist(beanOrTableName interface{}) (bool, error) {
 	return session.IsTableExist(beanOrTableName)
 }
 
-// IDOf get id from one struct
-func (engine *Engine) IDOf(bean interface{}) (schemas.PK, error) {
-	return engine.IDOfV(reflect.ValueOf(bean))
-}
-
 // TableName returns table name with schema prefix if has
 func (engine *Engine) TableName(bean interface{}, includeSchema ...bool) string {
 	return dialects.FullTableName(engine.dialect, engine.GetTableMapper(), bean, includeSchema...)
-}
-
-// IDOfV get id from one value of struct
-func (engine *Engine) IDOfV(rv reflect.Value) (schemas.PK, error) {
-	return engine.idOfV(rv)
-}
-
-func (engine *Engine) idOfV(rv reflect.Value) (schemas.PK, error) {
-	v := reflect.Indirect(rv)
-	table, err := engine.tagParser.ParseWithCache(v)
-	if err != nil {
-		return nil, err
-	}
-
-	pk := make([]interface{}, len(table.PrimaryKeys))
-	for i, col := range table.PKColumns() {
-		var err error
-
-		fieldName := col.FieldName
-		for {
-			parts := strings.SplitN(fieldName, ".", 2)
-			if len(parts) == 1 {
-				break
-			}
-
-			v = v.FieldByName(parts[0])
-			if v.Kind() == reflect.Ptr {
-				v = v.Elem()
-			}
-			if v.Kind() != reflect.Struct {
-				return nil, ErrUnSupportedType
-			}
-			fieldName = parts[1]
-		}
-
-		pkField := v.FieldByName(fieldName)
-		switch pkField.Kind() {
-		case reflect.String:
-			pk[i], err = engine.idTypeAssertion(col, pkField.String())
-		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-			pk[i], err = engine.idTypeAssertion(col, strconv.FormatInt(pkField.Int(), 10))
-		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-			// id of uint will be converted to int64
-			pk[i], err = engine.idTypeAssertion(col, strconv.FormatUint(pkField.Uint(), 10))
-		}
-
-		if err != nil {
-			return nil, err
-		}
-	}
-	return schemas.PK(pk), nil
-}
-
-func (engine *Engine) idTypeAssertion(col *schemas.Column, sid string) (interface{}, error) {
-	if col.SQLType.IsNumeric() {
-		n, err := strconv.ParseInt(sid, 10, 64)
-		if err != nil {
-			return nil, err
-		}
-		return n, nil
-	} else if col.SQLType.IsText() {
-		return sid, nil
-	} else {
-		return nil, errors.New("not supported")
-	}
 }
 
 // CreateIndexes create indexes
@@ -860,112 +1176,6 @@ func (engine *Engine) UnMapType(t reflect.Type) {
 	engine.tagParser.ClearCacheTable(t)
 }
 
-// Sync the new struct changes to database, this method will automatically add
-// table, column, index, unique. but will not delete or change anything.
-// If you change some field, you should change the database manually.
-func (engine *Engine) Sync(beans ...interface{}) error {
-	session := engine.NewSession()
-	defer session.Close()
-
-	for _, bean := range beans {
-		v := utils.ReflectValue(bean)
-		tableNameNoSchema := dialects.FullTableName(engine.dialect, engine.GetTableMapper(), bean)
-		table, err := engine.tagParser.ParseWithCache(v)
-		if err != nil {
-			return err
-		}
-
-		isExist, err := session.Table(bean).isTableExist(tableNameNoSchema)
-		if err != nil {
-			return err
-		}
-		if !isExist {
-			err = session.createTable(bean)
-			if err != nil {
-				return err
-			}
-		}
-		/*isEmpty, err := engine.IsEmptyTable(bean)
-		  if err != nil {
-		      return err
-		  }*/
-		var isEmpty bool
-		if isEmpty {
-			err = session.dropTable(bean)
-			if err != nil {
-				return err
-			}
-			err = session.createTable(bean)
-			if err != nil {
-				return err
-			}
-		} else {
-			for _, col := range table.Columns() {
-				isExist, err := engine.dialect.IsColumnExist(session.ctx, tableNameNoSchema, col.Name)
-				if err != nil {
-					return err
-				}
-				if !isExist {
-					if err := session.statement.SetRefBean(bean); err != nil {
-						return err
-					}
-					err = session.addColumn(col.Name)
-					if err != nil {
-						return err
-					}
-				}
-			}
-
-			for name, index := range table.Indexes {
-				if err := session.statement.SetRefBean(bean); err != nil {
-					return err
-				}
-				if index.Type == schemas.UniqueType {
-					isExist, err := session.isIndexExist2(tableNameNoSchema, index.Cols, true)
-					if err != nil {
-						return err
-					}
-					if !isExist {
-						if err := session.statement.SetRefBean(bean); err != nil {
-							return err
-						}
-
-						err = session.addUnique(tableNameNoSchema, name)
-						if err != nil {
-							return err
-						}
-					}
-				} else if index.Type == schemas.IndexType {
-					isExist, err := session.isIndexExist2(tableNameNoSchema, index.Cols, false)
-					if err != nil {
-						return err
-					}
-					if !isExist {
-						if err := session.statement.SetRefBean(bean); err != nil {
-							return err
-						}
-
-						err = session.addIndex(tableNameNoSchema, name)
-						if err != nil {
-							return err
-						}
-					}
-				} else {
-					return errors.New("unknow index type")
-				}
-			}
-		}
-	}
-	return nil
-}
-
-// Sync2 synchronize structs to database tables
-func (engine *Engine) Sync2(beans ...interface{}) error {
-	s := engine.NewSession()
-	defer s.Close()
-	return s.Sync2(beans...)
-}
-
 // CreateTables create tabls according bean
 func (engine *Engine) CreateTables(beans ...interface{}) error {
 	session := engine.NewSession()
@@ -979,7 +1189,7 @@ func (engine *Engine) CreateTables(beans ...interface{}) error {
 	for _, bean := range beans {
 		err = session.createTable(bean)
 		if err != nil {
-			session.Rollback()
+			_ = session.Rollback()
 			return err
 		}
 	}
@@ -999,7 +1209,7 @@ func (engine *Engine) DropTables(beans ...interface{}) error {
 	for _, bean := range beans {
 		err = session.dropTable(bean)
 		if err != nil {
-			session.Rollback()
+			_ = session.Rollback()
 			return err
 		}
 	}
@@ -1058,9 +1268,10 @@ func (engine *Engine) InsertOne(bean interface{}) (int64, error) {
 // Update records, bean's non-empty fields are updated contents,
 // condiBean' non-empty filds are conditions
 // CAUTION:
-//        1.bool will defaultly be updated content nor conditions
-//         You should call UseBool if you have bool to use.
-//        2.float32 & float64 may be not inexact as conditions
+//
+//	1.bool will defaultly be updated content nor conditions
+//	 You should call UseBool if you have bool to use.
+//	2.float32 & float64 may be not inexact as conditions
 func (engine *Engine) Update(bean interface{}, condiBeans ...interface{}) (int64, error) {
 	session := engine.NewSession()
 	defer session.Close()
@@ -1068,18 +1279,27 @@ func (engine *Engine) Update(bean interface{}, condiBeans ...interface{}) (int64
 }
 
 // Delete records, bean's non-empty fields are conditions
-func (engine *Engine) Delete(bean interface{}) (int64, error) {
+// At least one condition must be set.
+func (engine *Engine) Delete(beans ...interface{}) (int64, error) {
 	session := engine.NewSession()
 	defer session.Close()
-	return session.Delete(bean)
+	return session.Delete(beans...)
+}
+
+// Truncate records, bean's non-empty fields are conditions
+// In contrast to Delete this method allows deletes without conditions.
+func (engine *Engine) Truncate(beans ...interface{}) (int64, error) {
+	session := engine.NewSession()
+	defer session.Close()
+	return session.Truncate(beans...)
 }
 
 // Get retrieve one record from table, bean's non-empty fields
 // are conditions
-func (engine *Engine) Get(bean interface{}) (bool, error) {
+func (engine *Engine) Get(beans ...interface{}) (bool, error) {
 	session := engine.NewSession()
 	defer session.Close()
-	return session.Get(bean)
+	return session.Get(beans...)
 }
 
 // Exist returns true if the record exist otherwise return false
@@ -1157,63 +1377,26 @@ func (engine *Engine) SumsInt(bean interface{}, colNames ...string) ([]int64, er
 
 // ImportFile SQL DDL file
 func (engine *Engine) ImportFile(ddlPath string) ([]sql.Result, error) {
-	file, err := os.Open(ddlPath)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-	return engine.Import(file)
+	session := engine.NewSession()
+	defer session.Close()
+	return session.ImportFile(ddlPath)
 }
 
 // Import SQL DDL from io.Reader
 func (engine *Engine) Import(r io.Reader) ([]sql.Result, error) {
-	var results []sql.Result
-	var lastError error
-	scanner := bufio.NewScanner(r)
-
-	semiColSpliter := func(data []byte, atEOF bool) (advance int, token []byte, err error) {
-		if atEOF && len(data) == 0 {
-			return 0, nil, nil
-		}
-		if i := bytes.IndexByte(data, ';'); i >= 0 {
-			return i + 1, data[0:i], nil
-		}
-		// If we're at EOF, we have a final, non-terminated line. Return it.
-		if atEOF {
-			return len(data), data, nil
-		}
-		// Request more data.
-		return 0, nil, nil
-	}
-
-	scanner.Split(semiColSpliter)
-
-	for scanner.Scan() {
-		query := strings.Trim(scanner.Text(), " \t\n\r")
-		if len(query) > 0 {
-			result, err := engine.DB().ExecContext(engine.defaultContext, query)
-			results = append(results, result)
-			if err != nil {
-				return nil, err
-			}
-		}
-	}
-
-	return results, lastError
+	session := engine.NewSession()
+	defer session.Close()
+	return session.Import(r)
 }
 
 // nowTime return current time
-func (engine *Engine) nowTime(col *schemas.Column) (interface{}, time.Time) {
+func (engine *Engine) nowTime(col *schemas.Column) (interface{}, time.Time, error) {
 	t := time.Now()
-	var tz = engine.DatabaseTZ
-	if !col.DisableTimeZone && col.TimeZone != nil {
-		tz = col.TimeZone
+	result, err := dialects.FormatColumnTime(engine.dialect, engine.DatabaseTZ, col, t)
+	if err != nil {
+		return nil, time.Time{}, err
 	}
-	return dialects.FormatTime(engine.dialect, col.SQLType.Name, t.In(tz)), t.In(engine.TZLocation)
-}
-
-func (engine *Engine) formatColTime(col *schemas.Column, t time.Time) (v interface{}) {
-	return dialects.FormatColumnTime(engine.dialect, engine.DatabaseTZ, col, t)
+	return result, t.In(engine.TZLocation), nil
 }
 
 // GetColumnMapper returns the column name mapper
@@ -1248,7 +1431,12 @@ func (engine *Engine) SetTZDatabase(tz *time.Location) {
 
 // SetSchema sets the schema of database
 func (engine *Engine) SetSchema(schema string) {
-	engine.dialect.URI().Schema = schema
+	engine.dialect.URI().SetSchema(schema)
+}
+
+// AddHook adds a context Hook
+func (engine *Engine) AddHook(hook contexts.Hook) {
+	engine.db.AddHook(hook)
 }
 
 // Unscoped always disable struct tag "deleted"
@@ -1260,4 +1448,99 @@ func (engine *Engine) Unscoped() *Session {
 
 func (engine *Engine) tbNameWithSchema(v string) string {
 	return dialects.TableNameWithSchema(engine.dialect, v)
+}
+
+// Context creates a session with the context
+func (engine *Engine) Context(ctx context.Context) *Session {
+	session := engine.NewSession()
+	session.isAutoClose = true
+	return session.Context(ctx)
+}
+
+// SetDefaultContext set the default context
+func (engine *Engine) SetDefaultContext(ctx context.Context) {
+	engine.defaultContext = ctx
+}
+
+// PingContext tests if database is alive
+func (engine *Engine) PingContext(ctx context.Context) error {
+	session := engine.NewSession()
+	defer session.Close()
+	return session.PingContext(ctx)
+}
+
+// Transaction Execute sql wrapped in a transaction(abbr as tx), tx will automatic commit if no errors occurred
+func (engine *Engine) Transaction(f func(*Session) (interface{}, error)) (interface{}, error) {
+	session := engine.NewSession()
+	defer session.Close()
+
+	if err := session.Begin(); err != nil {
+		return nil, err
+	}
+
+	result, err := f(session)
+	if err != nil {
+		return result, err
+	}
+
+	if err := session.Commit(); err != nil {
+		return result, err
+	}
+
+	return result, nil
+}
+
+// Do is a retryer of session
+func (engine *Engine) Do(ctx context.Context, f func(context.Context, *Session) error, opts ...retry.RetryOption) error {
+	var (
+		dialect  = engine.Dialect()
+		attempts = 0
+	)
+	err := retry.Retry(ctx, dialect.IsRetryable, func(ctx context.Context) (err error) {
+		attempts++
+		session := engine.NewSession().Context(ctx)
+		defer func() {
+			_ = session.Close()
+		}()
+		if err = f(ctx, session); err != nil {
+			return err
+		}
+		return nil
+	}, opts...)
+	if err != nil {
+		return fmt.Errorf("operation failed after %d attempts: %w", attempts, err)
+	}
+	return nil
+}
+
+// DoTx is a retryer of session transactions
+func (engine *Engine) DoTx(ctx context.Context, f func(context.Context, *Session) error, opts ...retry.RetryOption) error {
+	var (
+		dialect  = engine.Dialect()
+		attempts = 0
+	)
+	err := retry.Retry(ctx, dialect.IsRetryable, func(ctx context.Context) (err error) {
+		attempts++
+		session := engine.NewSession().Context(ctx)
+		defer func() {
+			_ = session.Close()
+		}()
+		if err = session.Begin(); err != nil {
+			return err
+		}
+		defer func() {
+			_ = session.Rollback()
+		}()
+		if err = f(ctx, session); err != nil {
+			return err
+		}
+		if err = session.Commit(); err != nil {
+			return err
+		}
+		return nil
+	}, opts...)
+	if err != nil {
+		return fmt.Errorf("tx failed after %d attempts: %w", attempts, err)
+	}
+	return nil
 }

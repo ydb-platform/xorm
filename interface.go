@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"xorm.io/xorm/caches"
+	"xorm.io/xorm/contexts"
 	"xorm.io/xorm/dialects"
 	"xorm.io/xorm/log"
 	"xorm.io/xorm/names"
@@ -29,14 +30,15 @@ type Interface interface {
 	CreateUniques(bean interface{}) error
 	Decr(column string, arg ...interface{}) *Session
 	Desc(...string) *Session
-	Delete(interface{}) (int64, error)
+	Delete(...interface{}) (int64, error)
+	Truncate(...interface{}) (int64, error)
 	Distinct(columns ...string) *Session
 	DropIndexes(bean interface{}) error
 	Exec(sqlOrArgs ...interface{}) (sql.Result, error)
 	Exist(bean ...interface{}) (bool, error)
 	Find(interface{}, ...interface{}) error
 	FindAndCount(interface{}, ...interface{}) (int64, error)
-	Get(interface{}) (bool, error)
+	Get(...interface{}) (bool, error)
 	GroupBy(keys string) *Session
 	ID(interface{}) *Session
 	In(string, ...interface{}) *Session
@@ -50,15 +52,17 @@ type Interface interface {
 	MustCols(columns ...string) *Session
 	NoAutoCondition(...bool) *Session
 	NotIn(string, ...interface{}) *Session
-	Join(joinOperator string, tablename interface{}, condition string, args ...interface{}) *Session
+	Nullable(...string) *Session
+	Join(joinOperator string, tablename interface{}, condition interface{}, args ...interface{}) *Session
 	Omit(columns ...string) *Session
-	OrderBy(order string) *Session
+	OrderBy(order interface{}, args ...interface{}) *Session
 	Ping() error
 	Query(sqlOrArgs ...interface{}) (resultsSlice []map[string][]byte, err error)
 	QueryInterface(sqlOrArgs ...interface{}) ([]map[string]interface{}, error)
 	QueryString(sqlOrArgs ...interface{}) ([]map[string]string, error)
 	Rows(bean interface{}) (*Rows, error)
 	SetExpr(string, interface{}) *Session
+	Select(string) *Session
 	SQL(interface{}, ...interface{}) *Session
 	Sum(bean interface{}, colName string) (float64, error)
 	SumInt(bean interface{}, colName string) (int64, error)
@@ -81,7 +85,9 @@ type EngineInterface interface {
 	Context(context.Context) *Session
 	CreateTables(...interface{}) error
 	DBMetas() ([]*schemas.Table, error)
+	DBVersion() (*schemas.Version, error)
 	Dialect() dialects.Dialect
+	DriverName() string
 	DropTables(...interface{}) error
 	DumpAllToFile(fp string, tp ...schemas.DBType) error
 	GetCacher(string) caches.Cacher
@@ -90,23 +96,28 @@ type EngineInterface interface {
 	GetTableMapper() names.Mapper
 	GetTZDatabase() *time.Location
 	GetTZLocation() *time.Location
+	ImportFile(fp string) ([]sql.Result, error)
 	MapCacher(interface{}, caches.Cacher) error
 	NewSession() *Session
 	NoAutoTime() *Session
+	Prepare() *Session
 	Quote(string) string
 	SetCacher(string, caches.Cacher)
 	SetConnMaxLifetime(time.Duration)
 	SetColumnMapper(names.Mapper)
+	SetTagIdentifier(string)
 	SetDefaultCacher(caches.Cacher)
 	SetLogger(logger interface{})
 	SetLogLevel(log.LogLevel)
 	SetMapper(names.Mapper)
 	SetMaxOpenConns(int)
 	SetMaxIdleConns(int)
+	SetQuotePolicy(dialects.QuotePolicy)
 	SetSchema(string)
 	SetTableMapper(names.Mapper)
 	SetTZDatabase(tz *time.Location)
 	SetTZLocation(tz *time.Location)
+	AddHook(hook contexts.Hook)
 	ShowSQL(show ...bool)
 	Sync(...interface{}) error
 	Sync2(...interface{}) error
@@ -114,6 +125,7 @@ type EngineInterface interface {
 	TableInfo(bean interface{}) (*schemas.Table, error)
 	TableName(interface{}, ...bool) string
 	UnMapType(reflect.Type)
+	EnableSessionID(bool)
 }
 
 var (

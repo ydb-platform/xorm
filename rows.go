@@ -5,20 +5,19 @@
 package xorm
 
 import (
-	"database/sql"
+	"errors"
 	"fmt"
 	"reflect"
 
+	"xorm.io/builder"
 	"xorm.io/xorm/core"
-	"xorm.io/xorm/internal/utils"
 )
 
 // Rows rows wrapper a rows to
 type Rows struct {
-	session   *Session
-	rows      *core.Rows
-	beanType  reflect.Type
-	lastError error
+	session  *Session
+	rows     *core.Rows
+	beanType reflect.Type
 }
 
 func newRows(session *Session, bean interface{}) (*Rows, error) {
@@ -30,27 +29,51 @@ func newRows(session *Session, bean interface{}) (*Rows, error) {
 	var args []interface{}
 	var err error
 
+	beanValue := reflect.ValueOf(bean)
+	if beanValue.Kind() != reflect.Ptr {
+		return nil, errors.New("needs a pointer to a value")
+	} else if beanValue.Elem().Kind() == reflect.Ptr {
+		return nil, errors.New("a pointer to a pointer is not allowed")
+	}
+
 	if err = rows.session.statement.SetRefBean(bean); err != nil {
 		return nil, err
 	}
 
-	if len(session.statement.TableName()) <= 0 {
+	if len(session.statement.TableName()) == 0 {
 		return nil, ErrTableNotFound
 	}
 
 	if rows.session.statement.RawSQL == "" {
-		sqlStr, args, err = rows.session.statement.GenGetSQL(bean)
+		var autoCond builder.Cond
+		addedTableName := session.statement.NeedTableName()
+		table := rows.session.statement.RefTable
+
+		if !session.statement.NoAutoCondition {
+			var err error
+			autoCond, err = session.statement.BuildConds(table, bean, true, true, false, true, addedTableName)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			// !oinume! Add "<col> IS NULL" to WHERE whatever condiBean is given.
+			// See https://gitea.com/xorm/xorm/issues/179
+			if col := table.DeletedColumn(); col != nil && !session.statement.GetUnscoped() { // tag "deleted" is enabled
+				autoCond = session.statement.CondDeleted(col)
+			}
+		}
+
+		sqlStr, args, err = rows.session.statement.GenFindSQL(autoCond)
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		sqlStr = rows.session.statement.RawSQL
+		sqlStr = rows.session.statement.GenRawSQL()
 		args = rows.session.statement.RawParams
 	}
 
 	rows.rows, err = rows.session.queryRows(sqlStr, args...)
 	if err != nil {
-		rows.lastError = err
 		rows.Close()
 		return nil, err
 	}
@@ -60,48 +83,55 @@ func newRows(session *Session, bean interface{}) (*Rows, error) {
 
 // Next move cursor to next record, return false if end has reached
 func (rows *Rows) Next() bool {
-	if rows.lastError == nil && rows.rows != nil {
-		hasNext := rows.rows.Next()
-		if !hasNext {
-			rows.lastError = sql.ErrNoRows
-		}
-		return hasNext
+	if rows.rows != nil {
+		return rows.rows.Next()
 	}
 	return false
 }
 
 // Err returns the error, if any, that was encountered during iteration. Err may be called after an explicit or implicit Close.
 func (rows *Rows) Err() error {
-	return rows.lastError
+	if rows.rows != nil {
+		return rows.rows.Err()
+	}
+	return nil
 }
 
 // Scan row record to bean properties
-func (rows *Rows) Scan(bean interface{}) error {
-	if rows.lastError != nil {
-		return rows.lastError
+func (rows *Rows) Scan(beans ...interface{}) error {
+	if rows.Err() != nil {
+		return rows.Err()
 	}
 
-	if reflect.Indirect(reflect.ValueOf(bean)).Type() != rows.beanType {
-		return fmt.Errorf("scan arg is incompatible type to [%v]", rows.beanType)
+	bean := beans[0]
+	tp := reflect.TypeOf(bean)
+	if tp.Kind() == reflect.Ptr {
+		tp = tp.Elem()
 	}
+	beanKind := tp.Kind()
 
-	if err := rows.session.statement.SetRefBean(bean); err != nil {
-		return err
+	if len(beans) == 1 {
+		if reflect.Indirect(reflect.ValueOf(bean)).Type() != rows.beanType {
+			return fmt.Errorf("scan arg is incompatible type to [%v]", rows.beanType)
+		}
+
+		if err := rows.session.statement.SetRefBean(bean); err != nil {
+			return err
+		}
 	}
 
 	fields, err := rows.rows.Columns()
 	if err != nil {
 		return err
 	}
-
-	scanResults, err := rows.session.row2Slice(rows.rows, fields, bean)
+	types, err := rows.rows.ColumnTypes()
 	if err != nil {
 		return err
 	}
 
-	dataStruct := utils.ReflectValue(bean)
-	_, err = rows.session.slice2Bean(scanResults, fields, bean, &dataStruct, rows.session.statement.RefTable)
-	if err != nil {
+	columnsSchema := ParseColumnsSchema(fields, types, rows.session.statement.RefTable)
+
+	if err := rows.session.scan(rows.rows, rows.session.statement.RefTable, beanKind, beans, columnsSchema, types, fields); err != nil {
 		return err
 	}
 
@@ -114,9 +144,11 @@ func (rows *Rows) Close() error {
 		defer rows.session.Close()
 	}
 
+	defer rows.session.resetStatement()
+
 	if rows.rows != nil {
 		return rows.rows.Close()
 	}
 
-	return rows.lastError
+	return nil
 }

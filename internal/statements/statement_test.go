@@ -5,12 +5,41 @@
 package statements
 
 import (
+	"os"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/stretchr/testify/assert"
+	"xorm.io/xorm/caches"
+	"xorm.io/xorm/dialects"
+	"xorm.io/xorm/names"
 	"xorm.io/xorm/schemas"
+	"xorm.io/xorm/tags"
+
+	_ "github.com/mattn/go-sqlite3"
 )
+
+var (
+	dialect   dialects.Dialect
+	tagParser *tags.Parser
+)
+
+func TestMain(m *testing.M) {
+	var err error
+	dialect, err = dialects.OpenDialect("sqlite3", "./test.db")
+	if err != nil {
+		panic("unknow dialect")
+	}
+
+	tagParser = tags.NewParser("xorm", dialect, names.SnakeMapper{}, names.SnakeMapper{}, caches.NewManager())
+	if tagParser == nil {
+		panic("tags parser is nil")
+	}
+	m.Run()
+	os.Exit(0)
+}
 
 var colStrTests = []struct {
 	omitColumn        string
@@ -26,14 +55,9 @@ var colStrTests = []struct {
 }
 
 func TestColumnsStringGeneration(t *testing.T) {
-	if dbType == "postgres" || dbType == "mssql" {
-		return
-	}
-
-	var statement *Statement
-
 	for ndx, testCase := range colStrTests {
-		statement = createTestStatement()
+		statement, err := createTestStatement()
+		assert.NoError(t, err)
 
 		if testCase.omitColumn != "" {
 			statement.Omit(testCase.omitColumn)
@@ -55,35 +79,24 @@ func TestColumnsStringGeneration(t *testing.T) {
 	}
 }
 
-func BenchmarkColumnsStringGeneration(b *testing.B) {
-	b.StopTimer()
+func TestConvertSQLOrArgs(t *testing.T) {
+	statement, err := createTestStatement()
+	assert.NoError(t, err)
 
-	statement := createTestStatement()
-
-	testCase := colStrTests[0]
-
-	if testCase.omitColumn != "" {
-		statement.Omit(testCase.omitColumn) // !nemec784! Column must be skipped
+	// example orm struct
+	// type Table struct {
+	// 	ID  int
+	// 	del *time.Time `xorm:"deleted"`
+	// }
+	args := []interface{}{
+		"INSERT `table` (`id`, `del`) VALUES (?, ?)", 1, (*time.Time)(nil),
 	}
-
-	if testCase.onlyToDBColumnNdx >= 0 {
-		columns := statement.RefTable.Columns()
-		columns[testCase.onlyToDBColumnNdx].MapType = schemas.ONLYTODB // !nemec784! Column must be skipped
-	}
-
-	b.StartTimer()
-
-	for i := 0; i < b.N; i++ {
-		actual := statement.genColumnStr()
-
-		if actual != testCase.expected {
-			b.Errorf("Unexpected columns string:\nwant:\t%s\nhave:\t%s", testCase.expected, actual)
-		}
-	}
+	// before fix, here will panic
+	_, _, err = statement.convertSQLOrArgs(args...)
+	assert.NoError(t, err)
 }
 
 func BenchmarkGetFlagForColumnWithICKey_ContainsKey(b *testing.B) {
-
 	b.StopTimer()
 
 	mapCols := make(map[string]bool)
@@ -106,9 +119,7 @@ func BenchmarkGetFlagForColumnWithICKey_ContainsKey(b *testing.B) {
 	b.StartTimer()
 
 	for i := 0; i < b.N; i++ {
-
 		for _, col := range cols {
-
 			if _, ok := getFlagForColumn(mapCols, col); !ok {
 				b.Fatal("Unexpected result")
 			}
@@ -117,7 +128,6 @@ func BenchmarkGetFlagForColumnWithICKey_ContainsKey(b *testing.B) {
 }
 
 func BenchmarkGetFlagForColumnWithICKey_EmptyMap(b *testing.B) {
-
 	b.StopTimer()
 
 	mapCols := make(map[string]bool)
@@ -136,9 +146,7 @@ func BenchmarkGetFlagForColumnWithICKey_EmptyMap(b *testing.B) {
 	b.StartTimer()
 
 	for i := 0; i < b.N; i++ {
-
 		for _, col := range cols {
-
 			if _, ok := getFlagForColumn(mapCols, col); ok {
 				b.Fatal("Unexpected result")
 			}
@@ -162,23 +170,40 @@ func (TestType) TableName() string {
 	return "TestTable"
 }
 
-func createTestStatement() *Statement {
-	if engine, ok := testEngine.(*Engine); ok {
-		statement := &Statement{}
-		statement.Reset()
-		statement.Engine = engine
-		statement.dialect = engine.dialect
-		statement.SetRefValue(reflect.ValueOf(TestType{}))
-
-		return statement
-	} else if eg, ok := testEngine.(*EngineGroup); ok {
-		statement := &Statement{}
-		statement.Reset()
-		statement.Engine = eg.Engine
-		statement.dialect = eg.Engine.dialect
-		statement.SetRefValue(reflect.ValueOf(TestType{}))
-
-		return statement
+func createTestStatement() (*Statement, error) {
+	statement := NewStatement(dialect, tagParser, time.Local)
+	if err := statement.SetRefValue(reflect.ValueOf(TestType{})); err != nil {
+		return nil, err
 	}
-	return nil
+	return statement, nil
+}
+
+func BenchmarkColumnsStringGeneration(b *testing.B) {
+	b.StopTimer()
+
+	statement, err := createTestStatement()
+	if err != nil {
+		panic(err)
+	}
+
+	testCase := colStrTests[0]
+
+	if testCase.omitColumn != "" {
+		statement.Omit(testCase.omitColumn) // !nemec784! Column must be skipped
+	}
+
+	if testCase.onlyToDBColumnNdx >= 0 {
+		columns := statement.RefTable.Columns()
+		columns[testCase.onlyToDBColumnNdx].MapType = schemas.ONLYTODB // !nemec784! Column must be skipped
+	}
+
+	b.StartTimer()
+
+	for i := 0; i < b.N; i++ {
+		actual := statement.genColumnStr()
+
+		if actual != testCase.expected {
+			b.Errorf("Unexpected columns string:\nwant:\t%s\nhave:\t%s", testCase.expected, actual)
+		}
+	}
 }

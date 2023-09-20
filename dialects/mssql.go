@@ -6,6 +6,7 @@ package dialects
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"net/url"
@@ -204,26 +205,100 @@ var (
 		"EXIT":                           true,
 		"PROC":                           true,
 	}
+
+	mssqlQuoter = schemas.Quoter{
+		Prefix:     '[',
+		Suffix:     ']',
+		IsReserved: schemas.AlwaysReserve,
+	}
 )
 
 type mssql struct {
 	Base
+	defaultVarchar string
+	defaultChar    string
 }
 
-func (db *mssql) Init(d *core.DB, uri *URI, drivername, dataSourceName string) error {
-	return db.Base.Init(d, db, uri, drivername, dataSourceName)
+func (db *mssql) Init(uri *URI) error {
+	db.quoter = mssqlQuoter
+	db.defaultChar = "CHAR"
+	db.defaultVarchar = "VARCHAR"
+	return db.Base.Init(db, uri)
+}
+
+func (db *mssql) SetParams(params map[string]string) {
+	defaultVarchar, ok := params["DEFAULT_VARCHAR"]
+	if ok {
+		t := strings.ToUpper(defaultVarchar)
+		switch t {
+		case "NVARCHAR", "VARCHAR":
+			db.defaultVarchar = t
+		default:
+			db.defaultVarchar = "VARCHAR"
+		}
+	} else {
+		db.defaultVarchar = "VARCHAR"
+	}
+
+	defaultChar, ok := params["DEFAULT_CHAR"]
+	if ok {
+		t := strings.ToUpper(defaultChar)
+		switch t {
+		case "NCHAR", "CHAR":
+			db.defaultChar = t
+		default:
+			db.defaultChar = "CHAR"
+		}
+	} else {
+		db.defaultChar = "CHAR"
+	}
+}
+
+func (db *mssql) Version(ctx context.Context, queryer core.Queryer) (*schemas.Version, error) {
+	rows, err := queryer.QueryContext(ctx,
+		"SELECT SERVERPROPERTY('productversion'), SERVERPROPERTY ('productlevel') AS ProductLevel, SERVERPROPERTY ('edition') AS ProductEdition")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var version, level, edition string
+	if !rows.Next() {
+		if rows.Err() != nil {
+			return nil, rows.Err()
+		}
+		return nil, errors.New("unknow version")
+	}
+
+	if err := rows.Scan(&version, &level, &edition); err != nil {
+		return nil, err
+	}
+
+	// MSSQL: Microsoft SQL Server 2017 (RTM-CU13) (KB4466404) - 14.0.3048.4 (X64) Nov 30 2018 12:57:58 Copyright (C) 2017 Microsoft Corporation Developer Edition (64-bit) on Linux (Ubuntu 16.04.5 LTS)
+	return &schemas.Version{
+		Number:  version,
+		Level:   level,
+		Edition: edition,
+	}, nil
+}
+
+func (db *mssql) Features() *DialectFeatures {
+	return &DialectFeatures{
+		AutoincrMode: IncrAutoincrMode,
+	}
 }
 
 func (db *mssql) SQLType(c *schemas.Column) string {
 	var res string
 	switch t := c.SQLType.Name; t {
-	case schemas.Bool:
+	case schemas.Bool, schemas.Boolean:
 		res = schemas.Bit
 		if strings.EqualFold(c.Default, "true") {
 			c.Default = "1"
 		} else if strings.EqualFold(c.Default, "false") {
 			c.Default = "0"
 		}
+		return res
 	case schemas.Serial:
 		c.IsAutoIncrement = true
 		c.IsPrimaryKey = true
@@ -234,20 +309,29 @@ func (db *mssql) SQLType(c *schemas.Column) string {
 		c.IsPrimaryKey = true
 		c.Nullable = false
 		res = schemas.BigInt
-	case schemas.Bytea, schemas.Blob, schemas.Binary, schemas.TinyBlob, schemas.MediumBlob, schemas.LongBlob:
+	case schemas.Bytea, schemas.Binary:
 		res = schemas.VarBinary
 		if c.Length == 0 {
 			c.Length = 50
 		}
-	case schemas.TimeStamp:
-		res = schemas.DateTime
+	case schemas.Blob, schemas.TinyBlob, schemas.MediumBlob, schemas.LongBlob:
+		res = schemas.VarBinary
+		if c.Length == 0 {
+			res += "(MAX)"
+		}
+	case schemas.TimeStamp, schemas.DateTime:
+		if c.Length > 3 {
+			res = "DATETIME2"
+		} else {
+			return schemas.DateTime
+		}
 	case schemas.TimeStampz:
 		res = "DATETIMEOFFSET"
 		c.Length = 7
-	case schemas.MediumInt:
+	case schemas.MediumInt, schemas.TinyInt, schemas.SmallInt, schemas.UnsignedMediumInt, schemas.UnsignedTinyInt, schemas.UnsignedSmallInt:
 		res = schemas.Int
 	case schemas.Text, schemas.MediumText, schemas.TinyText, schemas.LongText, schemas.Json:
-		res = schemas.Varchar + "(MAX)"
+		res = db.defaultVarchar + "(MAX)"
 	case schemas.Double:
 		res = schemas.Real
 	case schemas.Uuid:
@@ -256,61 +340,96 @@ func (db *mssql) SQLType(c *schemas.Column) string {
 	case schemas.TinyInt:
 		res = schemas.TinyInt
 		c.Length = 0
-	case schemas.BigInt:
+	case schemas.BigInt, schemas.UnsignedBigInt, schemas.UnsignedInt:
 		res = schemas.BigInt
 		c.Length = 0
+	case schemas.NVarchar:
+		res = t
+		if c.Length == -1 {
+			res += "(MAX)"
+		}
+	case schemas.Varchar:
+		res = db.defaultVarchar
+		if c.Length == -1 {
+			res += "(MAX)"
+		}
+	case schemas.Char:
+		res = db.defaultChar
+		if c.Length == -1 {
+			res += "(MAX)"
+		}
+	case schemas.NChar:
+		res = t
+		if c.Length == -1 {
+			res += "(MAX)"
+		}
 	default:
 		res = t
 	}
 
-	if res == schemas.Int {
-		return schemas.Int
+	if res == schemas.Int || res == schemas.Bit {
+		return res
 	}
 
 	hasLen1 := (c.Length > 0)
 	hasLen2 := (c.Length2 > 0)
 
 	if hasLen2 {
-		res += "(" + strconv.Itoa(c.Length) + "," + strconv.Itoa(c.Length2) + ")"
+		res += "(" + strconv.FormatInt(c.Length, 10) + "," + strconv.FormatInt(c.Length2, 10) + ")"
 	} else if hasLen1 {
-		res += "(" + strconv.Itoa(c.Length) + ")"
+		res += "(" + strconv.FormatInt(c.Length, 10) + ")"
 	}
 	return res
 }
 
-func (db *mssql) SupportInsertMany() bool {
-	return true
+func (db *mssql) ColumnTypeKind(t string) int {
+	switch strings.ToUpper(t) {
+	case "DATE", "DATETIME", "DATETIME2", "TIME":
+		return schemas.TIME_TYPE
+	case "VARCHAR", "TEXT", "CHAR", "NVARCHAR", "NCHAR", "NTEXT":
+		return schemas.TEXT_TYPE
+	case "FLOAT", "REAL", "BIGINT", "DATETIMEOFFSET", "TINYINT", "SMALLINT", "INT":
+		return schemas.NUMERIC_TYPE
+	default:
+		return schemas.UNKNOW_TYPE
+	}
 }
 
 func (db *mssql) IsReserved(name string) bool {
-	_, ok := mssqlReservedWords[name]
+	_, ok := mssqlReservedWords[strings.ToUpper(name)]
 	return ok
 }
 
-func (db *mssql) Quoter() schemas.Quoter {
-	return schemas.Quoter{"[", "]"}
-}
-
-func (db *mssql) SupportEngine() bool {
-	return false
+func (db *mssql) SetQuotePolicy(quotePolicy QuotePolicy) {
+	switch quotePolicy {
+	case QuotePolicyNone:
+		q := mssqlQuoter
+		q.IsReserved = schemas.AlwaysNoReserve
+		db.quoter = q
+	case QuotePolicyReserved:
+		q := mssqlQuoter
+		q.IsReserved = db.IsReserved
+		db.quoter = q
+	case QuotePolicyAlways:
+		fallthrough
+	default:
+		db.quoter = mssqlQuoter
+	}
 }
 
 func (db *mssql) AutoIncrStr() string {
 	return "IDENTITY"
 }
 
-func (db *mssql) DropTableSQL(tableName string) string {
+func (db *mssql) DropTableSQL(tableName string) (string, bool) {
 	return fmt.Sprintf("IF EXISTS (SELECT * FROM sysobjects WHERE id = "+
 		"object_id(N'%s') and OBJECTPROPERTY(id, N'IsUserTable') = 1) "+
-		"DROP TABLE \"%s\"", tableName, tableName)
+		"DROP TABLE \"%s\"", tableName, tableName), true
 }
 
-func (db *mssql) SupportCharset() bool {
-	return false
-}
-
-func (db *mssql) IndexOnTable() bool {
-	return true
+func (db *mssql) ModifyColumnSQL(tableName string, col *schemas.Column) string {
+	s, _ := ColumnString(db.dialect, col, false, true)
+	return fmt.Sprintf("ALTER TABLE %s ALTER COLUMN %s", db.quoter.Quote(tableName), s)
 }
 
 func (db *mssql) IndexCheckSQL(tableName, idxName string) (string, []interface{}) {
@@ -319,40 +438,34 @@ func (db *mssql) IndexCheckSQL(tableName, idxName string) (string, []interface{}
 	return sql, args
 }
 
-/*func (db *mssql) ColumnCheckSql(tableName, colName string) (string, []interface{}) {
-	args := []interface{}{tableName, colName}
-	sql := `SELECT "COLUMN_NAME" FROM "INFORMATION_SCHEMA"."COLUMNS" WHERE "TABLE_NAME" = ? AND "COLUMN_NAME" = ?`
-	return sql, args
-}*/
-
-func (db *mssql) IsColumnExist(ctx context.Context, tableName, colName string) (bool, error) {
+func (db *mssql) IsColumnExist(queryer core.Queryer, ctx context.Context, tableName, colName string) (bool, error) {
 	query := `SELECT "COLUMN_NAME" FROM "INFORMATION_SCHEMA"."COLUMNS" WHERE "TABLE_NAME" = ? AND "COLUMN_NAME" = ?`
 
-	return db.HasRecords(ctx, query, tableName, colName)
+	return db.HasRecords(queryer, ctx, query, tableName, colName)
 }
 
-func (db *mssql) TableCheckSQL(tableName string) (string, []interface{}) {
-	args := []interface{}{}
+func (db *mssql) IsTableExist(queryer core.Queryer, ctx context.Context, tableName string) (bool, error) {
 	sql := "select * from sysobjects where id = object_id(N'" + tableName + "') and OBJECTPROPERTY(id, N'IsUserTable') = 1"
-	return sql, args
+	return db.HasRecords(queryer, ctx, sql)
 }
 
-func (db *mssql) GetColumns(ctx context.Context, tableName string) ([]string, map[string]*schemas.Column, error) {
+func (db *mssql) GetColumns(queryer core.Queryer, ctx context.Context, tableName string) ([]string, map[string]*schemas.Column, error) {
 	args := []interface{}{}
 	s := `select a.name as name, b.name as ctype,a.max_length,a.precision,a.scale,a.is_nullable as nullable,
 		  "default_is_null" = (CASE WHEN c.text is null THEN 1 ELSE 0 END),
 	      replace(replace(isnull(c.text,''),'(',''),')','') as vdefault,
-		  ISNULL(i.is_primary_key, 0), a.is_identity as is_identity
+		  ISNULL(p.is_primary_key, 0), a.is_identity as is_identity, a.collation_name
           from sys.columns a 
 		  left join sys.types b on a.user_type_id=b.user_type_id
           left join sys.syscomments c on a.default_object_id=c.id
-		  LEFT OUTER JOIN 
-    sys.index_columns ic ON ic.object_id = a.object_id AND ic.column_id = a.column_id
-		  LEFT OUTER JOIN 
-    sys.indexes i ON ic.object_id = i.object_id AND ic.index_id = i.index_id
+		  LEFT OUTER JOIN (SELECT i.object_id, ic.column_id, i.is_primary_key
+			FROM sys.indexes i
+		  LEFT JOIN sys.index_columns ic ON ic.object_id = i.object_id AND ic.index_id = i.index_id
+			WHERE i.is_primary_key = 1
+		) as p on p.object_id = a.object_id AND p.column_id = a.column_id
           where a.object_id=object_id('` + tableName + `')`
 
-	rows, err := db.DB().QueryContext(ctx, s, args...)
+	rows, err := queryer.QueryContext(ctx, s, args...)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -362,9 +475,10 @@ func (db *mssql) GetColumns(ctx context.Context, tableName string) ([]string, ma
 	colSeq := make([]string, 0)
 	for rows.Next() {
 		var name, ctype, vdefault string
-		var maxLen, precision, scale int
+		var collation *string
+		var maxLen, precision, scale int64
 		var nullable, isPK, defaultIsNull, isIncrement bool
-		err = rows.Scan(&name, &ctype, &maxLen, &precision, &scale, &nullable, &defaultIsNull, &vdefault, &isPK, &isIncrement)
+		err = rows.Scan(&name, &ctype, &maxLen, &precision, &scale, &nullable, &defaultIsNull, &vdefault, &isPK, &isIncrement, &collation)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -386,13 +500,32 @@ func (db *mssql) GetColumns(ctx context.Context, tableName string) ([]string, ma
 		} else {
 			col.Length = maxLen
 		}
+		if collation != nil {
+			col.Collation = *collation
+		}
 		switch ct {
 		case "DATETIMEOFFSET":
 			col.SQLType = schemas.SQLType{Name: schemas.TimeStampz, DefaultLength: 0, DefaultLength2: 0}
 		case "NVARCHAR":
 			col.SQLType = schemas.SQLType{Name: schemas.NVarchar, DefaultLength: 0, DefaultLength2: 0}
+			if col.Length > 0 {
+				col.Length /= 2
+				col.Length2 /= 2
+			}
+		case "DATETIME2":
+			col.SQLType = schemas.SQLType{Name: schemas.DateTime, DefaultLength: 7, DefaultLength2: 0}
+			col.Length = scale
+		case "DATETIME":
+			col.SQLType = schemas.SQLType{Name: schemas.DateTime, DefaultLength: 3, DefaultLength2: 0}
+			col.Length = scale
 		case "IMAGE":
 			col.SQLType = schemas.SQLType{Name: schemas.VarBinary, DefaultLength: 0, DefaultLength2: 0}
+		case "NCHAR":
+			if col.Length > 0 {
+				col.Length /= 2
+				col.Length2 /= 2
+			}
+			fallthrough
 		default:
 			if _, ok := schemas.SqlTypes[ct]; ok {
 				col.SQLType = schemas.SQLType{Name: ct, DefaultLength: 0, DefaultLength2: 0}
@@ -404,14 +537,17 @@ func (db *mssql) GetColumns(ctx context.Context, tableName string) ([]string, ma
 		cols[col.Name] = col
 		colSeq = append(colSeq, col.Name)
 	}
+	if rows.Err() != nil {
+		return nil, nil, rows.Err()
+	}
 	return colSeq, cols, nil
 }
 
-func (db *mssql) GetTables(ctx context.Context) ([]*schemas.Table, error) {
+func (db *mssql) GetTables(queryer core.Queryer, ctx context.Context) ([]*schemas.Table, error) {
 	args := []interface{}{}
 	s := `select name from sysobjects where xtype ='U'`
 
-	rows, err := db.DB().QueryContext(ctx, s, args...)
+	rows, err := queryer.QueryContext(ctx, s, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -428,10 +564,13 @@ func (db *mssql) GetTables(ctx context.Context) ([]*schemas.Table, error) {
 		table.Name = strings.Trim(name, "` ")
 		tables = append(tables, table)
 	}
+	if rows.Err() != nil {
+		return nil, rows.Err()
+	}
 	return tables, nil
 }
 
-func (db *mssql) GetIndexes(ctx context.Context, tableName string) (map[string]*schemas.Index, error) {
+func (db *mssql) GetIndexes(queryer core.Queryer, ctx context.Context, tableName string) (map[string]*schemas.Index, error) {
 	args := []interface{}{tableName}
 	s := `SELECT
 IXS.NAME                    AS  [INDEX_NAME],
@@ -445,13 +584,13 @@ AND IXCS.COLUMN_ID=C.COLUMN_ID
 WHERE IXS.TYPE_DESC='NONCLUSTERED' and OBJECT_NAME(IXS.OBJECT_ID) =?
 `
 
-	rows, err := db.DB().QueryContext(ctx, s, args...)
+	rows, err := queryer.QueryContext(ctx, s, args...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	indexes := make(map[string]*schemas.Index, 0)
+	indexes := make(map[string]*schemas.Index)
 	for rows.Next() {
 		var indexType int
 		var indexName, colName, isUnique string
@@ -474,7 +613,7 @@ WHERE IXS.TYPE_DESC='NONCLUSTERED' and OBJECT_NAME(IXS.OBJECT_ID) =?
 
 		colName = strings.Trim(colName, "` ")
 		var isRegular bool
-		if strings.HasPrefix(indexName, "IDX_"+tableName) || strings.HasPrefix(indexName, "UQE_"+tableName) {
+		if (strings.HasPrefix(indexName, "IDX_"+tableName) || strings.HasPrefix(indexName, "UQE_"+tableName)) && len(indexName) > (5+len(tableName)) {
 			indexName = indexName[5+len(tableName):]
 			isRegular = true
 		}
@@ -490,52 +629,58 @@ WHERE IXS.TYPE_DESC='NONCLUSTERED' and OBJECT_NAME(IXS.OBJECT_ID) =?
 		}
 		index.AddColumn(colName)
 	}
+	if rows.Err() != nil {
+		return nil, rows.Err()
+	}
 	return indexes, nil
 }
 
-func (db *mssql) CreateTableSQL(table *schemas.Table, tableName, storeEngine, charset string) string {
-	var sql string
+func (db *mssql) CreateTableSQL(ctx context.Context, queryer core.Queryer, table *schemas.Table, tableName string) (string, bool, error) {
 	if tableName == "" {
 		tableName = table.Name
 	}
 
-	sql = "IF NOT EXISTS (SELECT [name] FROM sys.tables WHERE [name] = '" + tableName + "' ) CREATE TABLE "
+	quoter := db.dialect.Quoter()
+	var b strings.Builder
+	b.WriteString("IF NOT EXISTS (SELECT [name] FROM sys.tables WHERE [name] = '")
+	quoter.QuoteTo(&b, tableName)
+	b.WriteString("' ) CREATE TABLE ")
+	quoter.QuoteTo(&b, tableName)
+	b.WriteString(" (")
 
-	sql += db.Quoter().Quote(tableName) + " ("
-
-	pkList := table.PrimaryKeys
-
-	for _, colName := range table.ColumnsSeq() {
+	for i, colName := range table.ColumnsSeq() {
 		col := table.GetColumn(colName)
-		if col.IsPrimaryKey && len(pkList) == 1 {
-			sql += db.String(col)
-		} else {
-			sql += db.StringNoPk(col)
+		s, _ := ColumnString(db.dialect, col, col.IsPrimaryKey && len(table.PrimaryKeys) == 1, true)
+		b.WriteString(s)
+
+		if i != len(table.ColumnsSeq())-1 {
+			b.WriteString(", ")
 		}
-		sql = strings.TrimSpace(sql)
-		sql += ", "
 	}
 
-	if len(pkList) > 1 {
-		sql += "PRIMARY KEY ( "
-		sql += strings.Join(pkList, ",")
-		sql += " ), "
+	if len(table.PrimaryKeys) > 1 {
+		b.WriteString(", PRIMARY KEY (")
+		b.WriteString(quoter.Join(table.PrimaryKeys, ","))
+		b.WriteString(")")
 	}
 
-	sql = sql[:len(sql)-2] + ")"
-	sql += ";"
-	return sql
-}
+	b.WriteString(")")
 
-func (db *mssql) ForUpdateSQL(query string) string {
-	return query
+	return b.String(), true, nil
 }
 
 func (db *mssql) Filters() []Filter {
-	return []Filter{&QuoteFilter{db.Quoter()}}
+	return []Filter{}
 }
 
 type odbcDriver struct {
+	baseDriver
+}
+
+func (p *odbcDriver) Features() *DriverFeatures {
+	return &DriverFeatures{
+		SupportReturnInsertedID: false,
+	}
 }
 
 func (p *odbcDriver) Parse(driverName, dataSourceName string) (*URI, error) {
@@ -552,8 +697,7 @@ func (p *odbcDriver) Parse(driverName, dataSourceName string) (*URI, error) {
 		for _, c := range kv {
 			vv := strings.Split(strings.TrimSpace(c), "=")
 			if len(vv) == 2 {
-				switch strings.ToLower(vv[0]) {
-				case "database":
+				if strings.ToLower(vv[0]) == "database" {
 					dbName = vv[1]
 				}
 			}
@@ -563,4 +707,27 @@ func (p *odbcDriver) Parse(driverName, dataSourceName string) (*URI, error) {
 		return nil, errors.New("no db name provided")
 	}
 	return &URI{DBName: dbName, DBType: schemas.MSSQL}, nil
+}
+
+func (p *odbcDriver) GenScanResult(colType string) (interface{}, error) {
+	switch colType {
+	case "VARCHAR", "TEXT", "CHAR", "NVARCHAR", "NCHAR", "NTEXT":
+		fallthrough
+	case "DATE", "DATETIME", "DATETIME2", "TIME":
+		var s sql.NullString
+		return &s, nil
+	case "FLOAT", "REAL":
+		var s sql.NullFloat64
+		return &s, nil
+	case "BIGINT", "DATETIMEOFFSET":
+		var s sql.NullInt64
+		return &s, nil
+	case "TINYINT", "SMALLINT", "INT":
+		var s sql.NullInt32
+		return &s, nil
+
+	default:
+		var r sql.RawBytes
+		return &r, nil
+	}
 }

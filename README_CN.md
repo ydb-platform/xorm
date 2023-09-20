@@ -2,57 +2,57 @@
 
 [English](https://gitea.com/xorm/xorm/src/branch/master/README.md)
 
-xorm是一个简单而强大的Go语言ORM库. 通过它可以使数据库操作非常简便。
+xorm 是一个简单而强大的Go语言ORM库. 通过它可以使数据库操作非常简便。
 
-[![Build Status](https://drone.gitea.com/api/badges/xorm/builder/status.svg)](https://drone.gitea.com/xorm/builder) [![](http://gocover.io/_badge/xorm.io/xorm)](https://gocover.io/xorm.io/xorm)
-[![](https://goreportcard.com/badge/xorm.io/xorm)](https://goreportcard.com/report/xorm.io/xorm)
-[![Join the chat at https://img.shields.io/discord/323460943201959939.svg](https://img.shields.io/discord/323460943201959939.svg)](https://discord.gg/HuR2CF3)
+[![Build Status](https://drone.gitea.com/api/badges/xorm/xorm/status.svg)](https://drone.gitea.com/xorm/xorm) [![](http://gocover.io/_badge/xorm.io/xorm)](https://gocover.io/xorm.io/xorm) [![](https://goreportcard.com/badge/xorm.io/xorm)](https://goreportcard.com/report/xorm.io/xorm) [![Join the chat at https://img.shields.io/discord/323460943201959939.svg](https://img.shields.io/discord/323460943201959939.svg)](https://discord.gg/HuR2CF3)
+
+## Notice
+
+v1.0.0 相对于 v0.8.2 有以下不兼容的变更：
+
+- 移除了部分不符合Go语言命名的函数，如 `Id`, `Sql`，请使用 `ID`, `SQL` 替代。
+- 删除了对 `xorm.io/core` 的依赖。大部分代码迁移到了 `xorm.io/xorm/core`, `xorm.io/xorm/names`, `xorm.io/xorm/schemas` 等等几个包中.
+- 重命名了几个结构体，如： `core.IMapper` -> `names.Mapper`, `core.ILogger` -> `log.Logger`.
 
 ## 特性
 
-* 支持Struct和数据库表之间的灵活映射，并支持自动同步
-
+* 支持 Struct 和数据库表之间的灵活映射，并支持自动同步
 * 事务支持
-
 * 同时支持原始SQL语句和ORM操作的混合执行
-
 * 使用连写来简化调用
-
-* 支持使用Id, In, Where, Limit, Join, Having, Table, Sql, Cols等函数和结构体等方式作为条件
-
+* 支持使用ID, In, Where, Limit, Join, Having, Table, SQL, Cols等函数和结构体等方式作为条件
 * 支持级联加载Struct
-
 * Schema支持（仅Postgres）
-
 * 支持缓存
-
-* 支持根据数据库自动生成xorm的结构体
-
+* 通过 [xorm.io/reverse](https://xorm.io/reverse) 支持根据数据库自动生成 xorm 结构体
 * 支持记录版本（即乐观锁）
-
-* 内置SQL Builder支持
-
+* 通过 [xorm.io/builder](https://xorm.io/builder) 内置 SQL Builder 支持
 * 上下文缓存支持
+* 支持日志上下文
 
 ## 驱动支持
 
 目前支持的Go数据库驱动和对应的数据库如下：
 
-* Mysql: [github.com/go-sql-driver/mysql](https://github.com/go-sql-driver/mysql)
+* [Mysql5.*](https://github.com/mysql/mysql-server/tree/5.7) / [Mysql8.*](https://github.com/mysql/mysql-server) / [Mariadb](https://github.com/MariaDB/server) / [Tidb](https://github.com/pingcap/tidb)
+  - [github.com/go-sql-driver/mysql](https://github.com/go-sql-driver/mysql)
+  - [github.com/ziutek/mymysql/godrv](https://github.com/ziutek/mymysql/godrv)
 
-* MyMysql: [github.com/ziutek/mymysql/godrv](https://github.com/ziutek/mymysql/godrv)
+* [Postgres](https://github.com/postgres/postgres) / [Cockroach](https://github.com/cockroachdb/cockroach)
+  - [github.com/lib/pq](https://github.com/lib/pq)
+  - [github.com/jackc/pgx](https://github.com/jackc/pgx)
 
-* Postgres: [github.com/lib/pq](https://github.com/lib/pq)
+* [SQLite](https://sqlite.org)
+  - [github.com/mattn/go-sqlite3](https://github.com/mattn/go-sqlite3)
+  - [modernc.org/sqlite](https://gitlab.com/cznic/sqlite)
 
-* Tidb: [github.com/pingcap/tidb](https://github.com/pingcap/tidb)
+* MsSql
+  - [github.com/denisenkom/go-mssqldb](https://github.com/denisenkom/go-mssqldb)
 
-* SQLite: [github.com/mattn/go-sqlite3](https://github.com/mattn/go-sqlite3)
-
-* MsSql: [github.com/denisenkom/go-mssqldb](https://github.com/denisenkom/go-mssqldb)
-
-* MsSql: [github.com/lunny/godbc](https://github.com/lunny/godbc)
-
-* Oracle: [github.com/mattn/go-oci8](https://github.com/mattn/go-oci8) (试验性支持)
+* Oracle
+  - [github.com/godror/godror](https://github.com/godror/godror) (试验性支持)
+  - [github.com/mattn/go-oci8](https://github.com/mattn/go-oci8) (试验性支持)
+  - [github.com/sijms/go-ora](https://github.com/sijms/go-ora) (试验性支持)
 
 ## 安装
 
@@ -62,11 +62,11 @@ xorm是一个简单而强大的Go语言ORM库. 通过它可以使数据库操作
 
 * [操作指南](http://xorm.io/docs)
 
-* [Godoc代码文档](http://godoc.org/xorm.io/xorm)
+* [Godoc代码文档](http://pkg.go.dev/xorm.io/xorm)
 
 # 快速开始
 
-* 第一步创建引擎，driverName, dataSourceName和database/sql接口相同
+* 第一步创建引擎，`driverName`, `dataSourceName` 和 `database/sql` 接口相同
 
 ```Go
 engine, err := xorm.NewEngine(driverName, dataSourceName)
@@ -85,7 +85,7 @@ type User struct {
     Updated time.Time `xorm:"updated"`
 }
 
-err := engine.Sync2(new(User))
+err := engine.Sync(new(User))
 ```
 
 * 创建Engine组
@@ -104,7 +104,7 @@ engineGroup, err := xorm.NewEngineGroup(masterEngine, []*Engine{slave1Engine, sl
 
 所有使用 `engine` 都可以简单的用 `engineGroup` 来替换。
 
-* `Query` 最原始的也支持SQL语句查询，返回的结果类型为 []map[string][]byte。`QueryString` 返回 []map[string]string, `QueryInterface` 返回 `[]map[string]interface{}`.
+* `Query` 最原始的也支持SQL语句查询，返回的结果类型为 `[]map[string][]byte`。`QueryString` 返回 `[]map[string]string`, `QueryInterface` 返回 `[]map[string]interface{}`.
 
 ```Go
 results, err := engine.Query("select * from user")
@@ -139,6 +139,24 @@ affected, err := engine.Insert(&users)
 affected, err := engine.Insert(&user1, &users)
 // INSERT INTO struct1 () values ()
 // INSERT INTO struct2 () values (),(),()
+
+affected, err := engine.Table("user").Insert(map[string]interface{}{
+    "name": "lunny",
+    "age": 18,
+})
+// INSERT INTO user (name, age) values (?,?)
+
+affected, err := engine.Table("user").Insert([]map[string]interface{}{
+    {
+        "name": "lunny",
+        "age": 18,
+    },
+    {
+        "name": "lunny2",
+        "age": 19,
+    },
+})
+// INSERT INTO user (name, age) values (?,?),(?,?)
 ```
 
 * `Get` 查询单条记录
@@ -158,6 +176,11 @@ var id int64
 has, err := engine.Table(&user).Where("name = ?", name).Cols("id").Get(&id)
 has, err := engine.SQL("select id from user").Get(&id)
 // SELECT id FROM user WHERE name = ?
+
+var id int64
+var name string
+has, err := engine.Table(&user).Cols("id", "name").Get(&id, &name)
+// SELECT id, name FROM user LIMIT 1
 
 var valuesMap = make(map[string]string)
 has, err := engine.Table(&user).Where("id = ?", id).Get(&valuesMap)
@@ -210,7 +233,7 @@ type UserDetail struct {
 }
 
 var users []UserDetail
-err := engine.Table("user").Select("user.*, detail.*")
+err := engine.Table("user").Select("user.*, detail.*").
     Join("INNER", "detail", "detail.user_id = user.id").
     Where("user.name = ?", name).Limit(10, 0).
     Find(&users)
@@ -232,13 +255,30 @@ err := engine.BufferSize(100).Iterate(&User{Name:name}, func(idx int, bean inter
 })
 // SELECT * FROM user Limit 0, 100
 // SELECT * FROM user Limit 101, 100
+```
 
+Rows 的用法类似 `sql.Rows`。
+
+```Go
 rows, err := engine.Rows(&User{Name:name})
 // SELECT * FROM user
 defer rows.Close()
 bean := new(Struct)
 for rows.Next() {
     err = rows.Scan(bean)
+}
+```
+
+或者
+
+```Go
+rows, err := engine.Cols("name", "age").Rows(&User{Name:name})
+// SELECT * FROM user
+defer rows.Close()
+for rows.Next() {
+    var name string
+    var age int
+    err = rows.Scan(&name, &age)
 }
 ```
 
@@ -275,6 +315,9 @@ affected, err := engine.Where(...).Delete(&user)
 
 affected, err := engine.ID(2).Delete(&user)
 // DELETE FROM user Where id = ?
+
+affected, err := engine.Table("user").Where(...).Delete()
+// DELETE FROM user WHERE ...
 ```
 
 * `Count` 获取记录条数
@@ -435,13 +478,13 @@ res, err := engine.Transaction(func(session *xorm.Session) (interface{}, error) 
 
 # 案例
 
-* [Go语言中文网](http://studygolang.com/) - [github.com/studygolang/studygolang](https://github.com/studygolang/studygolang)
-
 * [Gitea](http://gitea.io) - [github.com/go-gitea/gitea](http://github.com/go-gitea/gitea)
 
 * [Gogs](http://try.gogits.org) - [github.com/gogits/gogs](http://github.com/gogits/gogs)
 
 * [grafana](https://grafana.com/) - [github.com/grafana/grafana](http://github.com/grafana/grafana)
+
+* [Go语言中文网](http://studygolang.com/) - [github.com/studygolang/studygolang](https://github.com/studygolang/studygolang)
 
 * [github.com/m3ng9i/qreader](https://github.com/m3ng9i/qreader)
 
@@ -470,27 +513,7 @@ res, err := engine.Transaction(func(session *xorm.Session) (interface{}, error) 
 
 ## 更新日志
 
-* **v0.7.0**
-    * 修正部分Bug
-
-* **v0.6.6**
-    * 修正部分Bug
-
-* **v0.6.5**
-    * 通过 engine.SetSchema 来支持 schema，当前仅支持Postgres
-    * vgo 支持
-    * 新增 `FindAndCount` 函数
-    * 通过 `NewEngineWithParams` 支持数据库特别参数
-    * 修正部分Bug
-
-* **v0.6.4**
-    * 自动读写分离支持
-    * Query/QueryString/QueryInterface 支持与 Where/And 合用
-    * `Get` 支持获取非结构体变量
-    * `Iterate` 支持 `BufferSize` 
-    * 修正部分Bug
-
-[更多更新日志...](https://github.com/go-xorm/manual-zh-CN/tree/master/chapter-16)
+请访问 [CHANGELOG.md](CHANGELOG.md) 获得更新日志。
 
 ## LICENSE
 

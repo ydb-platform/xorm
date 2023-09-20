@@ -143,14 +143,68 @@ var (
 		"WITH":              true,
 		"WITHOUT":           true,
 	}
+
+	sqlite3Quoter = schemas.Quoter{
+		Prefix:     '`',
+		Suffix:     '`',
+		IsReserved: schemas.AlwaysReserve,
+	}
 )
 
 type sqlite3 struct {
 	Base
 }
 
-func (db *sqlite3) Init(d *core.DB, uri *URI, drivername, dataSourceName string) error {
-	return db.Base.Init(d, db, uri, drivername, dataSourceName)
+func (db *sqlite3) Init(uri *URI) error {
+	db.quoter = sqlite3Quoter
+	return db.Base.Init(db, uri)
+}
+
+func (db *sqlite3) Version(ctx context.Context, queryer core.Queryer) (*schemas.Version, error) {
+	rows, err := queryer.QueryContext(ctx, "SELECT sqlite_version()")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var version string
+	if !rows.Next() {
+		if rows.Err() != nil {
+			return nil, rows.Err()
+		}
+		return nil, errors.New("unknow version")
+	}
+
+	if err := rows.Scan(&version); err != nil {
+		return nil, err
+	}
+	return &schemas.Version{
+		Number:  version,
+		Edition: "sqlite",
+	}, nil
+}
+
+func (db *sqlite3) Features() *DialectFeatures {
+	return &DialectFeatures{
+		AutoincrMode: IncrAutoincrMode,
+	}
+}
+
+func (db *sqlite3) SetQuotePolicy(quotePolicy QuotePolicy) {
+	switch quotePolicy {
+	case QuotePolicyNone:
+		q := sqlite3Quoter
+		q.IsReserved = schemas.AlwaysNoReserve
+		db.quoter = q
+	case QuotePolicyReserved:
+		q := sqlite3Quoter
+		q.IsReserved = db.IsReserved
+		db.quoter = q
+	case QuotePolicyAlways:
+		fallthrough
+	default:
+		db.quoter = sqlite3Quoter
+	}
 }
 
 func (db *sqlite3) SQLType(c *schemas.Column) string {
@@ -169,7 +223,9 @@ func (db *sqlite3) SQLType(c *schemas.Column) string {
 	case schemas.Char, schemas.Varchar, schemas.NVarchar, schemas.TinyText,
 		schemas.Text, schemas.MediumText, schemas.LongText, schemas.Json:
 		return schemas.Text
-	case schemas.Bit, schemas.TinyInt, schemas.SmallInt, schemas.MediumInt, schemas.Int, schemas.Integer, schemas.BigInt:
+	case schemas.Bit, schemas.TinyInt, schemas.UnsignedTinyInt, schemas.SmallInt,
+		schemas.UnsignedSmallInt, schemas.MediumInt, schemas.Int, schemas.UnsignedInt,
+		schemas.BigInt, schemas.UnsignedBigInt, schemas.Integer:
 		return schemas.Integer
 	case schemas.Float, schemas.Double, schemas.Real:
 		return schemas.Real
@@ -187,37 +243,28 @@ func (db *sqlite3) SQLType(c *schemas.Column) string {
 	}
 }
 
-func (db *sqlite3) FormatBytes(bs []byte) string {
-	return fmt.Sprintf("X'%x'", bs)
-}
-
-func (db *sqlite3) SupportInsertMany() bool {
-	return true
+func (db *sqlite3) ColumnTypeKind(t string) int {
+	switch strings.ToUpper(t) {
+	case "DATETIME":
+		return schemas.TIME_TYPE
+	case "TEXT":
+		return schemas.TEXT_TYPE
+	case "INTEGER", "REAL", "NUMERIC", "DECIMAL":
+		return schemas.NUMERIC_TYPE
+	case "BLOB":
+		return schemas.BLOB_TYPE
+	default:
+		return schemas.UNKNOW_TYPE
+	}
 }
 
 func (db *sqlite3) IsReserved(name string) bool {
-	_, ok := sqlite3ReservedWords[name]
+	_, ok := sqlite3ReservedWords[strings.ToUpper(name)]
 	return ok
-}
-
-func (db *sqlite3) Quoter() schemas.Quoter {
-	return schemas.Quoter{"`", "`"}
 }
 
 func (db *sqlite3) AutoIncrStr() string {
 	return "AUTOINCREMENT"
-}
-
-func (db *sqlite3) SupportEngine() bool {
-	return false
-}
-
-func (db *sqlite3) SupportCharset() bool {
-	return false
-}
-
-func (db *sqlite3) IndexOnTable() bool {
-	return false
 }
 
 func (db *sqlite3) IndexCheckSQL(tableName, idxName string) (string, []interface{}) {
@@ -225,9 +272,8 @@ func (db *sqlite3) IndexCheckSQL(tableName, idxName string) (string, []interface
 	return "SELECT name FROM sqlite_master WHERE type='index' and name = ?", args
 }
 
-func (db *sqlite3) TableCheckSQL(tableName string) (string, []interface{}) {
-	args := []interface{}{tableName}
-	return "SELECT name FROM sqlite_master WHERE type='table' and name = ?", args
+func (db *sqlite3) IsTableExist(queryer core.Queryer, ctx context.Context, tableName string) (bool, error) {
+	return db.HasRecords(queryer, ctx, "SELECT name FROM sqlite_master WHERE type='table' and name = ?", tableName)
 }
 
 func (db *sqlite3) DropIndexSQL(tableName string, index *schemas.Index) string {
@@ -245,30 +291,32 @@ func (db *sqlite3) DropIndexSQL(tableName string, index *schemas.Index) string {
 	return fmt.Sprintf("DROP INDEX %v", db.Quoter().Quote(idxName))
 }
 
-func (db *sqlite3) ForUpdateSQL(query string) string {
-	return query
-}
-
-func (db *sqlite3) IsColumnExist(ctx context.Context, tableName, colName string) (bool, error) {
-	args := []interface{}{tableName}
-	query := "SELECT name FROM sqlite_master WHERE type='table' and name = ? and ((sql like '%`" + colName + "`%') or (sql like '%[" + colName + "]%'))"
-
-	rows, err := db.DB().QueryContext(ctx, query, args...)
+func (db *sqlite3) IsColumnExist(queryer core.Queryer, ctx context.Context, tableName, colName string) (bool, error) {
+	query := "SELECT * FROM " + tableName + " LIMIT 0"
+	rows, err := queryer.QueryContext(ctx, query)
 	if err != nil {
 		return false, err
 	}
 	defer rows.Close()
 
-	if rows.Next() {
-		return true, nil
+	cols, err := rows.Columns()
+	if err != nil {
+		return false, err
 	}
+
+	for _, col := range cols {
+		if strings.EqualFold(col, colName) {
+			return true, nil
+		}
+	}
+
 	return false, nil
 }
 
 // splitColStr splits a sqlite col strings as fields
 func splitColStr(colStr string) []string {
 	colStr = strings.TrimSpace(colStr)
-	var results = make([]string, 0, 10)
+	results := make([]string, 0, 10)
 	var lastIdx int
 	var hasC, hasQuote bool
 	for i, c := range colStr {
@@ -327,23 +375,25 @@ func parseString(colStr string) (*schemas.Column, error) {
 	return col, nil
 }
 
-func (db *sqlite3) GetColumns(ctx context.Context, tableName string) ([]string, map[string]*schemas.Column, error) {
+func (db *sqlite3) GetColumns(queryer core.Queryer, ctx context.Context, tableName string) ([]string, map[string]*schemas.Column, error) {
 	args := []interface{}{tableName}
 	s := "SELECT sql FROM sqlite_master WHERE type='table' and name = ?"
 
-	rows, err := db.DB().QueryContext(ctx, s, args...)
+	rows, err := queryer.QueryContext(ctx, s, args...)
 	if err != nil {
 		return nil, nil, err
 	}
 	defer rows.Close()
 
 	var name string
-	for rows.Next() {
+	if rows.Next() {
 		err = rows.Scan(&name)
 		if err != nil {
 			return nil, nil, err
 		}
-		break
+	}
+	if rows.Err() != nil {
+		return nil, nil, rows.Err()
 	}
 
 	if name == "" {
@@ -384,11 +434,11 @@ func (db *sqlite3) GetColumns(ctx context.Context, tableName string) ([]string, 
 	return colSeq, cols, nil
 }
 
-func (db *sqlite3) GetTables(ctx context.Context) ([]*schemas.Table, error) {
+func (db *sqlite3) GetTables(queryer core.Queryer, ctx context.Context) ([]*schemas.Table, error) {
 	args := []interface{}{}
 	s := "SELECT name FROM sqlite_master WHERE type='table'"
 
-	rows, err := db.DB().QueryContext(ctx, s, args...)
+	rows, err := queryer.QueryContext(ctx, s, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -406,20 +456,23 @@ func (db *sqlite3) GetTables(ctx context.Context) ([]*schemas.Table, error) {
 		}
 		tables = append(tables, table)
 	}
+	if rows.Err() != nil {
+		return nil, rows.Err()
+	}
 	return tables, nil
 }
 
-func (db *sqlite3) GetIndexes(ctx context.Context, tableName string) (map[string]*schemas.Index, error) {
+func (db *sqlite3) GetIndexes(queryer core.Queryer, ctx context.Context, tableName string) (map[string]*schemas.Index, error) {
 	args := []interface{}{tableName}
 	s := "SELECT sql FROM sqlite_master WHERE type='index' and tbl_name = ?"
 
-	rows, err := db.DB().QueryContext(ctx, s, args...)
+	rows, err := queryer.QueryContext(ctx, s, args...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	indexes := make(map[string]*schemas.Index, 0)
+	indexes := make(map[string]*schemas.Index)
 	for rows.Next() {
 		var tmpSQL sql.NullString
 		err = rows.Scan(&tmpSQL)
@@ -439,7 +492,7 @@ func (db *sqlite3) GetIndexes(ctx context.Context, tableName string) (map[string
 			continue
 		}
 
-		indexName := strings.Trim(sql[nNStart+6:nNEnd], "` []")
+		indexName := strings.Trim(strings.TrimSpace(sql[nNStart+6:nNEnd]), "`[]'\"")
 		var isRegular bool
 		if strings.HasPrefix(indexName, "IDX_"+tableName) || strings.HasPrefix(indexName, "UQE_"+tableName) {
 			index.Name = indexName[5+len(tableName):]
@@ -465,6 +518,9 @@ func (db *sqlite3) GetIndexes(ctx context.Context, tableName string) (map[string
 		index.IsRegular = isRegular
 		indexes[index.Name] = index
 	}
+	if rows.Err() != nil {
+		return nil, rows.Err()
+	}
 
 	return indexes, nil
 }
@@ -474,6 +530,13 @@ func (db *sqlite3) Filters() []Filter {
 }
 
 type sqlite3Driver struct {
+	baseDriver
+}
+
+func (p *sqlite3Driver) Features() *DriverFeatures {
+	return &DriverFeatures{
+		SupportReturnInsertedID: true,
+	}
 }
 
 func (p *sqlite3Driver) Parse(driverName, dataSourceName string) (*URI, error) {
@@ -482,4 +545,30 @@ func (p *sqlite3Driver) Parse(driverName, dataSourceName string) (*URI, error) {
 	}
 
 	return &URI{DBType: schemas.SQLITE, DBName: dataSourceName}, nil
+}
+
+func (p *sqlite3Driver) GenScanResult(colType string) (interface{}, error) {
+	switch colType {
+	case "TEXT":
+		var s sql.NullString
+		return &s, nil
+	case "INTEGER":
+		var s sql.NullInt64
+		return &s, nil
+	case "DATETIME":
+		var s sql.NullTime
+		return &s, nil
+	case "REAL":
+		var s sql.NullFloat64
+		return &s, nil
+	case "NUMERIC", "DECIMAL":
+		var s sql.NullString
+		return &s, nil
+	case "BLOB":
+		var s sql.RawBytes
+		return &s, nil
+	default:
+		var r sql.NullString
+		return &r, nil
+	}
 }

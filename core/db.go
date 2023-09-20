@@ -12,8 +12,8 @@ import (
 	"reflect"
 	"regexp"
 	"sync"
-	"time"
 
+	"xorm.io/xorm/contexts"
 	"xorm.io/xorm/log"
 	"xorm.io/xorm/names"
 )
@@ -23,6 +23,7 @@ var (
 	DefaultCacheSize = 200
 )
 
+// MapToSlice map query and struct as sql and args
 func MapToSlice(query string, mp interface{}) (string, []interface{}, error) {
 	vv := reflect.ValueOf(mp)
 	if vv.Kind() != reflect.Ptr || vv.Elem().Kind() != reflect.Map {
@@ -44,6 +45,7 @@ func MapToSlice(query string, mp interface{}) (string, []interface{}, error) {
 	return query, args, err
 }
 
+// StructToSlice converts a query and struct as sql and args
 func StructToSlice(query string, st interface{}) (string, []interface{}, error) {
 	vv := reflect.ValueOf(st)
 	if vv.Kind() != reflect.Ptr || vv.Elem().Kind() != reflect.Struct {
@@ -77,13 +79,18 @@ type cacheStruct struct {
 	idx   int
 }
 
+var (
+	_ QueryExecuter = &DB{}
+)
+
 // DB is a wrap of sql.DB with extra contents
 type DB struct {
 	*sql.DB
 	Mapper            names.Mapper
 	reflectCache      map[reflect.Type]*cacheStruct
 	reflectCacheMutex sync.RWMutex
-	Logger            log.SQLLogger
+	Logger            log.ContextLogger
+	hooks             contexts.Hooks
 }
 
 // Open opens a database
@@ -108,6 +115,19 @@ func FromDB(db *sql.DB) *DB {
 	}
 }
 
+// NeedLogSQL returns true if need to log SQL
+func (db *DB) NeedLogSQL(ctx context.Context) bool {
+	if db.Logger == nil {
+		return false
+	}
+
+	v := ctx.Value(log.SessionShowSQLKey)
+	if showSQL, ok := v.(bool); ok {
+		return showSQL
+	}
+	return db.Logger.IsShowSQL()
+}
+
 func (db *DB) reflectNew(typ reflect.Type) reflect.Value {
 	db.reflectCacheMutex.Lock()
 	defer db.reflectCacheMutex.Unlock()
@@ -116,32 +136,21 @@ func (db *DB) reflectNew(typ reflect.Type) reflect.Value {
 		cs = &cacheStruct{reflect.MakeSlice(reflect.SliceOf(typ), DefaultCacheSize, DefaultCacheSize), 0}
 		db.reflectCache[typ] = cs
 	} else {
-		cs.idx = cs.idx + 1
+		cs.idx++
 	}
 	return cs.value.Index(cs.idx).Addr()
 }
 
 // QueryContext overwrites sql.DB.QueryContext
 func (db *DB) QueryContext(ctx context.Context, query string, args ...interface{}) (*Rows, error) {
-	start := time.Now()
-	if db.Logger != nil {
-		db.Logger.BeforeSQL(log.LogContext{
-			Ctx:  ctx,
-			SQL:  query,
-			Args: args,
-		})
+	hookCtx := contexts.NewContextHook(ctx, query, args)
+	ctx, err := db.beforeProcess(hookCtx)
+	if err != nil {
+		return nil, err
 	}
 	rows, err := db.DB.QueryContext(ctx, query, args...)
-	if db.Logger != nil {
-		db.Logger.AfterSQL(log.LogContext{
-			Ctx:         ctx,
-			SQL:         query,
-			Args:        args,
-			ExecuteTime: time.Now().Sub(start),
-			Err:         err,
-		})
-	}
-	if err != nil {
+	hookCtx.End(ctx, nil, err)
+	if err := db.afterProcess(hookCtx); err != nil {
 		if rows != nil {
 			rows.Close()
 		}
@@ -169,6 +178,7 @@ func (db *DB) QueryMap(query string, mp interface{}) (*Rows, error) {
 	return db.QueryMapContext(context.Background(), query, mp)
 }
 
+// QueryStructContext query rows with struct
 func (db *DB) QueryStructContext(ctx context.Context, query string, st interface{}) (*Rows, error) {
 	query, args, err := StructToSlice(query, st)
 	if err != nil {
@@ -177,10 +187,12 @@ func (db *DB) QueryStructContext(ctx context.Context, query string, st interface
 	return db.QueryContext(ctx, query, args...)
 }
 
+// QueryStruct query rows with struct
 func (db *DB) QueryStruct(query string, st interface{}) (*Rows, error) {
 	return db.QueryStructContext(context.Background(), query, st)
 }
 
+// QueryRowContext query row with args
 func (db *DB) QueryRowContext(ctx context.Context, query string, args ...interface{}) *Row {
 	rows, err := db.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -189,10 +201,12 @@ func (db *DB) QueryRowContext(ctx context.Context, query string, args ...interfa
 	return &Row{rows, nil}
 }
 
+// QueryRow query row with args
 func (db *DB) QueryRow(query string, args ...interface{}) *Row {
 	return db.QueryRowContext(context.Background(), query, args...)
 }
 
+// QueryRowMapContext query row with map
 func (db *DB) QueryRowMapContext(ctx context.Context, query string, mp interface{}) *Row {
 	query, args, err := MapToSlice(query, mp)
 	if err != nil {
@@ -201,10 +215,12 @@ func (db *DB) QueryRowMapContext(ctx context.Context, query string, mp interface
 	return db.QueryRowContext(ctx, query, args...)
 }
 
+// QueryRowMap query row with map
 func (db *DB) QueryRowMap(query string, mp interface{}) *Row {
 	return db.QueryRowMapContext(context.Background(), query, mp)
 }
 
+// QueryRowStructContext query row with struct
 func (db *DB) QueryRowStructContext(ctx context.Context, query string, st interface{}) *Row {
 	query, args, err := StructToSlice(query, st)
 	if err != nil {
@@ -213,6 +229,7 @@ func (db *DB) QueryRowStructContext(ctx context.Context, query string, st interf
 	return db.QueryRowContext(ctx, query, args...)
 }
 
+// QueryRowStruct query row with struct
 func (db *DB) QueryRowStruct(query string, st interface{}) *Row {
 	return db.QueryRowStructContext(context.Background(), query, st)
 }
@@ -221,7 +238,7 @@ var (
 	re = regexp.MustCompile(`[?](\w+)`)
 )
 
-// ExecMapContext exec map with context.Context
+// ExecMapContext exec map with context.ContextHook
 // insert into (name) values (?)
 // insert into (name) values (?name)
 func (db *DB) ExecMapContext(ctx context.Context, query string, mp interface{}) (sql.Result, error) {
@@ -232,10 +249,12 @@ func (db *DB) ExecMapContext(ctx context.Context, query string, mp interface{}) 
 	return db.ExecContext(ctx, query, args...)
 }
 
+// ExecMap exec query with map
 func (db *DB) ExecMap(query string, mp interface{}) (sql.Result, error) {
 	return db.ExecMapContext(context.Background(), query, mp)
 }
 
+// ExecStructContext exec query with map
 func (db *DB) ExecStructContext(ctx context.Context, query string, st interface{}) (sql.Result, error) {
 	query, args, err := StructToSlice(query, st)
 	if err != nil {
@@ -244,28 +263,46 @@ func (db *DB) ExecStructContext(ctx context.Context, query string, st interface{
 	return db.ExecContext(ctx, query, args...)
 }
 
+// ExecContext exec query with args
 func (db *DB) ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
-	start := time.Now()
-	if db.Logger != nil {
-		db.Logger.BeforeSQL(log.LogContext{
-			Ctx:  ctx,
-			SQL:  query,
-			Args: args,
-		})
+	hookCtx := contexts.NewContextHook(ctx, query, args)
+	ctx, err := db.beforeProcess(hookCtx)
+	if err != nil {
+		return nil, err
 	}
 	res, err := db.DB.ExecContext(ctx, query, args...)
-	if db.Logger != nil {
-		db.Logger.AfterSQL(log.LogContext{
-			Ctx:         ctx,
-			SQL:         query,
-			Args:        args,
-			ExecuteTime: time.Now().Sub(start),
-			Err:         err,
-		})
+	hookCtx.End(ctx, res, err)
+	if err := db.afterProcess(hookCtx); err != nil {
+		return nil, err
 	}
-	return res, err
+	return res, nil
 }
 
+// ExecStruct exec query with struct
 func (db *DB) ExecStruct(query string, st interface{}) (sql.Result, error) {
 	return db.ExecStructContext(context.Background(), query, st)
+}
+
+func (db *DB) beforeProcess(c *contexts.ContextHook) (context.Context, error) {
+	if db.NeedLogSQL(c.Ctx) {
+		db.Logger.BeforeSQL(log.LogContext(*c))
+	}
+	ctx, err := db.hooks.BeforeProcess(c)
+	if err != nil {
+		return nil, err
+	}
+	return ctx, nil
+}
+
+func (db *DB) afterProcess(c *contexts.ContextHook) error {
+	err := db.hooks.AfterProcess(c)
+	if db.NeedLogSQL(c.Ctx) {
+		db.Logger.AfterSQL(log.LogContext(*c))
+	}
+	return err
+}
+
+// AddHook adds hook
+func (db *DB) AddHook(h ...contexts.Hook) {
+	db.hooks.AddHook(h...)
 }
