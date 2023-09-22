@@ -289,128 +289,90 @@ const (
 	yql_List = "LIST"
 )
 
-func toYQLDataType(t string, defaultLength, defaultLength2 int64) (yqlType string) {
+func toYQLDataType(t string, defaultLength, defaultLength2 int64) string {
 	switch v := t; v {
 	case schemas.Bool, schemas.Boolean:
-		yqlType = yql_Bool
-		return
+		return yql_Bool
 	case schemas.TinyInt:
-		yqlType = yql_Int8
-		return
+		return yql_Int8
 	case schemas.UnsignedTinyInt:
-		yqlType = yql_Uint8
-		return
+		return yql_Uint8
 	case schemas.SmallInt:
-		yqlType = yql_Int16
-		return
+		return yql_Int16
 	case schemas.UnsignedSmallInt:
-		yqlType = yql_Uint16
-		return
+		return yql_Uint16
 	case schemas.MediumInt:
-		yqlType = yql_Int32
-		return
+		return yql_Int32
 	case schemas.UnsignedMediumInt:
-		yqlType = yql_Uint32
-		return
+		return yql_Uint32
 	case schemas.BigInt:
-		yqlType = yql_Int64
-		return
+		return yql_Int64
 	case schemas.UnsignedBigInt:
-		yqlType = yql_Uint64
-		return
+		return yql_Uint64
 	case schemas.Int, schemas.Integer:
-		yqlType = yql_Int32
-		return
+		return yql_Int32
 	case schemas.UnsignedInt:
-		yqlType = yql_Uint32
-		return
+		return yql_Uint32
 	case schemas.Float:
-		yqlType = yql_Float
-		return
+		return yql_Float
 	case schemas.Double:
-		yqlType = yql_Double
-		return
+		return yql_Double
 	case schemas.Blob:
-		yqlType = yql_String
-		return
+		return yql_String
 	case schemas.Json:
-		yqlType = yql_Json
-		return
+		return yql_Json
 	case schemas.Array:
-		yqlType = yql_List
-		return
+		return yql_List
 	case schemas.Varchar, schemas.Text:
-		yqlType = yql_Utf8
-		return
+		return yql_Utf8
 	case schemas.TimeStamp, schemas.DateTime:
-		yqlType = yql_Timestamp
-		return
+		return yql_Timestamp
 	case schemas.Interval:
-		yqlType = yql_Interval
-		return
+		return yql_Interval
 	default:
-		yqlType = yql_String
+		return yql_String
 	}
-	return
 }
 
-func yqlToSQLType(yqlType string) (sqlType schemas.SQLType) {
+func yqlToSQLType(yqlType string) schemas.SQLType {
 	switch yqlType {
 	case yql_Bool:
-		sqlType = schemas.SQLType{Name: schemas.Bool, DefaultLength: 0, DefaultLength2: 0}
-		return
+		return schemas.SQLType{Name: schemas.Bool, DefaultLength: 0, DefaultLength2: 0}
 	case yql_Int8:
-		sqlType = schemas.SQLType{Name: schemas.TinyInt, DefaultLength: 0, DefaultLength2: 0}
-		return
+		return schemas.SQLType{Name: schemas.TinyInt, DefaultLength: 0, DefaultLength2: 0}
 	case yql_Uint8:
-		sqlType = schemas.SQLType{Name: schemas.UnsignedTinyInt, DefaultLength: 0, DefaultLength2: 0}
-		return
+		return schemas.SQLType{Name: schemas.UnsignedTinyInt, DefaultLength: 0, DefaultLength2: 0}
 	case yql_Int16:
-		sqlType = schemas.SQLType{Name: schemas.SmallInt, DefaultLength: 0, DefaultLength2: 0}
-		return
+		return schemas.SQLType{Name: schemas.SmallInt, DefaultLength: 0, DefaultLength2: 0}
 	case yql_Uint16:
-		sqlType = schemas.SQLType{Name: schemas.UnsignedSmallInt, DefaultLength: 0, DefaultLength2: 0}
-		return
+		return schemas.SQLType{Name: schemas.UnsignedSmallInt, DefaultLength: 0, DefaultLength2: 0}
 	case yql_Int32:
-		sqlType = schemas.SQLType{Name: schemas.MediumInt, DefaultLength: 0, DefaultLength2: 0}
-		return
+		return schemas.SQLType{Name: schemas.MediumInt, DefaultLength: 0, DefaultLength2: 0}
 	case yql_Uint32:
-		sqlType = schemas.SQLType{Name: schemas.UnsignedMediumInt, DefaultLength: 0, DefaultLength2: 0}
-		return
+		return schemas.SQLType{Name: schemas.UnsignedMediumInt, DefaultLength: 0, DefaultLength2: 0}
 	case yql_Int64:
-		sqlType = schemas.SQLType{Name: schemas.BigInt, DefaultLength: 0, DefaultLength2: 0}
-		return
+		return schemas.SQLType{Name: schemas.BigInt, DefaultLength: 0, DefaultLength2: 0}
 	case yql_Uint64:
-		sqlType = schemas.SQLType{Name: schemas.UnsignedBigInt, DefaultLength: 0, DefaultLength2: 0}
-		return
+		return schemas.SQLType{Name: schemas.UnsignedBigInt, DefaultLength: 0, DefaultLength2: 0}
 	case yql_Float:
-		sqlType = schemas.SQLType{Name: schemas.Float, DefaultLength: 0, DefaultLength2: 0}
-		return
+		return schemas.SQLType{Name: schemas.Float, DefaultLength: 0, DefaultLength2: 0}
 	case yql_Double:
-		sqlType = schemas.SQLType{Name: schemas.Double, DefaultLength: 0, DefaultLength2: 0}
-		return
+		return schemas.SQLType{Name: schemas.Double, DefaultLength: 0, DefaultLength2: 0}
 	case yql_String:
-		sqlType = schemas.SQLType{Name: schemas.Blob, DefaultLength: 0, DefaultLength2: 0}
-		return
+		return schemas.SQLType{Name: schemas.Blob, DefaultLength: 0, DefaultLength2: 0}
 	case yql_Json:
-		sqlType = schemas.SQLType{Name: schemas.Json, DefaultLength: 0, DefaultLength2: 0}
-		return
+		return schemas.SQLType{Name: schemas.Json, DefaultLength: 0, DefaultLength2: 0}
 	case yql_List:
-		sqlType = schemas.SQLType{Name: schemas.Array, DefaultLength: 0, DefaultLength2: 0}
-		return
+		return schemas.SQLType{Name: schemas.Array, DefaultLength: 0, DefaultLength2: 0}
 	case yql_Utf8:
-		sqlType = schemas.SQLType{Name: schemas.Varchar, DefaultLength: 255, DefaultLength2: 0}
-		return
+		return schemas.SQLType{Name: schemas.Varchar, DefaultLength: 255, DefaultLength2: 0}
 	case yql_Timestamp:
-		sqlType = schemas.SQLType{Name: schemas.TimeStamp, DefaultLength: 0, DefaultLength2: 0}
-		return
+		return schemas.SQLType{Name: schemas.TimeStamp, DefaultLength: 0, DefaultLength2: 0}
 	case yql_Interval:
-		sqlType = schemas.SQLType{Name: schemas.Interval, DefaultLength: 0, DefaultLength2: 0}
-		return
+		return schemas.SQLType{Name: schemas.Interval, DefaultLength: 0, DefaultLength2: 0}
 	default:
-		sqlType = schemas.SQLType{Name: schemas.Blob, DefaultLength: 0, DefaultLength2: 0}
+		return schemas.SQLType{Name: schemas.Blob, DefaultLength: 0, DefaultLength2: 0}
 	}
-	return
 }
 
 func removeOptional(s string) string {

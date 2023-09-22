@@ -37,10 +37,8 @@ jobs:
         with:
           go-version: 1.20
       - uses: actions/checkout@v3
-      #- name: test ydb (secure connection)
-      #  run: TEST_YDB_SCHEME=grpcs TEST_YDB_HOST=ydb:2135 TEST_YDB_DBNAME=local make test-ydb
       - name: test ydb (insecure connection)
-        run: TEST_YDB_SCHEME=grpc TEST_YDB_HOST=ydb:2136 TEST_YDB_DBNAME=local make test-ydb
+        run: make test-ydb
 
     services:
       ydb:
@@ -49,13 +47,10 @@ jobs:
           - 2135:2135
           - 2136:2136
           - 8765:8765
-        #volumes:
-        #  - /tmp/ydb_certs:/ydb_certs
         env:
           YDB_LOCAL_SURVIVE_RESTART: true
           YDB_USE_IN_MEMORY_PDISKS: true
 
     env:
-      #YDB_SSL_ROOT_CERTIFICATES_FILE: /tmp/ydb_certs/ca.pem
       YDB_SESSIONS_SHUTDOWN_URLS: http://ydb:8765/actors/kqp_proxy?force_shutdown=all
       HIDE_APPLICATION_OUTPUT: 1

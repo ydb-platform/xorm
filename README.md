@@ -56,7 +56,7 @@ Drivers for Go's sql package which currently support database/sql includes:
   - [github.com/sijms/go-ora](https://github.com/sijms/go-ora) (experiment)
 
 * [YDB](https://github.com/ydb-platform/ydb)
-  - [github.com/ydb-platform/ydb-go-sdk](https://github.com/ydb-platform/ydb-go-sdk)
+  - [github.com/ydb-platform/ydb-go-sdk](https://github.com/ydb-platform/ydb-go-sdk) (experiment)
 
 ## Installation
 

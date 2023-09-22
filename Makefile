@@ -47,14 +47,7 @@ TEST_DAMENG_HOST ?= dameng:5236
 TEST_DAMENG_USERNAME ?= SYSDBA
 TEST_DAMENG_PASSWORD ?= SYSDBA
 
-TEST_YDB_SCHEME ?= grpc
-TEST_YDB_HOST ?= ydb:2136
-TEST_YDB_DBNAME ?= local
-TEST_YDB_TABLE_PATH_PREFIX ?= /local/xorm/test
-TEST_YDB_QUERY_BIND ?= table_path_prefix($(TEST_YDB_TABLE_PATH_PREFIX)),declare,numeric
-TEST_YDB_FAKE_TX ?= scan,scheme,scripting
-TEST_YDB_USERNAME ?= 
-TEST_YDB_PASSWORD ?= 
+TEST_YDB_CONNECTION_STRING ?= grpc://ydb:2136/local?go_query_bind=table_path_prefix(/local/xorm/test),declare,numeric&go_fake_tx=scan,scheme,scripting
 
 TEST_CACHE_ENABLE ?= false
 TEST_QUOTE_POLICY ?= always
@@ -290,7 +283,7 @@ test-dameng\#%: go-check
 .PHONY: test-ydb
 test-ydb: go-check
 	$(GO) test $(INTEGRATION_PACKAGES)/ydbtest -v -race -db=ydb -cache=$(TEST_CACHE_ENABLE) \
-	-conn_str="$(TEST_YDB_SCHEME)://$(TEST_YDB_HOST)/$(TEST_YDB_DBNAME)?go_query_bind=$(TEST_YDB_QUERY_BIND)&go_fake_tx=$(TEST_YDB_FAKE_TX)" \
+	-conn_str="$(TEST_YDB_CONNECTION_STRING)" \
 	-quote=$(TEST_QUOTE_POLICY) -coverprofile=ydb.$(TEST_QUOTE_POLICY).$(TEST_CACHE_ENABLE).coverage.out -covermode=atomic -timeout=20m
 
 .PHONY: vet
