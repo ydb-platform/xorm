@@ -313,7 +313,7 @@ func (session *Session) insertStruct(bean interface{}) (int64, error) {
 	}
 
 	// if there is auto increment column and driver don't support return it
-	if len(table.AutoIncrement) > 0 && !session.engine.driver.Features().SupportReturnInsertedID && session.engine.dialect.URI().DBType != schemas.YDB {
+	if len(table.AutoIncrement) > 0 && !session.engine.driver.Features().SupportReturnInsertedID {
 		var sql string
 		var newArgs []interface{}
 		var needCommit bool
