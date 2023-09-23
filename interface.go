@@ -15,6 +15,7 @@ import (
 	"xorm.io/xorm/dialects"
 	"xorm.io/xorm/log"
 	"xorm.io/xorm/names"
+	"xorm.io/xorm/retry"
 	"xorm.io/xorm/schemas"
 )
 
@@ -127,6 +128,9 @@ type EngineInterface interface {
 	TableName(interface{}, ...bool) string
 	UnMapType(reflect.Type)
 	EnableSessionID(bool)
+
+	Do(context.Context, func(context.Context, *Session) error, ...retry.RetryOption) error
+	DoTx(context.Context, func(context.Context, *Session) error, ...retry.RetryOption) error
 }
 
 var (
