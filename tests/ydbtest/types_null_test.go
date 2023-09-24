@@ -18,7 +18,6 @@ type NullStruct struct {
 	Age          sql.NullInt64
 	Height       sql.NullFloat64
 	IsMan        sql.NullBool `xorm:"null"`
-	Nil          driver.Valuer
 	CustomStruct CustomStruct `xorm:"VARCHAR null"`
 }
 
@@ -90,7 +89,6 @@ func TestNullStructInsert(t *testing.T) {
 			Height:       sql.NullFloat64{Float64: 1.5 + 1.1*float64(i), Valid: true},
 			IsMan:        sql.NullBool{Bool: true, Valid: true},
 			CustomStruct: CustomStruct{int64(i), int64(i + 1), int64(i + 2)},
-			Nil:          nil,
 		}
 		items = append(items, item)
 	}

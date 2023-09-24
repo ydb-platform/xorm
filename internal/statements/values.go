@@ -237,9 +237,6 @@ func (statement *Statement) Value2Interface(col *schemas.Column, fieldValue refl
 			return val, nil
 		}
 	default:
-		if fieldValue.Interface() == nil && statement.dialect.URI().DBType == schemas.YDB {
-			return (*string)(nil), nil
-		}
 		return fieldValue.Interface(), nil
 	}
 }
