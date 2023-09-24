@@ -13,10 +13,6 @@ import (
 
 // FormatColumnTime format column time
 func FormatColumnTime(dialect Dialect, dbLocation *time.Location, col *schemas.Column, t time.Time) (interface{}, error) {
-	if dialect != nil && dialect.URI().DBType == schemas.YDB && t.IsZero() {
-		return (*time.Time)(nil), nil
-	}
-
 	if t.IsZero() {
 		if col.Nullable {
 			return nil, nil
@@ -45,9 +41,6 @@ func FormatColumnTime(dialect Dialect, dbLocation *time.Location, col *schemas.C
 		}
 		return t.Format(layout), nil
 	case schemas.DateTime, schemas.TimeStamp:
-		if dialect != nil && dialect.URI().DBType == schemas.YDB {
-			return t, nil
-		}
 		layout := "2006-01-02 15:04:05"
 		if col.Length > 0 {
 			// we can use int(...) casting here as it's very unlikely to a huge sized field

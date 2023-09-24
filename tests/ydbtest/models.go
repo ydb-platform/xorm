@@ -9,28 +9,28 @@ import (
 )
 
 type Series struct {
-	SeriesID    []byte    `xorm:"pk 'series_id'"`
-	Title       string    `xorm:"'title' index(index_series_title)"`
-	SeriesInfo  string    `xorm:"'series_info'"`
-	ReleaseDate time.Time `xorm:"'release_date'"`
-	Comment     string    `xorm:"'comment'"`
+	SeriesID    []byte       `xorm:"pk 'series_id'"`
+	Title       string       `xorm:"'title' index(index_series_title)"`
+	SeriesInfo  string       `xorm:"'series_info'"`
+	ReleaseDate sql.NullTime `xorm:"'release_date'"`
+	Comment     string       `xorm:"'comment'"`
 }
 
 type Seasons struct {
-	SeriesID   []byte    `xorm:"pk 'series_id'"`
-	SeasonID   []byte    `xorm:"pk 'season_id'"`
-	Title      string    `xorm:"'title' index(index_series_title)"`
-	FirstAired time.Time `xorm:"'first_aired' index(index_season_first_aired)"`
-	LastAired  time.Time `xorm:"'last_aired'"`
+	SeriesID   []byte       `xorm:"pk 'series_id'"`
+	SeasonID   []byte       `xorm:"pk 'season_id'"`
+	Title      string       `xorm:"'title' index(index_series_title)"`
+	FirstAired sql.NullTime `xorm:"'first_aired' index(index_season_first_aired)"`
+	LastAired  sql.NullTime `xorm:"'last_aired'"`
 }
 
 type Episodes struct {
-	SeriesID  []byte    `xorm:"pk 'series_id'"`
-	SeasonID  []byte    `xorm:"pk 'season_id'"`
-	EpisodeID []byte    `xorm:"pk 'episode_id'"`
-	Title     string    `xorm:"'title'"`
-	AirDate   time.Time `xorm:"'air_date' index(index_episodes_air_date)"`
-	Views     uint64    `xorm:"'views'"`
+	SeriesID  []byte       `xorm:"pk 'series_id'"`
+	SeasonID  []byte       `xorm:"pk 'season_id'"`
+	EpisodeID []byte       `xorm:"pk 'episode_id'"`
+	Title     string       `xorm:"'title'"`
+	AirDate   sql.NullTime `xorm:"'air_date' index(index_episodes_air_date)"`
+	Views     uint64       `xorm:"'views'"`
 }
 
 type TestEpisodes struct {
@@ -46,8 +46,8 @@ type Users struct {
 type Account struct {
 	UserID  sql.NullInt64 `xorm:"pk 'user_id'"`
 	Number  string        `xorm:"pk 'number'"`
-	Created time.Time     `xorm:"created 'created_at'"`
-	Updated time.Time     `xorm:"updated 'updated_at'"`
+	Created sql.NullTime  `xorm:"'created_at'"`
+	Updated sql.NullTime  `xorm:"'updated_at'"`
 }
 
 // table name method
@@ -85,7 +85,7 @@ func getUsersData() (users []*Users) {
 	return
 }
 
-func seriesData(id string, released time.Time, title, info, comment string) *Series {
+func seriesData(id string, released sql.NullTime, title, info, comment string) *Series {
 	return &Series{
 		SeriesID:    []byte(id),
 		Title:       title,
@@ -95,7 +95,7 @@ func seriesData(id string, released time.Time, title, info, comment string) *Ser
 	}
 }
 
-func seasonData(seriesID, seasonID string, title string, first, last time.Time) *Seasons {
+func seasonData(seriesID, seasonID string, title string, first, last sql.NullTime) *Seasons {
 	return &Seasons{
 		SeriesID:   []byte(seriesID),
 		SeasonID:   []byte(seasonID),
@@ -105,7 +105,7 @@ func seasonData(seriesID, seasonID string, title string, first, last time.Time) 
 	}
 }
 
-func episodeData(seriesID, seasonID, episodeID string, title string, date time.Time) *Episodes {
+func episodeData(seriesID, seasonID, episodeID string, title string, date sql.NullTime) *Episodes {
 	return &Episodes{
 		SeriesID:  []byte(seriesID),
 		SeasonID:  []byte(seasonID),
@@ -137,11 +137,11 @@ func getDataForITCrowd(seriesID string) (series *Series, seasons []*Seasons, epi
 	)
 	for _, season := range []struct {
 		title    string
-		first    time.Time
-		last     time.Time
-		episodes map[string]time.Time
+		first    sql.NullTime
+		last     sql.NullTime
+		episodes map[string]sql.NullTime
 	}{
-		{"Season 1", date("2006-02-03"), date("2006-03-03"), map[string]time.Time{
+		{"Season 1", date("2006-02-03"), date("2006-03-03"), map[string]sql.NullTime{
 			"Yesterday's Jam":             date("2006-02-03"),
 			"Calamity Jen":                date("2006-02-03"),
 			"Fifty-Fifty":                 date("2006-02-10"),
@@ -149,7 +149,7 @@ func getDataForITCrowd(seriesID string) (series *Series, seasons []*Seasons, epi
 			"The Haunting of Bill Crouse": date("2006-02-24"),
 			"Aunt Irma Visits":            date("2006-03-03"),
 		}},
-		{"Season 2", date("2007-08-24"), date("2007-09-28"), map[string]time.Time{
+		{"Season 2", date("2007-08-24"), date("2007-09-28"), map[string]sql.NullTime{
 			"The Work Outing":            date("2006-08-24"),
 			"Return of the Golden Child": date("2007-08-31"),
 			"Moss and the German":        date("2007-09-07"),
@@ -157,7 +157,7 @@ func getDataForITCrowd(seriesID string) (series *Series, seasons []*Seasons, epi
 			"Smoke and Mirrors":          date("2007-09-21"),
 			"Men Without Women":          date("2007-09-28"),
 		}},
-		{"Season 3", date("2008-11-21"), date("2008-12-26"), map[string]time.Time{
+		{"Season 3", date("2008-11-21"), date("2008-12-26"), map[string]sql.NullTime{
 			"From Hell":       date("2008-11-21"),
 			"Are We Not Men?": date("2008-11-28"),
 			"Tramps Like Us":  date("2008-12-05"),
@@ -165,7 +165,7 @@ func getDataForITCrowd(seriesID string) (series *Series, seasons []*Seasons, epi
 			"Friendface":      date("2008-12-19"),
 			"Calendar Geeks":  date("2008-12-26"),
 		}},
-		{"Season 4", date("2010-06-25"), date("2010-07-30"), map[string]time.Time{
+		{"Season 4", date("2010-06-25"), date("2010-07-30"), map[string]sql.NullTime{
 			"Jen The Fredo":         date("2010-06-25"),
 			"The Final Countdown":   date("2010-07-02"),
 			"Something Happened":    date("2010-07-09"),
@@ -192,11 +192,11 @@ func getDataForSiliconValley(seriesID string) (series *Series, seasons []*Season
 	)
 	for _, season := range []struct {
 		title    string
-		first    time.Time
-		last     time.Time
-		episodes map[string]time.Time
+		first    sql.NullTime
+		last     sql.NullTime
+		episodes map[string]sql.NullTime
 	}{
-		{"Season 1", date("2014-04-06"), date("2014-06-01"), map[string]time.Time{
+		{"Season 1", date("2014-04-06"), date("2014-06-01"), map[string]sql.NullTime{
 			"Minimum Viable Product":        date("2014-04-06"),
 			"The Cap Table":                 date("2014-04-13"),
 			"Articles of Incorporation":     date("2014-04-20"),
@@ -206,7 +206,7 @@ func getDataForSiliconValley(seriesID string) (series *Series, seasons []*Season
 			"Proof of Concept":              date("2014-05-18"),
 			"Optimal Tip-to-Tip Efficiency": date("2014-06-01"),
 		}},
-		{"Season 2", date("2015-04-12"), date("2015-06-14"), map[string]time.Time{
+		{"Season 2", date("2015-04-12"), date("2015-06-14"), map[string]sql.NullTime{
 			"Sand Hill Shuffle":      date("2015-04-12"),
 			"Runaway Devaluation":    date("2015-04-19"),
 			"Bad Money":              date("2015-04-26"),
@@ -218,7 +218,7 @@ func getDataForSiliconValley(seriesID string) (series *Series, seasons []*Season
 			"Binding Arbitration":    date("2015-06-07"),
 			"Two Days of the Condor": date("2015-06-14"),
 		}},
-		{"Season 3", date("2016-04-24"), date("2016-06-26"), map[string]time.Time{
+		{"Season 3", date("2016-04-24"), date("2016-06-26"), map[string]sql.NullTime{
 			"Founder Friendly":               date("2016-04-24"),
 			"Two in the Box":                 date("2016-05-01"),
 			"Meinertzhagen's Haversack":      date("2016-05-08"),
@@ -230,7 +230,7 @@ func getDataForSiliconValley(seriesID string) (series *Series, seasons []*Season
 			"Daily Active Users":             date("2016-06-19"),
 			"The Uptick":                     date("2016-06-26"),
 		}},
-		{"Season 4", date("2017-04-23"), date("2017-06-25"), map[string]time.Time{
+		{"Season 4", date("2017-04-23"), date("2017-06-25"), map[string]sql.NullTime{
 			"Success Failure":       date("2017-04-23"),
 			"Terms of Service":      date("2017-04-30"),
 			"Intellectual Property": date("2017-05-07"),
@@ -242,7 +242,7 @@ func getDataForSiliconValley(seriesID string) (series *Series, seasons []*Season
 			"Hooli-Con":             date("2017-06-18"),
 			"Server Error":          date("2017-06-25"),
 		}},
-		{"Season 5", date("2018-03-25"), date("2018-05-13"), map[string]time.Time{
+		{"Season 5", date("2018-03-25"), date("2018-05-13"), map[string]sql.NullTime{
 			"Grow Fast or Die Slow":             date("2018-03-25"),
 			"Reorientation":                     date("2018-04-01"),
 			"Chief Operating Officer":           date("2018-04-08"),
@@ -264,10 +264,10 @@ func getDataForSiliconValley(seriesID string) (series *Series, seasons []*Season
 
 const dateISO8601 = "2006-01-02"
 
-func date(date string) time.Time {
+func date(date string) sql.NullTime {
 	t, err := time.Parse(dateISO8601, date)
 	if err != nil {
 		panic(err)
 	}
-	return t
+	return sql.NullTime{Time: t, Valid: true}
 }

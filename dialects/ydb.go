@@ -1021,27 +1021,27 @@ func (ydbDrv *ydbDriver) Scan(ctx *ScanContext, rows *core.Rows, types []*sql.Co
 		return err
 	}
 
-	if ctx.DBLocation == nil {
+	if ctx.UserLocation == nil {
 		return nil
 	}
 
 	for i := range v {
 		// !datbeohbbh! YDB saves time in UTC. When returned value is time type, then value will be represented in local time.
-		// So value in time type must be converted to DBLocation.
+		// So value in time type must be converted to UserLocation.
 		switch des := v[i].(type) {
 		case *time.Time:
-			*des = (*des).In(ctx.DBLocation)
+			*des = (*des).In(ctx.UserLocation)
 		case *sql.NullTime:
 			if des.Valid {
-				(*des).Time = (*des).Time.In(ctx.DBLocation)
+				(*des).Time = (*des).Time.In(ctx.UserLocation)
 			}
 		case *interface{}:
 			switch t := (*des).(type) {
 			case time.Time:
-				*des = t.In(ctx.DBLocation)
+				*des = t.In(ctx.UserLocation)
 			case sql.NullTime:
 				if t.Valid {
-					*des = t.Time.In(ctx.DBLocation)
+					*des = t.Time.In(ctx.UserLocation)
 				}
 			}
 		}

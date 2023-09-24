@@ -1,8 +1,8 @@
 package ydb
 
 import (
+	"database/sql"
 	"fmt"
-	"strings"
 	"testing"
 	"time"
 
@@ -12,7 +12,7 @@ import (
 func TestTime(t *testing.T) {
 	type TestTime struct {
 		Uuid     string `xorm:"pk"`
-		OperTime time.Time
+		OperTime sql.NullTime
 	}
 	assert.NoError(t, PrepareScheme(&TestTime{}))
 
@@ -21,7 +21,7 @@ func TestTime(t *testing.T) {
 
 	tm := TestTime{
 		Uuid:     "datbeohbb",
-		OperTime: time.Now().In(engine.GetTZLocation()),
+		OperTime: sql.NullTime{Time: time.Now().In(engine.GetTZLocation()), Valid: true},
 	}
 
 	_, err = engine.Insert(&tm)
@@ -31,14 +31,14 @@ func TestTime(t *testing.T) {
 	has, err := engine.Get(&ret)
 	assert.NoError(t, err)
 	assert.True(t, has)
-	assert.EqualValues(t, tm.OperTime.Unix(), ret.OperTime.Unix())
-	assert.EqualValues(t, tm.OperTime.Format(time.RFC3339), ret.OperTime.Format(time.RFC3339))
+	assert.EqualValues(t, tm.OperTime.Time.Unix(), ret.OperTime.Time.Unix())
+	assert.EqualValues(t, tm.OperTime.Time.Format(time.RFC3339), ret.OperTime.Time.Format(time.RFC3339))
 }
 
 func TestTimeInDiffLoc(t *testing.T) {
 	type TestTime struct {
 		Uuid     string `xorm:"pk"`
-		OperTime *time.Time
+		OperTime *sql.NullTime
 	}
 	assert.NoError(t, PrepareScheme(&TestTime{}))
 
@@ -66,7 +66,7 @@ func TestTimeInDiffLoc(t *testing.T) {
 	now := time.Now().In(newTzLoc)
 	tm := TestTime{
 		Uuid:     "datbeohbbh",
-		OperTime: &now,
+		OperTime: &sql.NullTime{Time: now, Valid: true},
 	}
 
 	_, err = engine.Insert(&tm)
@@ -77,14 +77,14 @@ func TestTimeInDiffLoc(t *testing.T) {
 	assert.NoError(t, err)
 	assert.True(t, has)
 
-	assert.EqualValues(t, tm.OperTime.Unix(), ret.OperTime.Unix())
-	assert.EqualValues(t, tm.OperTime.Format(time.RFC3339), ret.OperTime.Format(time.RFC3339))
+	assert.EqualValues(t, tm.OperTime.Time.Unix(), ret.OperTime.Time.Unix())
+	assert.EqualValues(t, tm.OperTime.Time.Format(time.RFC3339), ret.OperTime.Time.Format(time.RFC3339))
 }
 
 func TestTimeUserCreated(t *testing.T) {
 	type TestTime struct {
-		Uuid      string    `xorm:"pk"`
-		CreatedAt time.Time `xorm:"created"`
+		Uuid      string `xorm:"pk"`
+		CreatedAt sql.NullTime
 	}
 	assert.NoError(t, PrepareScheme(&TestTime{}))
 
@@ -107,14 +107,14 @@ func TestTimeUserCreated(t *testing.T) {
 	t.Log(":", tm.CreatedAt)
 	t.Log(":", ret.CreatedAt)
 
-	assert.EqualValues(t, tm.CreatedAt.UnixMicro(), ret.CreatedAt.UnixMicro())
-	assert.EqualValues(t, tm.CreatedAt.Format(time.RFC3339), ret.CreatedAt.Format(time.RFC3339))
+	assert.EqualValues(t, tm.CreatedAt.Time.UnixMicro(), ret.CreatedAt.Time.UnixMicro())
+	assert.EqualValues(t, tm.CreatedAt.Time.Format(time.RFC3339), ret.CreatedAt.Time.Format(time.RFC3339))
 }
 
 func TestTimeUserCreatedDiffLoc(t *testing.T) {
 	type TestTime struct {
-		Uuid      string    `xorm:"pk"`
-		CreatedAt time.Time `xorm:"created"`
+		Uuid      string `xorm:"pk"`
+		CreatedAt sql.NullTime
 	}
 	assert.NoError(t, PrepareScheme(&TestTime{}))
 
@@ -154,16 +154,16 @@ func TestTimeUserCreatedDiffLoc(t *testing.T) {
 	t.Log(":", tm.CreatedAt)
 	t.Log(":", ret.CreatedAt)
 
-	assert.EqualValues(t, tm.CreatedAt.UnixMicro(), ret.CreatedAt.UnixMicro())
-	assert.EqualValues(t, tm.CreatedAt.Format(time.RFC3339), ret.CreatedAt.Format(time.RFC3339))
+	assert.EqualValues(t, tm.CreatedAt.Time.UnixMicro(), ret.CreatedAt.Time.UnixMicro())
+	assert.EqualValues(t, tm.CreatedAt.Time.Format(time.RFC3339), ret.CreatedAt.Time.Format(time.RFC3339))
 }
 
 func TestTimeUserUpdated(t *testing.T) {
 	type TestTime struct {
 		Uuid      string `xorm:"pk"`
 		Count     int64
-		CreatedAt time.Time `xorm:"created"`
-		UpdatedAt time.Time `xorm:"updated"`
+		CreatedAt sql.NullTime
+		UpdatedAt sql.NullTime
 	}
 	assert.NoError(t, PrepareScheme(&TestTime{}))
 
@@ -188,10 +188,10 @@ func TestTimeUserUpdated(t *testing.T) {
 	t.Log("created 2:", ret.CreatedAt)
 	t.Log("updated 2:", ret.UpdatedAt)
 
-	assert.EqualValues(t, tm.CreatedAt.UnixMicro(), ret.CreatedAt.UnixMicro())
-	assert.EqualValues(t, tm.UpdatedAt.UnixMicro(), ret.UpdatedAt.UnixMicro())
-	assert.EqualValues(t, tm.CreatedAt.Format(time.RFC3339), ret.CreatedAt.Format(time.RFC3339))
-	assert.EqualValues(t, tm.UpdatedAt.Format(time.RFC3339), ret.UpdatedAt.Format(time.RFC3339))
+	assert.EqualValues(t, tm.CreatedAt.Time.UnixMicro(), ret.CreatedAt.Time.UnixMicro())
+	assert.EqualValues(t, tm.UpdatedAt.Time.UnixMicro(), ret.UpdatedAt.Time.UnixMicro())
+	assert.EqualValues(t, tm.CreatedAt.Time.Format(time.RFC3339), ret.CreatedAt.Time.Format(time.RFC3339))
+	assert.EqualValues(t, tm.UpdatedAt.Time.Format(time.RFC3339), ret.UpdatedAt.Time.Format(time.RFC3339))
 
 	tm2 := TestTime{
 		CreatedAt: tm.CreatedAt,
@@ -204,18 +204,18 @@ func TestTimeUserUpdated(t *testing.T) {
 	assert.NoError(t, err)
 	assert.True(t, has)
 
-	assert.EqualValues(t, tm2.CreatedAt.UnixMicro(), ret.CreatedAt.UnixMicro())
-	assert.EqualValues(t, tm2.UpdatedAt.UnixMicro(), ret.UpdatedAt.UnixMicro())
-	assert.EqualValues(t, tm2.CreatedAt.Format(time.RFC3339), ret.CreatedAt.Format(time.RFC3339))
-	assert.EqualValues(t, tm2.UpdatedAt.Format(time.RFC3339), ret.UpdatedAt.Format(time.RFC3339))
+	assert.EqualValues(t, tm2.CreatedAt.Time.UnixMicro(), ret.CreatedAt.Time.UnixMicro())
+	assert.EqualValues(t, tm2.UpdatedAt.Time.UnixMicro(), ret.UpdatedAt.Time.UnixMicro())
+	assert.EqualValues(t, tm2.CreatedAt.Time.Format(time.RFC3339), ret.CreatedAt.Time.Format(time.RFC3339))
+	assert.EqualValues(t, tm2.UpdatedAt.Time.Format(time.RFC3339), ret.UpdatedAt.Time.Format(time.RFC3339))
 }
 
 func TestTimeUserUpdatedDiffLoc(t *testing.T) {
 	type TestTime struct {
 		Uuid      string `xorm:"pk"`
 		Count     int64
-		CreatedAt time.Time `xorm:"created"`
-		UpdatedAt time.Time `xorm:"updated"`
+		CreatedAt sql.NullTime
+		UpdatedAt sql.NullTime
 	}
 	assert.NoError(t, PrepareScheme(&TestTime{}))
 
@@ -257,10 +257,10 @@ func TestTimeUserUpdatedDiffLoc(t *testing.T) {
 	t.Log("created 2:", ret.CreatedAt)
 	t.Log("updated 2:", ret.UpdatedAt)
 
-	assert.EqualValues(t, tm.CreatedAt.UnixMicro(), ret.CreatedAt.UnixMicro())
-	assert.EqualValues(t, tm.UpdatedAt.UnixMicro(), ret.UpdatedAt.UnixMicro())
-	assert.EqualValues(t, tm.CreatedAt.Format(time.RFC3339), ret.CreatedAt.Format(time.RFC3339))
-	assert.EqualValues(t, tm.UpdatedAt.Format(time.RFC3339), ret.UpdatedAt.Format(time.RFC3339))
+	assert.EqualValues(t, tm.CreatedAt.Time.UnixMicro(), ret.CreatedAt.Time.UnixMicro())
+	assert.EqualValues(t, tm.UpdatedAt.Time.UnixMicro(), ret.UpdatedAt.Time.UnixMicro())
+	assert.EqualValues(t, tm.CreatedAt.Time.Format(time.RFC3339), ret.CreatedAt.Time.Format(time.RFC3339))
+	assert.EqualValues(t, tm.UpdatedAt.Time.Format(time.RFC3339), ret.UpdatedAt.Time.Format(time.RFC3339))
 
 	tm2 := TestTime{
 		CreatedAt: tm.CreatedAt,
@@ -273,69 +273,16 @@ func TestTimeUserUpdatedDiffLoc(t *testing.T) {
 	assert.NoError(t, err)
 	assert.True(t, has)
 
-	assert.EqualValues(t, tm2.CreatedAt.UnixMicro(), ret.CreatedAt.UnixMicro())
-	assert.EqualValues(t, tm2.UpdatedAt.UnixMicro(), ret.UpdatedAt.UnixMicro())
-	assert.EqualValues(t, tm2.CreatedAt.Format(time.RFC3339), ret.CreatedAt.Format(time.RFC3339))
-	assert.EqualValues(t, tm2.UpdatedAt.Format(time.RFC3339), ret.UpdatedAt.Format(time.RFC3339))
-}
-
-type JSONDate time.Time
-
-func (j JSONDate) MarshalJSON() ([]byte, error) {
-	if time.Time(j).IsZero() {
-		return []byte(`""`), nil
-	}
-	return []byte(`"` + time.Time(j).Format("2006-01-02 15:04:05") + `"`), nil
-}
-
-func (j *JSONDate) UnmarshalJSON(value []byte) error {
-	var v = strings.TrimSpace(strings.Trim(string(value), "\""))
-
-	t, err := time.ParseInLocation("2006-01-02 15:04:05", v, time.Local)
-	if err != nil {
-		return err
-	}
-	*j = JSONDate(t)
-	return nil
-}
-
-func (j *JSONDate) Unix() int64 {
-	return (*time.Time)(j).Unix()
-}
-
-func TestCustomTimeUser(t *testing.T) {
-	type TestTime struct {
-		Id        string   `xorm:"pk"`
-		CreatedAt JSONDate `xorm:"created"`
-		UpdatedAt JSONDate `xorm:"updated"`
-	}
-
-	assert.NoError(t, PrepareScheme(&TestTime{}))
-	engine, err := enginePool.GetDataQueryEngine()
-	assert.NoError(t, err)
-
-	var user = TestTime{
-		Id: "datbeohbbh",
-	}
-
-	_, err = engine.Insert(&user)
-	assert.NoError(t, err)
-	t.Log("user", user.CreatedAt, user.UpdatedAt)
-
-	var user2 TestTime
-	has, err := engine.Get(&user2)
-	assert.NoError(t, err)
-	assert.True(t, has)
-	assert.EqualValues(t, user.CreatedAt.Unix(), user2.CreatedAt.Unix())
-	assert.EqualValues(t, time.Time(user.CreatedAt).Format(time.RFC3339), time.Time(user2.CreatedAt).Format(time.RFC3339))
-	assert.EqualValues(t, user.UpdatedAt.Unix(), user2.UpdatedAt.Unix())
-	assert.EqualValues(t, time.Time(user.UpdatedAt).Format(time.RFC3339), time.Time(user2.UpdatedAt).Format(time.RFC3339))
+	assert.EqualValues(t, tm2.CreatedAt.Time.UnixMicro(), ret.CreatedAt.Time.UnixMicro())
+	assert.EqualValues(t, tm2.UpdatedAt.Time.UnixMicro(), ret.UpdatedAt.Time.UnixMicro())
+	assert.EqualValues(t, tm2.CreatedAt.Time.Format(time.RFC3339), ret.CreatedAt.Time.Format(time.RFC3339))
+	assert.EqualValues(t, tm2.UpdatedAt.Time.Format(time.RFC3339), ret.UpdatedAt.Time.Format(time.RFC3339))
 }
 
 func TestFindTimeDiffLoc(t *testing.T) {
 	type TestTime struct {
-		Uuid     string    `xorm:"pk 'uuid'"`
-		OperTime time.Time `xorm:"'oper_time'"`
+		Uuid     string       `xorm:"pk 'uuid'"`
+		OperTime sql.NullTime `xorm:"'oper_time'"`
 	}
 	assert.NoError(t, PrepareScheme(&TestTime{}))
 
@@ -373,7 +320,7 @@ func TestFindTimeDiffLoc(t *testing.T) {
 		now = now.Add(time.Minute).In(newTzLoc)
 		data := TestTime{
 			Uuid:     fmt.Sprintf("%d", i),
-			OperTime: now,
+			OperTime: sql.NullTime{Time: now, Valid: true},
 		}
 		_, err = session.Insert(&data)
 		assert.NoError(t, err)
@@ -385,8 +332,8 @@ func TestFindTimeDiffLoc(t *testing.T) {
 	assert.EqualValues(t, len(expected), len(actual))
 
 	for i, e := range expected {
-		assert.EqualValues(t, e.OperTime.Unix(), actual[i].OperTime.Unix())
-		assert.EqualValues(t, e.OperTime.Format(time.RFC3339), actual[i].OperTime.Format(time.RFC3339))
+		assert.EqualValues(t, e.OperTime.Time.Unix(), actual[i].OperTime.Time.Unix())
+		assert.EqualValues(t, e.OperTime.Time.Format(time.RFC3339), actual[i].OperTime.Time.Format(time.RFC3339))
 	}
 
 	t.Log(expected)

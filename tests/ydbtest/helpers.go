@@ -95,7 +95,7 @@ func (em *EngineWithMode) getEngine(queryMode QueryMode) (*xorm.Engine, error) {
 	engine.ShowSQL(*showSQL)
 	engine.SetLogLevel(xormLog.LOG_DEBUG)
 
-	appLoc, _ := time.LoadLocation("Asia/Ho_Chi_Minh")
+	appLoc, _ := time.LoadLocation("America/New_York")
 	DbLoc, _ := time.LoadLocation("Europe/Moscow")
 	engine.SetTZLocation(appLoc)
 	engine.SetTZDatabase(DbLoc)

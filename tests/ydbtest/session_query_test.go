@@ -1,9 +1,9 @@
 package ydb
 
 import (
+	"database/sql"
 	"strconv"
 	"testing"
-	"time"
 
 	"xorm.io/builder"
 
@@ -16,7 +16,7 @@ func TestQueryString(t *testing.T) {
 		Msg     string `xorm:"varchar(255)"`
 		Age     int32
 		Money   float64
-		Created time.Time `xorm:"created"`
+		Created sql.NullTime 
 	}
 
 	assert.NoError(t, PrepareScheme(&GetVar2{}))
@@ -83,7 +83,7 @@ func TestQueryInterface(t *testing.T) {
 		Msg     string `xorm:"varchar(255)"`
 		Age     int32
 		Money   float64
-		Created time.Time `xorm:"created"`
+		Created sql.NullTime 
 	}
 
 	assert.NoError(t, PrepareScheme(&GetVarInterface{}))
@@ -115,7 +115,7 @@ func TestQueryNoParams(t *testing.T) {
 		Msg     string `xorm:"varchar(255)"`
 		Age     int32
 		Money   float64
-		Created time.Time `xorm:"created"`
+		Created sql.NullTime 
 	}
 
 	assert.NoError(t, PrepareScheme(&QueryNoParams{}))
@@ -258,7 +258,7 @@ func TestQueryWithBuilder(t *testing.T) {
 		Msg     string `xorm:"varchar(255)"`
 		Age     int32
 		Money   float64
-		Created time.Time `xorm:"created"`
+		Created sql.NullTime 
 	}
 
 	assert.NoError(t, PrepareScheme(&QueryWithBuilder{}))

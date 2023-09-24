@@ -118,11 +118,13 @@ func TestYQLUpsertCompositePK(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, engine)
 
+	loc := engine.GetTZLocation()
+
 	session := engine.NewSession()
 	defer session.Close()
 
 	uuidArg := uuid.NewString()
-	now := time.Now()
+	now := sql.NullTime{Time: time.Now().In(loc), Valid: true}
 
 	_, err = session.
 		Exec("UPSERT INTO `users` (`name`, `age`, `user_id`, `number`, `created_at`, `updated_at`) "+
@@ -150,8 +152,6 @@ func TestYQLUpsertCompositePK(t *testing.T) {
 		}).
 		Get(&ret)
 
-	loc := engine.GetTZLocation()
-
 	assert.NoError(t, err)
 
 	assert.True(t, has)
@@ -163,6 +163,6 @@ func TestYQLUpsertCompositePK(t *testing.T) {
 
 	// values are updated after fetched
 	assert.EqualValues(t, 22, ret.Age)
-	assert.EqualValues(t, now.In(loc).Format(time.RFC3339), ret.Created.Format(time.RFC3339))
-	assert.EqualValues(t, now.In(loc).Format(time.RFC3339), ret.Updated.Format(time.RFC3339))
+	assert.EqualValues(t, now.Time.In(loc).Format(time.RFC3339), ret.Created.Time.Format(time.RFC3339))
+	assert.EqualValues(t, now.Time.In(loc).Format(time.RFC3339), ret.Updated.Time.Format(time.RFC3339))
 }

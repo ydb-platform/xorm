@@ -452,7 +452,7 @@ func TestFindTime(t *testing.T) {
 	_, err = engine.Insert(&usersData)
 	assert.NoError(t, err)
 
-	createdAt := make([]string, 0)
+	createdAt := make([]sql.NullTime, 0)
 	err = engine.Table(&Users{}).Cols("created_at").Find(&createdAt)
 	assert.NoError(t, err)
 	assert.EqualValues(t, len(usersData), len(createdAt))
@@ -504,7 +504,7 @@ func TestFindCustomTypeAllField(t *testing.T) {
 	type RowID = uint64
 	type Str = *string
 	type Double = *float64
-	type Timestamp = *time.Time
+	type Timestamp = *sql.NullTime
 
 	type Row struct {
 		ID               RowID     `xorm:"pk 'id'"`
@@ -519,7 +519,7 @@ func TestFindCustomTypeAllField(t *testing.T) {
 			ID:               RowID(i),
 			PayloadStr:       func(s string) *string { return &s }(fmt.Sprintf("payload#%d", i)),
 			PayloadDouble:    func(f float64) *float64 { return &f }((float64)(i)),
-			PayloadTimestamp: func(t time.Time) *time.Time { return &t }(time.Now()),
+			PayloadTimestamp: func(t sql.NullTime) *sql.NullTime { return &t }(sql.NullTime{Time: time.Now(), Valid: true}),
 		})
 	}
 
@@ -546,7 +546,7 @@ func TestFindCustomTypeAllField(t *testing.T) {
 		assert.EqualValues(t, v.ID, res[i].ID)
 		assert.EqualValues(t, v.PayloadStr, res[i].PayloadStr)
 		assert.EqualValues(t, v.PayloadDouble, res[i].PayloadDouble)
-		assert.EqualValues(t, v.PayloadTimestamp.Unix(), res[i].PayloadTimestamp.Unix())
+		assert.EqualValues(t, v.PayloadTimestamp.Time.Unix(), res[i].PayloadTimestamp.Time.Unix())
 	}
 }
 
@@ -624,7 +624,7 @@ func TestFindEmptyField(t *testing.T) {
 
 		Utf8 string
 
-		Timestamp time.Time
+		Timestamp sql.NullTime
 
 		Interval time.Duration
 

@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"xorm.io/xorm"
@@ -237,8 +236,8 @@ func TestInsertMulti2InterfaceTransaction(t *testing.T) {
 		ID         uint64 `xorm:"id pk"`
 		Name       string
 		Alias      string
-		CreateTime time.Time `xorm:"created"`
-		UpdateTime time.Time `xorm:"updated"`
+		CreateTime sql.NullTime
+		UpdateTime sql.NullTime
 	}
 
 	engine, err := enginePool.GetScriptQueryEngine()

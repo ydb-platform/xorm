@@ -1,6 +1,7 @@
 package ydb
 
 import (
+	"database/sql"
 	"strconv"
 	"testing"
 	"time"
@@ -37,14 +38,14 @@ func TestExecTime(t *testing.T) {
 	type UserinfoExecTime struct {
 		Uid     int64 `xorm:"pk"`
 		Name    string
-		Created time.Time
+		Created sql.NullTime
 	}
 
 	assert.NoError(t, PrepareScheme(&UserinfoExecTime{}))
 	engine, err := enginePool.GetDataQueryEngine()
 	assert.NoError(t, err)
 
-	now := time.Now()
+	now := sql.NullTime{Time: time.Now(), Valid: true}
 	_, err = engine.
 		Exec("INSERT INTO "+engine.TableName("`userinfo_exec_time`", true)+" (`uid`, `name`, `created`) VALUES (?, ?, ?)", int64(1), "user", now)
 	assert.NoError(t, err)
@@ -54,6 +55,6 @@ func TestExecTime(t *testing.T) {
 	assert.NoError(t, err)
 	assert.True(t, has)
 	assert.EqualValues(t,
-		now.In(engine.GetTZLocation()).Format(time.RFC3339),
-		uet.Created.In(engine.TZLocation).Format(time.RFC3339))
+		now.Time.In(engine.GetTZLocation()).Format(time.RFC3339),
+		uet.Created.Time.In(engine.TZLocation).Format(time.RFC3339))
 }

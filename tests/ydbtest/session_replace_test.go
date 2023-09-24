@@ -121,7 +121,7 @@ func TestYQLReplaceCompositePK(t *testing.T) {
 	defer session.Close()
 
 	uuidArg := uuid.NewString()
-	now := time.Now()
+	now := sql.NullTime{Time: time.Now(), Valid: true}
 
 	_, err = session.
 		Exec("REPLACE INTO `users` (`name`, `age`, `user_id`, `number`, `created_at`, `updated_at`) "+
@@ -160,6 +160,6 @@ func TestYQLReplaceCompositePK(t *testing.T) {
 
 	// overwritten with default values
 	assert.EqualValues(t, 0, ret.Age)
-	assert.EqualValues(t, time.Time{}.Format(time.RFC3339), ret.Created.Format(time.RFC3339))
-	assert.EqualValues(t, time.Time{}.Format(time.RFC3339), ret.Updated.Format(time.RFC3339))
+	assert.EqualValues(t, time.Time{}.Format(time.RFC3339), ret.Created.Time.Format(time.RFC3339))
+	assert.EqualValues(t, time.Time{}.Format(time.RFC3339), ret.Updated.Time.Format(time.RFC3339))
 }
