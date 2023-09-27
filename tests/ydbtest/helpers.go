@@ -156,7 +156,7 @@ func PrepareScheme(bean ...interface{}) error {
 		return err
 	}
 
-	if err := engine.CreateTables(bean...); err != nil {
+	if err := engine.Sync(bean...); err != nil {
 		return err
 	}
 

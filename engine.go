@@ -552,10 +552,6 @@ func (engine *Engine) dumpTables(ctx context.Context, tables []*schemas.Table, w
 		}
 
 		for _, index := range dstTable.Indexes {
-			// !datbeohbbh! with YDB, if there are indexes in table, these indexes have already been created in CREATE TABLE script.
-			if dstDialect.URI().DBType == schemas.YDB {
-				continue
-			}
 			_, err = io.WriteString(w, dstDialect.CreateIndexSQL(dstTable.Name, index)+";\n")
 			if err != nil {
 				return err

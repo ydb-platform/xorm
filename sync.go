@@ -109,11 +109,6 @@ func (session *Session) SyncWithOptions(opts SyncOptions, beans ...interface{}) 
 				return nil, err
 			}
 
-			// !datbeohbbh! skip with YDB. All indexes are created when create table.
-			if engine.dialect.URI().DBType == schemas.YDB {
-				continue
-			}
-
 			if !opts.IgnoreConstrains {
 				err = session.createUniques(bean)
 				if err != nil {

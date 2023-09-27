@@ -47,7 +47,7 @@ TEST_DAMENG_HOST ?= dameng:5236
 TEST_DAMENG_USERNAME ?= SYSDBA
 TEST_DAMENG_PASSWORD ?= SYSDBA
 
-TEST_YDB_CONNECTION_STRING ?= grpc://ydb:2136/local?go_query_bind=table_path_prefix(/local/xorm/test),declare,numeric&go_fake_tx=scan,scheme,scripting
+TEST_YDB_CONNECTION_STRING ?= grpc://ydb:2136/local?go_query_bind=table_path_prefix(/local),declare,numeric&go_fake_tx=scan,scheme,scripting
 
 TEST_CACHE_ENABLE ?= false
 TEST_QUOTE_POLICY ?= always

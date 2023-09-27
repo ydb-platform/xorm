@@ -724,6 +724,8 @@ func (db *ydb) GetIndexes(
 	return indexes, nil
 }
 
+// !datbeohbbh! CreateTableSQL generate `CREATE TABLE` YQL.
+// Method does not generate YQL for creating index.
 func (db *ydb) CreateTableSQL(
 	ctx context.Context,
 	_ core.Queryer,
@@ -761,27 +763,7 @@ func (db *ydb) CreateTableSQL(
 	}
 	joinColumns := strings.Join(columnsList, ", ")
 
-	// build index
-	indexList := []string{}
-	for indexName, index := range table.Indexes {
-		name := quote.Quote(indexName)
-		onCols := make([]string, len(index.Cols))
-		for i := 0; i < len(index.Cols); i++ {
-			onCols[i] = quote.Quote(index.Cols[i])
-		}
-		indexList = append(indexList,
-			fmt.Sprintf(
-				"INDEX %s GLOBAL ON ( %s )",
-				name, strings.Join(onCols, ", ")))
-	}
-	joinIndexes := strings.Join(indexList, ", ")
-
-	if joinIndexes != "" {
-		buf.WriteString(strings.Join([]string{joinColumns, joinIndexes, primaryKey}, ", "))
-	} else {
-		buf.WriteString(strings.Join([]string{joinColumns, primaryKey}, ", "))
-	}
-
+	buf.WriteString(strings.Join([]string{joinColumns, primaryKey}, ", "))
 	buf.WriteString(" ) ")
 
 	if db.tableParams != nil && len(db.tableParams) > 0 {
