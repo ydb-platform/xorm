@@ -397,6 +397,11 @@ func (db *ydb) getDB(queryer interface{}) *core.DB {
 	if internalDB, ok := queryer.(*core.DB); ok {
 		return internalDB
 	}
+	if txGetDB, ok := queryer.(interface {
+		GetDB() *core.DB
+	}); ok {
+		return txGetDB.GetDB()
+	}
 	return nil
 }
 

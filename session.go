@@ -187,9 +187,6 @@ func (session *Session) Tx() *core.Tx {
 }
 
 func (session *Session) getQueryer() core.Queryer {
-	if session.engine.dialect.URI().DBType == schemas.YDB {
-		return session.db()
-	}
 	if session.tx != nil {
 		return session.tx
 	}

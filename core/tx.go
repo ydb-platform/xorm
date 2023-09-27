@@ -236,3 +236,7 @@ func (tx *Tx) QueryRowStructContext(ctx context.Context, query string, st interf
 func (tx *Tx) QueryRowStruct(query string, st interface{}) *Row {
 	return tx.QueryRowStructContext(context.Background(), query, st)
 }
+
+func (tx *Tx) GetDB() *DB {
+	return tx.db
+}
