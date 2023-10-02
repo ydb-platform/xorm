@@ -5,6 +5,8 @@
 package xorm
 
 import (
+	"database/sql/driver"
+	"errors"
 	"reflect"
 
 	"xorm.io/builder"
@@ -237,7 +239,11 @@ func (session *Session) Update(bean interface{}, condiBean ...interface{}) (int6
 	cleanupProcessorsClosures(&session.afterClosures) // cleanup after used
 	// --
 
-	return res.RowsAffected()
+	affected, err := res.RowsAffected()
+	if errors.Is(err, driver.ErrSkip) {
+		err = nil
+	}
+	return affected, err
 }
 
 func (session *Session) genUpdateColumns(bean interface{}) ([]string, []interface{}, error) {

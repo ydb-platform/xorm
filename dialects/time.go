@@ -55,7 +55,12 @@ func FormatColumnTime(dialect Dialect, dbLocation *time.Location, col *schemas.C
 		} else {
 			return t.Format(time.RFC3339Nano), nil
 		}
+	case schemas.Interval:
+		return time.Since(t), nil
 	case schemas.BigInt, schemas.Int:
+		if dialect != nil && dialect.URI().DBType == schemas.YDB {
+			return t.UnixMicro(), nil
+		}
 		return t.Unix(), nil
 	default:
 		return t, nil

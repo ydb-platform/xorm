@@ -19,11 +19,13 @@ import (
 
 	"xorm.io/xorm/caches"
 	"xorm.io/xorm/contexts"
+	"xorm.io/xorm/convert"
 	"xorm.io/xorm/core"
 	"xorm.io/xorm/dialects"
 	"xorm.io/xorm/internal/utils"
 	"xorm.io/xorm/log"
 	"xorm.io/xorm/names"
+	"xorm.io/xorm/retry"
 	"xorm.io/xorm/schemas"
 	"xorm.io/xorm/tags"
 )
@@ -792,6 +794,56 @@ func (engine *Engine) dumpTables(ctx context.Context, tables []*schemas.Table, w
 								return err
 							}
 						}
+					} else if dstDialect.URI().DBType == schemas.YDB {
+						castTmpl := "CAST(%v AS Optional<%v>)"
+						yqlType := dstDialect.SQLType(dstTable.Columns()[i])
+						if dstTable.Columns()[i].IsPrimaryKey {
+							if strings.HasPrefix(yqlType, "UINT") || strings.HasPrefix(yqlType, "INT") {
+								if _, err = io.WriteString(w, s.String); err != nil {
+									return err
+								}
+							} else if yqlType == "TIMESTAMP" {
+								fromLoc := engine.GetTZLocation()
+								toLoc := engine.GetTZDatabase()
+								t, err := convert.String2Time(s.String, fromLoc, toLoc)
+								if err != nil {
+									return err
+								}
+								if _, err = io.WriteString(w, fmt.Sprintf("%v", t.UnixMicro())); err != nil {
+									return err
+								}
+							} else {
+								if _, err = io.WriteString(w, "'"+strings.ReplaceAll(s.String, "'", "\\'")+"'"); err != nil {
+									return err
+								}
+							}
+						} else {
+							if yqlType == "TIMESTAMP" {
+								fromLoc := engine.GetTZLocation()
+								toLoc := engine.GetTZDatabase()
+								t, err := convert.String2Time(s.String, fromLoc, toLoc)
+								if err != nil {
+									return err
+								}
+								if _, err = io.WriteString(w, fmt.Sprintf(castTmpl, t.UnixMicro(), yqlType)); err != nil {
+									return err
+								}
+							} else if yqlType == "INTERVAL" {
+								// !datbeohbbh! TODO: only work if database represent interval time in microsecond.
+								d, err := strconv.ParseInt(s.String, 10, 64)
+								if err != nil {
+									return err
+								}
+								sec := float64(d) / float64(time.Microsecond)
+								if _, err = io.WriteString(w, fmt.Sprintf(castTmpl, sec, yqlType)); err != nil {
+									return err
+								}
+							} else {
+								if _, err = io.WriteString(w, fmt.Sprintf(castTmpl, "'"+strings.ReplaceAll(s.String, "'", "\\'")+"'", yqlType)); err != nil {
+									return err
+								}
+							}
+						}
 					} else {
 						if _, err = io.WriteString(w, "'"+strings.ReplaceAll(s.String, "'", "''")+"'"); err != nil {
 							return err
@@ -1432,4 +1484,59 @@ func (engine *Engine) Transaction(f func(*Session) (interface{}, error)) (interf
 	}
 
 	return result, nil
+}
+
+// Do is a retryer of session
+func (engine *Engine) Do(ctx context.Context, f func(context.Context, *Session) error, opts ...retry.RetryOption) error {
+	var (
+		dialect  = engine.Dialect()
+		attempts = 0
+	)
+	err := retry.Retry(ctx, dialect.IsRetryable, func(ctx context.Context) (err error) {
+		attempts++
+		session := engine.NewSession().Context(ctx)
+		defer func() {
+			_ = session.Close()
+		}()
+		if err = f(ctx, session); err != nil {
+			return err
+		}
+		return nil
+	}, opts...)
+	if err != nil {
+		return fmt.Errorf("operation failed after %d attempts: %w", attempts, err)
+	}
+	return nil
+}
+
+// DoTx is a retryer of session transactions
+func (engine *Engine) DoTx(ctx context.Context, f func(context.Context, *Session) error, opts ...retry.RetryOption) error {
+	var (
+		dialect  = engine.Dialect()
+		attempts = 0
+	)
+	err := retry.Retry(ctx, dialect.IsRetryable, func(ctx context.Context) (err error) {
+		attempts++
+		session := engine.NewSession().Context(ctx)
+		defer func() {
+			_ = session.Close()
+		}()
+		if err = session.Begin(); err != nil {
+			return err
+		}
+		defer func() {
+			_ = session.Rollback()
+		}()
+		if err = f(ctx, session); err != nil {
+			return err
+		}
+		if err = session.Commit(); err != nil {
+			return err
+		}
+		return nil
+	}, opts...)
+	if err != nil {
+		return fmt.Errorf("tx failed after %d attempts: %w", attempts, err)
+	}
+	return nil
 }

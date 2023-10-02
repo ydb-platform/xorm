@@ -155,6 +155,11 @@ func (session *Session) SyncWithOptions(opts SyncOptions, beans ...interface{}) 
 			expectedType := engine.dialect.SQLType(col)
 			curType := engine.dialect.SQLType(oriCol)
 			if expectedType != curType {
+				if engine.dialect.URI().DBType == schemas.YDB {
+					engine.logger.Warnf("YDB does not support modify column type")
+					engine.logger.Warnf("Table %s column %s db type is %s, struct type is %s",
+						tbNameWithSchema, col.Name, curType, expectedType)
+				}
 				if expectedType == schemas.Text &&
 					strings.HasPrefix(curType, schemas.Varchar) {
 					// currently only support mysql & postgres

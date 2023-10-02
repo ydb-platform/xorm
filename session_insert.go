@@ -5,6 +5,7 @@
 package xorm
 
 import (
+	"database/sql/driver"
 	"errors"
 	"fmt"
 	"reflect"
@@ -56,6 +57,11 @@ func (session *Session) Insert(beans ...interface{}) (int64, error) {
 			} else {
 				cnt, err = session.insertStruct(bean)
 			}
+		}
+		// !datbeohbbh! YDB does not support (sql.Result).LastInsertId() and (sql.Result) RowsAffected().
+		// YDB returns `0, driver.ErrSkip` instead.
+		if errors.Is(err, driver.ErrSkip) {
+			err = nil
 		}
 		if err != nil {
 			return affected, err
@@ -430,7 +436,11 @@ func (session *Session) InsertOne(bean interface{}) (int64, error) {
 		defer session.Close()
 	}
 
-	return session.insertStruct(bean)
+	affected, err := session.insertStruct(bean)
+	if errors.Is(err, driver.ErrSkip) {
+		err = nil
+	}
+	return affected, err
 }
 
 func (session *Session) cacheInsert(table string) error {

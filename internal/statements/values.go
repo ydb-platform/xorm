@@ -92,12 +92,57 @@ func (statement *Statement) Value2Interface(col *schemas.Column, fieldValue refl
 		} else if fieldType.ConvertibleTo(nullFloatType) {
 			t := fieldValue.Convert(nullFloatType).Interface().(sql.NullFloat64)
 			if !t.Valid {
-				return nil, nil
+				return (*float64)(nil), nil
 			}
 			return t.Float64, nil
 		} else if fieldType.ConvertibleTo(bigFloatType) {
 			t := fieldValue.Convert(bigFloatType).Interface().(big.Float)
 			return t.String(), nil
+		} else if fieldType.ConvertibleTo(schemas.IntervalType) {
+			t := fieldValue.Convert(schemas.IntervalType).Interface().(time.Duration)
+			return t, nil
+		} else if fieldType.ConvertibleTo(schemas.NullBoolType) {
+			t := fieldValue.Convert(schemas.NullBoolType).Interface().(sql.NullBool)
+			if !t.Valid {
+				return (*bool)(nil), nil
+			}
+			return t.Bool, nil
+		} else if fieldType.ConvertibleTo(schemas.NullFloat64Type) {
+			t := fieldValue.Convert(schemas.NullFloat64Type).Interface().(sql.NullFloat64)
+			if !t.Valid {
+				return (*float64)(nil), nil
+			}
+			return t.Float64, nil
+		} else if fieldType.ConvertibleTo(schemas.NullInt16Type) {
+			t := fieldValue.Convert(schemas.NullInt16Type).Interface().(sql.NullInt16)
+			if !t.Valid {
+				return (*int16)(nil), nil
+			}
+			return t.Int16, nil
+		} else if fieldType.ConvertibleTo(schemas.NullInt32Type) {
+			t := fieldValue.Convert(schemas.NullInt32Type).Interface().(sql.NullInt32)
+			if !t.Valid {
+				return (*int32)(nil), nil
+			}
+			return t.Int32, nil
+		} else if fieldType.ConvertibleTo(schemas.NullInt64Type) {
+			t := fieldValue.Convert(schemas.NullInt64Type).Interface().(sql.NullInt64)
+			if !t.Valid {
+				return (*int64)(nil), nil
+			}
+			return t.Int64, nil
+		} else if fieldType.ConvertibleTo(schemas.NullStringType) {
+			t := fieldValue.Convert(schemas.NullStringType).Interface().(sql.NullString)
+			if !t.Valid {
+				return (*string)(nil), nil
+			}
+			return t.String, nil
+		} else if fieldType.ConvertibleTo(schemas.NullTimeType) {
+			t := fieldValue.Convert(schemas.NullTimeType).Interface().(sql.NullTime)
+			if !t.Valid {
+				return (*time.Time)(nil), nil
+			}
+			return t.Time, nil
 		}
 
 		if !col.IsJSON {
@@ -164,7 +209,33 @@ func (statement *Statement) Value2Interface(col *schemas.Column, fieldValue refl
 		}
 		return nil, ErrUnSupportedType
 	case reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uint:
-		return fieldValue.Uint(), nil
+		val := fieldValue.Uint()
+		switch t := fieldValue.Kind(); t {
+		case reflect.Uint8:
+			return uint8(val), nil
+		case reflect.Uint16:
+			return uint16(val), nil
+		case reflect.Uint32:
+			return uint32(val), nil
+		case reflect.Uint64:
+			return uint64(val), nil
+		default:
+			return val, nil
+		}
+	case reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Int:
+		val := fieldValue.Int()
+		switch t := fieldValue.Kind(); t {
+		case reflect.Int8:
+			return int8(val), nil
+		case reflect.Int16:
+			return int16(val), nil
+		case reflect.Int32:
+			return int32(val), nil
+		case reflect.Int64:
+			return int64(val), nil
+		default:
+			return val, nil
+		}
 	default:
 		return fieldValue.Interface(), nil
 	}
